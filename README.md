@@ -11,6 +11,6 @@ ToDos:
 - [ ] Dokumentation für Anwender erstellen
 - [ ] Installationsanleitung
 - [ ] Variablennamen sprechen machen (saaralf, steffen)
-- [ ] Positionsgrößen ermitteln (steffen)
+- [x] Positionsgrößen ermitteln (steffen)
 - [ ] Senden Implementieren (saaralf)
 - [ ] Traden implementieren (saaralf) (steffen)
