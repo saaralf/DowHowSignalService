@@ -1,0 +1,14 @@
+{
+    "mql_tools.Metaeditor.Include5Dir": "C:\\Users\\Michael\\AppData\\Roaming\\MetaQuotes\\Terminal\\884523AE28415014F7F7EA493EAB1A23\\MQL5\\Include",
+    "mql_tools.LogFile.NameLog": "C:\\Users\\Michael\\AppData\\Roaming\\MetaQuotes\\Terminal\\884523AE28415014F7F7EA493EAB1A23\\logs\\metaeditor.log",
+    "mql_tools.Metaeditor.Metaeditor5Dir": "C:\\Program Files\\GBE MetaTrader 5 Terminal\\MetaEditor64.exe",
+    "C_Cpp.default.includePath": [
+        "c:\\Users\\Michael\\AppData\\Roaming\\MetaQuotes\\Terminal\\884523AE28415014F7F7EA493EAB1A23\\MQL5\\Include",
+        "c:\\Users\\Michael\\AppData\\Roaming\\MetaQuotes\\Terminal\\884523AE28415014F7F7EA493EAB1A23\\MQL5\\Include\\Include"
+    ],
+    "files.associations": {
+        "*.mq5": "cpp",
+        "*.mqh": "cpp"
+    },
+    "C_Cpp.clang_format_style": "{ BasedOnStyle: Microsoft, UseTab: Never, IndentWidth: 4, TabWidth: 4, ColumnLimit: 0}"
+}
