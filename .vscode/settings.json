@@ -1,6 +1,6 @@
 {
-    "mql_tools.Metaeditor.Include5Dir": "C:\\Users\\Michael\\AppData\\Roaming\\MetaQuotes\\Terminal\\884523AE28415014F7F7EA493EAB1A23\\MQL5\\Include",
-    "mql_tools.LogFile.NameLog": "C:\\Users\\Michael\\AppData\\Roaming\\MetaQuotes\\Terminal\\884523AE28415014F7F7EA493EAB1A23\\logs\\metaeditor.log",
+    "mql_tools.Metaeditor.Include5Dir": "C:\\Users\\Michael\\AppData\\Roaming\\MetaQuotes\\Terminal\\884523AE28415014F7F7EA493EAB1A23\\MQL5\\",
+    "mql_tools.LogFile.NameLog": "DowHowSignalService.log",
     "mql_tools.Metaeditor.Metaeditor5Dir": "C:\\Program Files\\GBE MetaTrader 5 Terminal\\MetaEditor64.exe",
     "C_Cpp.default.includePath": [
         "c:\\Users\\Michael\\AppData\\Roaming\\MetaQuotes\\Terminal\\884523AE28415014F7F7EA493EAB1A23\\MQL5\\Include",
