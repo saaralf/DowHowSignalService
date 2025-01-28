@@ -240,7 +240,7 @@ bool SendDiscordMessage(string message, bool isError = false)
 //  message = (isError ? "? " : "? ") + message;
 
 // Prepare webhook data
-   string payload = "{ \"avatar_url\": \"https://www.dropbox.com/scl/fi/syc44v16hjk4nm9uruzhi/logo-blau-100.jpg?rlkey=n5my4usc0ta954vdo9n2kwm8n&st=76y5mms4&dl=0\",\"content\":\"" + EscapeJSON(message) + "\"}";
+   string payload = "{\"content\":\"" + EscapeJSON(message) + "\"}";
    string headers = "Content-Type: application/json\r\n";
 
    char post[], result[];
