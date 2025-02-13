@@ -13,7 +13,7 @@
 #include <Trade/Trade.mqh>
 
 // Strategy Parameters
-input group "Discord Settings"
+input group "===== Discord Settings ====="
 input string DiscordBotName = "DowHow Trading Signalservice";    // Name of the bot in Discord
 input color MessageColor = clrBlue;                 // Color for Discord messages
 
