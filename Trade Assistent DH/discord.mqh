@@ -53,6 +53,7 @@ struct TradeInfo
    string            sabiosl;
    string            sabiotp;
    bool              was_send;
+   bool              is_trade_pending;
   };
 TradeInfo tradeInfo[2];
 
