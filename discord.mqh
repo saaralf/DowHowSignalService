@@ -17,27 +17,15 @@ input group "===== Discord Settings ====="
 input string DiscordBotName = "DowHow Trading Signalservice";    // Name of the bot in Discord
 input color MessageColor = clrBlue;                 // Color for Discord messages
 
-// Saaralfd webhooks
-//input string LinkChannelM2 = "https://discord.com/api/webhooks/1313603310548418580/536YHYIxfiJwbpPB0mj8t1CRuePiVpLCs8TbEwQ06NVcUd_ekftgsnbGitLmjXhGcbU4";  // Discord Channel M2 Link
-//input string LinkChannelM5 = "https://discord.com/api/webhooks/1313603118768062575/TPHxceiomoSnyZmp4RZnKtwzM2U4ptc-lTCcnUxj4qqpo1UdXedoyRQaB_Gv-gE9JDSP";  // Discord Channel M5 Link
-
 // webhooks Markus 
-input string LinkChannelM2 = "https://discord.com/api/webhooks/1310622895764144149/krik955QUwx2ixt0t-91xBYuJzx9dfRFKPSY00vAAGxAH4XbuRwpr35nCs775Ek_UO4R";  // Discord Channel M2 Link
-input string LinkChannelM5 = "https://discord.com/api/webhooks/1310635653809049640/IFYg82RT0shabbE4FQLU8hZKecG7ta3JzS7uowsF2gZJJKoK8zVCaX6DfYjUEfYl6k39";  // Discord Channel M5 Link
-
+input string LinkChannelM2 = " ";  // Discord Channel 
 
 bool isWebRequestEnabled = false;
 datetime lastMessageTime = 0;
 
-
 // Discord webhook URL - Replace with your webhook URL
-string discord_webhook = LinkChannelM5;
+string discord_webhook = LinkChannelM2;
 string discord_webhook_test = "https://discord.com/api/webhooks/1328803943068860416/O7dsN4wcNk-vSA9sQQx1ZFzZUAhx8NsPe4JFPxQ4MuQtiOx1BWepkXqSz00ZkCrqiDHw";
-
-//string discord_webhook = "https://discord.com/api/webhooks/1313603118768062575/TPHxceiomoSnyZmp4RZnKtwzM2U4ptc-lTCcnUxj4qqpo1UdXedoyRQaB_Gv-gE9JDSP";
-//string discord_webhook_test = "https://discord.com/api/webhooks/1328803943068860416/O7dsN4wcNk-vSA9sQQx1ZFzZUAhx8NsPe4JFPxQ4MuQtiOx1BWepkXqSz00ZkCrqiDHw";
-
-
 
 // Structure to hold trade information
 struct TradeInfo
@@ -353,11 +341,11 @@ string get_discord_webhook()
      {
       return LinkChannelM2;
      }
-   if(Period()==PERIOD_M5)
+/*   if(Period()==PERIOD_M5)
      {
       return LinkChannelM5;
      }
-
+*/
    Alert("Falsche Zeiteinheit "+ EnumToString(Period())+" eingestellt:. Derzeit nur M2 und M5 definiert!");
    return discord_webhook_test;
   }
