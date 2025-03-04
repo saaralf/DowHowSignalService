@@ -12,32 +12,13 @@
 
 #include <Trade/Trade.mqh>
 
-// Strategy Parameters
-input group "===== Discord Settings ====="
-input string DiscordBotName = "DowHow Trading Signalservice";    // Name of the bot in Discord
-input color MessageColor = clrBlue;                 // Color for Discord messages
-
-// Saaralfd webhooks
-//input string LinkChannelM2 = "https://discord.com/api/webhooks/1313603310548418580/536YHYIxfiJwbpPB0mj8t1CRuePiVpLCs8TbEwQ06NVcUd_ekftgsnbGitLmjXhGcbU4";  // Discord Channel M2 Link
-//input string LinkChannelM5 = "https://discord.com/api/webhooks/1313603118768062575/TPHxceiomoSnyZmp4RZnKtwzM2U4ptc-lTCcnUxj4qqpo1UdXedoyRQaB_Gv-gE9JDSP";  // Discord Channel M5 Link
-
-// webhooks Markus 
-input string LinkChannelM2 = "https://discord.com/api/webhooks/1310622895764144149/krik955QUwx2ixt0t-91xBYuJzx9dfRFKPSY00vAAGxAH4XbuRwpr35nCs775Ek_UO4R";  // Discord Channel M2 Link
-input string LinkChannelM5 = "https://discord.com/api/webhooks/1310635653809049640/IFYg82RT0shabbE4FQLU8hZKecG7ta3JzS7uowsF2gZJJKoK8zVCaX6DfYjUEfYl6k39";  // Discord Channel M5 Link
-
 
 bool isWebRequestEnabled = false;
 datetime lastMessageTime = 0;
 
-
 // Discord webhook URL - Replace with your webhook URL
-string discord_webhook = LinkChannelM5;
+
 string discord_webhook_test = "https://discord.com/api/webhooks/1328803943068860416/O7dsN4wcNk-vSA9sQQx1ZFzZUAhx8NsPe4JFPxQ4MuQtiOx1BWepkXqSz00ZkCrqiDHw";
-
-//string discord_webhook = "https://discord.com/api/webhooks/1313603118768062575/TPHxceiomoSnyZmp4RZnKtwzM2U4ptc-lTCcnUxj4qqpo1UdXedoyRQaB_Gv-gE9JDSP";
-//string discord_webhook_test = "https://discord.com/api/webhooks/1328803943068860416/O7dsN4wcNk-vSA9sQQx1ZFzZUAhx8NsPe4JFPxQ4MuQtiOx1BWepkXqSz00ZkCrqiDHw";
-
-
 
 // Structure to hold trade information
 struct TradeInfo
@@ -77,7 +58,7 @@ bool checkDiscord()
 // Simple test message
    ResetLastError();
 
-   string test_message = "{\"content\":\"Discord Test Steffen\"}";
+   string test_message = "{\"content\":\"Discord Test Michael: Symbol "+_Symbol + ", Zeiteinheit "   +EnumToString(Period())+"\"}";
    string headers = "Content-Type: application/json\r\n";
    char data[], result[];
    ArrayResize(data, StringToCharArray(test_message, data, 0, WHOLE_ARRAY, CP_UTF8) - 1);
@@ -103,17 +84,23 @@ bool checkDiscord()
      }
 
    Print("Initialization step 3: Test Period");
-   if(get_discord_webhook()==discord_webhook_test)
+   Print("Check Period");
+   if(Period()!=InTimeframe)
      {
-      Print("Check Period");
+      Print("Zeiteinheit "+EnumToString(Period())+" ist nicht die in den Eigenschaften definierte Zeiteinheit "+EnumToString(InTimeframe)+"!");
       return false;
+     }else{
+      Print("Zeiteinheit "+EnumToString(Period())+" ist die in den Eigenschaften definierte Zeiteinheit "+EnumToString(InTimeframe)+"!");
+      Print("Symbol "+ _Symbol+" ist die in den Eigenschaften definierte Zeiteinheit"+EnumToString(InTimeframe)+"!");
+     Print("Alles ok");
      }
+     
 
    isWebRequestEnabled = true;
    Print("Initialization step 4: All checks passed!");
    Print("Successfully connected to Discord!");
 
-
+/*
 // Erzeuge Array TradeInfo
    tradeInfo[0].tradenummer=0;
    tradeInfo[0].symbol = _Symbol;
@@ -138,7 +125,7 @@ bool checkDiscord()
    tradeInfo[1].sabiosl = 0.0;
    tradeInfo[1].sabiotp = 0.0;
    tradeInfo[1].was_send=false;
-
+*/
 
 
 
@@ -167,7 +154,7 @@ string FormatTradeMessage(TradeInfo& tradeInfo)
   {
 
    string
-  
+
    message = "@everyone\n";
    message += ":red_circle:TRADINGSIGNAL: :red_circle:\n";
    message += "\n";
@@ -186,7 +173,7 @@ string FormatTradeMessage(TradeInfo& tradeInfo)
    message += "\n";
    message += ":orange_circle: **SL:** " + DoubleToString(tradeInfo.sl, _Digits) + " ("+ tradeInfo.sabiosl+")\n";
    message += ":dollar: **TP:** " + DoubleToString(tradeInfo.tp, _Digits) + " ("+tradeInfo.sabiotp+")\n";
-  
+
 //   message += "Uhrzeit der Meldung: " + TimeToString(TimeCurrent());
    return message;
 
@@ -351,11 +338,11 @@ string get_discord_webhook()
   {
    if(Period()==PERIOD_M2)
      {
-      return LinkChannelM2;
+      return discord_webhook;
      }
    if(Period()==PERIOD_M5)
      {
-      return LinkChannelM5;
+      return discord_webhook;
      }
 
    Alert("Falsche Zeiteinheit "+ EnumToString(Period())+" eingestellt:. Derzeit nur M2 und M5 definiert!");
