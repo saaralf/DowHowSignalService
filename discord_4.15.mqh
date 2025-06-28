@@ -316,7 +316,7 @@ string FormatTPMessage(TradeInfo& tradeInfo)
 string FormatCancelTradeMessage(TradeInfo& tradeInfo)
   {
    string  message = "@everyone\n";
-   message += "**Attention:** "+tradeInfo.symbol+" Trade "+tradeInfo.tradenummer+" - cancel the order cause trend is broken\n";
+   message += "**Attention:** "+tradeInfo.symbol+" Trade "+tradeInfo.tradenummer+" - cancel the order\n";
 
    return message;
   }
@@ -341,11 +341,16 @@ string get_discord_webhook()
      {
       return LinkChannelM2;
      }
-/*   if(Period()==PERIOD_M5)
+   if(Period()==PERIOD_M5)
      {
-      return LinkChannelM5;
+      return LinkChannelM2;
      }
-*/
+
+   if(Period()==PERIOD_H1)
+     {
+      return LinkChannelM2;
+     }
+
    Alert("Falsche Zeiteinheit "+ EnumToString(Period())+" eingestellt:. Derzeit nur M2 und M5 definiert!");
    return discord_webhook_test;
   }
