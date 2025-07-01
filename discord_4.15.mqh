@@ -173,8 +173,9 @@ string FormatTradeMessage(TradeInfo& tradeInfo)
    message += ":arrow_right: **Entry:** " + DoubleToString(tradeInfo.price, _Digits) + " ("+ tradeInfo.sabioentry+")\n";
    message += "\n";
    message += ":orange_circle: **SL:** " + DoubleToString(tradeInfo.sl, _Digits) + " ("+ tradeInfo.sabiosl+")\n";
+if(ShowTPButton) {
    message += ":dollar: **TP:** " + DoubleToString(tradeInfo.tp, _Digits) + " ("+tradeInfo.sabiotp+")\n";
-  
+  }
 //   message += "Uhrzeit der Meldung: " + TimeToString(TimeCurrent());
    return message;
 
