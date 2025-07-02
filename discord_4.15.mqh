@@ -12,19 +12,13 @@
 
 #include <Trade/Trade.mqh>
 
-// Strategy Parameters
-input group "===== Discord Settings ====="
-input string DiscordBotName = "DowHow Trading Signalservice";    // Name of the bot in Discord
-input color MessageColor = clrBlue;                 // Color for Discord messages
 
-// webhooks Markus 
-input string LinkChannelM2 = " ";  // Discord Channel 
+
 
 bool isWebRequestEnabled = false;
 datetime lastMessageTime = 0;
 
-// Discord webhook URL - Replace with your webhook URL
-string discord_webhook = LinkChannelM2;
+string discord_webhook = "";  // Wird dynamisch gesetzt
 string discord_webhook_test = "https://discord.com/api/webhooks/1328803943068860416/O7dsN4wcNk-vSA9sQQx1ZFzZUAhx8NsPe4JFPxQ4MuQtiOx1BWepkXqSz00ZkCrqiDHw";
 
 // Structure to hold trade information
@@ -45,6 +39,20 @@ struct TradeInfo
   };
 TradeInfo tradeInfo[2];
 
+
+
+void PrintWebhookStatus()
+  {
+   Print("=== Discord Webhook Konfiguration ===");
+   Print("M2 Webhook: ", (WebhookM2 != "" ? "✓ Konfiguriert" : "✗ Nicht konfiguriert"));
+   Print("M5 Webhook: ", (WebhookM5 != "" ? "✓ Konfiguriert" : "✗ Nicht konfiguriert"));
+   Print("H1 Webhook: ", (WebhookH1 != "" ? "✓ Konfiguriert" : "✗ Nicht konfiguriert"));
+   Print("Default Webhook: ", (WebhookDefault != "" ? "✓ Konfiguriert" : "✗ Nicht konfiguriert"));
+   Print("Aktueller Timeframe: ", EnumToString(Period()));
+   Print("Verwendete Webhook: ", StringSubstr(get_discord_webhook(), 0, 50) + "...");
+   Print("===================================");
+  }
+
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -52,7 +60,13 @@ bool checkDiscord()
   {
    Print("Initialization step 1: Checking WebRequest permissions...");
 
-
+ // NEU: Prüfe ob mindestens eine Webhook URL konfiguriert ist
+   if(WebhookM2 == "" && WebhookM5 == "" && WebhookH1 == "" && WebhookDefault == "")
+     {
+      Print("WARNUNG: Keine Discord Webhook URLs konfiguriert!");
+      Print("Bitte konfigurieren Sie mindestens eine Webhook URL in den EA Einstellungen.");
+      return false;
+     }
 
    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
      {
@@ -155,7 +169,7 @@ string FormatTradeMessage(TradeInfo& tradeInfo)
   {
 
    string
-  
+
    message = "@everyone\n";
    message += ":red_circle:TRADINGSIGNAL: :red_circle:\n";
    message += "\n";
@@ -173,9 +187,10 @@ string FormatTradeMessage(TradeInfo& tradeInfo)
    message += ":arrow_right: **Entry:** " + DoubleToString(tradeInfo.price, _Digits) + " ("+ tradeInfo.sabioentry+")\n";
    message += "\n";
    message += ":orange_circle: **SL:** " + DoubleToString(tradeInfo.sl, _Digits) + " ("+ tradeInfo.sabiosl+")\n";
-if(ShowTPButton) {
-   message += ":dollar: **TP:** " + DoubleToString(tradeInfo.tp, _Digits) + " ("+tradeInfo.sabiotp+")\n";
-  }
+   if(ShowTPButton)
+     {
+      message += ":dollar: **TP:** " + DoubleToString(tradeInfo.tp, _Digits) + " ("+tradeInfo.sabiotp+")\n";
+     }
 //   message += "Uhrzeit der Meldung: " + TimeToString(TimeCurrent());
    return message;
 
@@ -223,7 +238,15 @@ bool SendDiscordMessage(string message, bool isError = false)
       return false;
      }
 
-
+ // NEU: Hole aktuelle Webhook URL
+   discord_webhook = get_discord_webhook();
+   
+    if(discord_webhook == discord_webhook_test)
+     {
+      Print("WARNUNG: Verwende Test-Webhook, da keine produktive URL konfiguriert ist!");
+     }
+   
+   
    Sleep(100);
 
 // Add emoji prefix for visual status
@@ -338,24 +361,52 @@ string FormatUpdateTradeMessage(TradeInfo& tradeInfo)
 //+------------------------------------------------------------------+
 string get_discord_webhook()
   {
-   if(Period()==PERIOD_M2)
+   string webhook_url = "";
+
+// Wähle Webhook basierend auf Timeframe
+   switch(Period())
      {
-      return LinkChannelM2;
-     }
-   if(Period()==PERIOD_M5)
-     {
-      return LinkChannelM2;
+      case PERIOD_M1:
+         webhook_url = WebhookM1;
+         break;
+      case PERIOD_M2:
+         webhook_url = WebhookM2;
+         break;
+      case PERIOD_M5:
+         webhook_url = WebhookM5;
+         break;
+      case PERIOD_M10:
+         webhook_url = WebhookM10;
+         break;
+      case PERIOD_M15:
+         webhook_url = WebhookM15;
+         break;
+      case PERIOD_M30:
+         webhook_url = WebhookM30;
+         break;
+      case PERIOD_H1:
+         webhook_url = WebhookH1;
+         break;
+      default:
+         webhook_url = WebhookDefault;
+         break;
      }
 
-   if(Period()==PERIOD_H1)
+// Fallback wenn URL leer ist
+   if(webhook_url == "" || StringLen(webhook_url) < 10)
      {
-      return LinkChannelM2;
+      webhook_url = WebhookDefault;
+
+      // Wenn auch Default leer, verwende Test-Webhook
+      if(webhook_url == "" || StringLen(webhook_url) < 10)
+        {
+         Print("WARNUNG: Keine Discord Webhook URL konfiguriert für ", EnumToString(Period()));
+         return discord_webhook_test;
+        }
      }
 
-   Alert("Falsche Zeiteinheit "+ EnumToString(Period())+" eingestellt:. Derzeit nur M2 und M5 definiert!");
-   return discord_webhook_test;
+   return webhook_url;
   }
-
 
 
 //+------------------------------------------------------------------+
