@@ -18,7 +18,7 @@ input string DiscordBotName = "DowHow Trading Signalservice";    // Name of the 
 input color MessageColor = clrBlue;                 // Color for Discord messages
 
 // webhooks Markus 
-input string LinkChSannelM2 = " ";  // Discord Channel 
+input string LinkChannelM2 = " ";  // Discord Channel 
 
 bool isWebRequestEnabled = false;
 datetime lastMessageTime = 0;
@@ -173,8 +173,9 @@ string FormatTradeMessage(TradeInfo& tradeInfo)
    message += ":arrow_right: **Entry:** " + DoubleToString(tradeInfo.price, _Digits) + " ("+ tradeInfo.sabioentry+")\n";
    message += "\n";
    message += ":orange_circle: **SL:** " + DoubleToString(tradeInfo.sl, _Digits) + " ("+ tradeInfo.sabiosl+")\n";
+if(ShowTPButton) {
    message += ":dollar: **TP:** " + DoubleToString(tradeInfo.tp, _Digits) + " ("+tradeInfo.sabiotp+")\n";
-  
+  }
 //   message += "Uhrzeit der Meldung: " + TimeToString(TimeCurrent());
    return message;
 
@@ -316,7 +317,7 @@ string FormatTPMessage(TradeInfo& tradeInfo)
 string FormatCancelTradeMessage(TradeInfo& tradeInfo)
   {
    string  message = "@everyone\n";
-   message += "**Attention:** "+tradeInfo.symbol+" Trade "+tradeInfo.tradenummer+" - cancel the order cause trend is broken\n";
+   message += "**Attention:** "+tradeInfo.symbol+" Trade "+tradeInfo.tradenummer+" - cancel the order\n";
 
    return message;
   }
@@ -342,6 +343,11 @@ string get_discord_webhook()
       return LinkChannelM2;
      }
    if(Period()==PERIOD_M5)
+     {
+      return LinkChannelM2;
+     }
+
+   if(Period()==PERIOD_H1)
      {
       return LinkChannelM2;
      }
