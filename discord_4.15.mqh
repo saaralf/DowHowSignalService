@@ -18,7 +18,7 @@ input string DiscordBotName = "DowHow Trading Signalservice";    // Name of the 
 input color MessageColor = clrBlue;                 // Color for Discord messages
 
 // webhooks Markus 
-input string LinkChannelM2 = " ";  // Discord Channel 
+input string LinkChannelM2 = "https://discordapp.com/api/webhooks/1328803943068860416/O7dsN4wcNk-vSA9sQQx1ZFzZUAhx8NsPe4JFPxQ4MuQtiOx1BWepkXqSz00ZkCrqiDHw";  // Discord Channel 
 
 bool isWebRequestEnabled = false;
 datetime lastMessageTime = 0;
@@ -53,19 +53,20 @@ bool checkDiscord()
    Print("Initialization step 1: Checking WebRequest permissions...");
 
 
-
    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
      {
       Print("Error: WebRequest is not allowed. Please allow in Tool -> Options -> Expert Advisors");
       return false;
      }
+Print ("TerminalInfoInteger ok!");
+
 
    Print("Initialization step 2: Testing Discord connection...");
 
 // Simple test message
    ResetLastError();
 
-   string test_message = "{\"content\":\"Discord Test Steffen\"}";
+   string test_message = "{\"content\":\"Discord Test Michael\"}";
    string headers = "Content-Type: application/json\r\n";
    char data[], result[];
    ArrayResize(data, StringToCharArray(test_message, data, 0, WHOLE_ARRAY, CP_UTF8) - 1);
