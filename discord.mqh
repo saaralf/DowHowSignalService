@@ -1,15 +1,9 @@
 ﻿//+------------------------------------------------------------------+
-
-/* History
-   16.01.2025 (Steffen) Zeilen Input LinkChannelM2 und ...M5 hinzugefÃ¼gt - wird nicht angezeigt
-   16.01.2025 (saaralf) Methoden FormatSLMessage, FormatTPMessage ,FormatUpdateTradeMessage und FormatCancelTradeMessage erstellt
-
-//-------------------------------------------------------------------*/
-
-#property copyright "Copyright 2025, saaralf, Michael Keller"
-#property link      "kellermichael.de"
-#property version   "1.01"
-
+//|                                                      ProjectName |
+//|                                      Copyright 2020, CompanyName |
+//|                                       http://www.companyname.net |
+//+------------------------------------------------------------------+
+#include "db_state.mqh"
 #include <Trade/Trade.mqh>
 
 // Strategy Parameters
@@ -17,33 +11,95 @@ input group "===== Discord Settings ====="
 input string DiscordBotName = "DowHow Trading Signalservice";    // Name of the bot in Discord
 input color MessageColor = clrBlue;                 // Color for Discord messages
 
-// webhooks Markus 
-input string LinkChSannelM2 = " ";  // Discord Channel 
+// webhooks Markus
+input string Webhook_System = "https://discordapp.com/api/webhooks/1328803943068860416/O7dsN4wcNk-vSA9sQQx1ZFzZUAhx8NsPe4JFPxQ4MuQtiOx1BWepkXqSz00ZkCrqiDHw";  // Discord Channel
+input string Webhook_AUDUSD = "https://discordapp.com/api/webhooks/1450622346661462259/OgfubC7T87mutfRTVwD0MNbwaPDA05rUC86mgA1KfpHXqPMcyWTFRrbhXj8ALDvUsLRh";
+input string Webhook_EURUSD = "https://discordapp.com/api/webhooks/1450620878558724166/b0l7BJt8RVPA7shPc1dMFEDKe_UFLjyE2cV77mwxIkvRTaEnwtWsomSTiluWM6UeEMAQ";
+input string Webhook_GPBUSD = "https://discordapp.com/api/webhooks/1450621149154246667/2qkM0Eq_Ic8frSyuMJXOB_VqwklR5S0rZKnb6oxFIszis4KAdDbnuK2p5mtz5Qq60chi";
+input string Webhook_USDJPY = "https://discordapp.com/api/webhooks/1450621290716069928/8ZAnAbMwx5vU6_H3SmszphfNZnq1kFhUMcdbLCgQok81FWvr2vVp1iBgE_mDDodeaMCS";
+input string Webhook_USDCHF = "https://discordapp.com/api/webhooks/1450621580551127142/HwBW4ySbMaUu3BF6PGRBX1-mSGFRjzAB6CSZjuvPffbvFla04ativeVCWqQUWK7EsDd8";
+input string Webhook_USDCAD = "https://discordapp.com/api/webhooks/1450621496765452451/LyofoHfsnJ-EPoiN-R9idXBrKt3qRCvKdWKq1r_SE9DdmZpevQjPjCvgu66khcQ9NKeL";
+input string Webhook_NZDUSD = "https://discordapp.com/api/webhooks/1450621799787401346/zLu5SEDVqHXRqaDgrGQ-aKR1Ixh3V6SH-P3AF4DmkyoBqe-oMAMa-PjNLF1XxPsPL09D";
+input string Webhook_Nasdaq = "https://discordapp.com/api/webhooks/1450621910730670180/6zb7Vbpcv2U1uxvW6wkjw2H0G4nFUdfB9_Davjb1RE1qgYwXQznAo5CUFzTx10Umlgrm";
+input string Webhook_Gold = "https://discordapp.com/api/webhooks/1450621987985686639/ioVRX8Kbn1d1dUWQFLtczHNh8bjAIBeO2A5lNkuS7G130N64CobTNeWXHUY0I5ligA6n";
+input string Webhook_WTI = "https://discordapp.com/api/webhooks/1450622078901289192/n90YprBYG2LDbYWUMyIFdf6XvA0vRnndlqTjG_mqmi3n8o40urBeDaYIqwKafag0_pRy";
+input string Webhook_EURJPY = "https://discordapp.com/api/webhooks/1450622149797740666/P1agMvI1lthidesmNoiiWC8lbcHMy-nt5XHdQyDTbCg-B5B2sGm4RkwTUVQf8DrlLFA8";
+input string Webhook_EURNZD = "https://discordapp.com/api/webhooks/1450622242663694587/4o-Zz7bkyAoMu6DAFFybPkvfHE3UQmstwU7VcDgd8FcqXPH3boCOxjLH0U9jmHOqW_sk";
+
+// Wenn der Broker seltsame Namen für die Symbole hat, dann muss dieser in den Eigenschaften angegeben werden
+input group "======= Symbolnamen ======="
+input string SYMBOL_NAME_EURUSD = "EURUSD";
+input string SYMBOL_NAME_AUDUSD ="AUDUSD";
+input string SYMBOL_NAME_GPBUSD ="GPBUSD";
+input string SYMBOL_NAME_USDCAD ="USDCAD";
+input string SYMBOL_NAME_USDCHF ="USDCHF";
+input string SYMBOL_NAME_USDJPY ="USDJPY";
+input string  SYMBOL_NAME_EURJPY ="EURJPY";
+input string  SYMBOL_NAME_EURNZD ="EURNZD";
+input string  SYMBOL_NAME_XAUUSD ="XAUUSD";
+input string  SYMBOL_NAME_WTI ="WTI";
+input string SYMBOL_NAME_NASDAQ ="SYMBOL_NAME_NASDAQ";
+input string SYMBOL_NAME_0001 ="";
+input string SYMBOL_NAME_0002 ="";
+input string SYMBOL_NAME_0003 ="";
+input string SYMBOL_NAME_0004 ="";
+input string SYMBOL_NAME_0005 ="";
+input string SYMBOL_NAME_0006 ="";
+input string SYMBOL_NAME_0007 ="";
+input string SYMBOL_NAME_0008 ="";
+input string SYMBOL_NAME_0009 ="";
+input string SYMBOL_NAME_0010 ="";
+input string SYMBOL_NAME_0011 ="";
+input string SYMBOL_NAME_0012 ="";
+input string SYMBOL_NAME_0013 ="";
+input string SYMBOL_NAME_0014 ="";
+input string SYMBOL_NAME_0015 ="";
+input string SYMBOL_NAME_0016 ="";
+input string SYMBOL_NAME_0017 ="";
+input string SYMBOL_NAME_0018 ="";
+input string SYMBOL_NAME_0019 ="";
+input string SYMBOL_NAME_0020 ="";
+
+
+#define SYMBOL_NAME_EURUSD SYMBOL_NAME_EURUSD
+#define SYMBOL_NAME_AUDUSD SYMBOL_NAME_AUDUSD
+#define SYMBOL_NAME_GPBUSD SYMBOL_NAME_GPBUSD
+#define SYMBOL_NAME_USDCAD SYMBOL_NAME_USDCAD
+#define SYMBOL_NAME_USDCHF SYMBOL_NAME_USDCHF
+#define SYMBOL_NAME_USDJPY SYMBOL_NAME_USDJPY
+#define SYMBOL_NAME_EURJPY SYMBOL_NAME_EURJPY
+#define SYMBOL_NAME_EURNZD SYMBOL_NAME_EURNZD
+#define SYMBOL_NAME_XAUUSD SYMBOL_NAME_XAUUSD
+#define SYMBOL_NAME_WTI SYMBOL_NAME_WTI
+#define SYMBOL_NAME_NASDAQ SYMBOL_NAME_NASDAQ
+#define SYMBOL_NAME_0001 SYMBOL_NAME_0001
+#define SYMBOL_NAME_0002 SYMBOL_NAME_0002
+#define SYMBOL_NAME_0003 SYMBOL_NAME_0003
+#define SYMBOL_NAME_0004 SYMBOL_NAME_0004
+#define SYMBOL_NAME_0005 SYMBOL_NAME_0005
+#define SYMBOL_NAME_0006 SYMBOL_NAME_0006
+#define SYMBOL_NAME_0007 SYMBOL_NAME_0007
+#define SYMBOL_NAME_0008 SYMBOL_NAME_0008
+#define SYMBOL_NAME_0009 SYMBOL_NAME_0009
+#define SYMBOL_NAME_0010 SYMBOL_NAME_0010
+#define SYMBOL_NAME_0011 SYMBOL_NAME_0011
+#define SYMBOL_NAME_0012 SYMBOL_NAME_0012
+#define SYMBOL_NAME_0013 SYMBOL_NAME_0013
+#define SYMBOL_NAME_0014 SYMBOL_NAME_0014
+#define SYMBOL_NAME_0015 SYMBOL_NAME_0015
+#define SYMBOL_NAME_0016 SYMBOL_NAME_0016
+#define SYMBOL_NAME_0017 SYMBOL_NAME_0017
+#define SYMBOL_NAME_0018 SYMBOL_NAME_0018
+#define SYMBOL_NAME_0019 SYMBOL_NAME_0019
+#define SYMBOL_NAME_0020 SYMBOL_NAME_0020
 
 bool isWebRequestEnabled = false;
 datetime lastMessageTime = 0;
 
 // Discord webhook URL - Replace with your webhook URL
-string discord_webhook = LinkChannelM2;
+string discord_webhook = Webhook_System;
 string discord_webhook_test = "https://discord.com/api/webhooks/1328803943068860416/O7dsN4wcNk-vSA9sQQx1ZFzZUAhx8NsPe4JFPxQ4MuQtiOx1BWepkXqSz00ZkCrqiDHw";
 
-// Structure to hold trade information
-struct TradeInfo
-  {
-   int               tradenummer;
-   string            symbol;
-   string            type;
-   double            price;
-   double            lots;
-   double            sl;
-   double            tp;
-   string            sabioentry;
-   string            sabiosl;
-   string            sabiotp;
-   bool              was_send;
-   bool              is_trade_pending;
-  };
-TradeInfo tradeInfo[2];
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -51,21 +107,19 @@ TradeInfo tradeInfo[2];
 bool checkDiscord()
   {
    Print("Initialization step 1: Checking WebRequest permissions...");
-
-
-
    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
      {
       Print("Error: WebRequest is not allowed. Please allow in Tool -> Options -> Expert Advisors");
       return false;
      }
+   Print("TerminalInfoInteger ok!");
 
    Print("Initialization step 2: Testing Discord connection...");
 
 // Simple test message
    ResetLastError();
 
-   string test_message = "{\"content\":\"Discord Test Steffen\"}";
+   string test_message = "{\"content\":\"DowHow Signal Dienst AS3 System Test erfolgreich\"}";
    string headers = "Content-Type: application/json\r\n";
    char data[], result[];
    ArrayResize(data, StringToCharArray(test_message, data, 0, WHOLE_ARRAY, CP_UTF8) - 1);
@@ -90,46 +144,45 @@ bool checkDiscord()
       return false;
      }
 
-   Print("Initialization step 3: Test Period");
+   Print("Initialization step 3: Set Webhook");
    if(get_discord_webhook()==discord_webhook_test)
      {
-      Print("Check Period");
+      Print("Please set Webhooks: ");
       return false;
+     }
+   else
+     {
+      Print("Use Webhook: "+get_discord_webhook());
      }
 
    isWebRequestEnabled = true;
    Print("Initialization step 4: All checks passed!");
    Print("Successfully connected to Discord!");
 
+   test_message = "{\"content\":\"DowHow Signal Dienst AS3 System für "+_Symbol+" mit Webhook "+get_discord_webhook() +"\"}";
+   headers = "Content-Type: application/json\r\n";
 
-// Erzeuge Array TradeInfo
-   tradeInfo[0].tradenummer=0;
-   tradeInfo[0].symbol = _Symbol;
-   tradeInfo[0].type = "BUY";
-   tradeInfo[0].price = 0.0;
-   tradeInfo[0].lots = 0.01;
-   tradeInfo[0].sl = 0.0;
-   tradeInfo[0].tp = 0.0;
-   tradeInfo[0].sabioentry = 0.0;
-   tradeInfo[0].sabiosl = 0.0;
-   tradeInfo[0].sabiotp = 0.0;
-   tradeInfo[0].was_send=false;
+   ArrayResize(data, StringToCharArray(test_message, data, 0, WHOLE_ARRAY, CP_UTF8) - 1);
 
-   tradeInfo[1].tradenummer=0;
-   tradeInfo[1].symbol = _Symbol;
-   tradeInfo[1].type = "SELL";
-   tradeInfo[1].price = 0.0;
-   tradeInfo[1].lots = 0.01;
-   tradeInfo[1].sl = 0.0;
-   tradeInfo[1].tp = 0.0;
-   tradeInfo[1].sabioentry = 0.0;
-   tradeInfo[1].sabiosl = 0.0;
-   tradeInfo[1].sabiotp = 0.0;
-   tradeInfo[1].was_send=false;
+   res = WebRequest(
+            "POST",
+            discord_webhook_test,
+            headers,
+            5000,
+            data,
+            result,
+            headers
+         );
 
-
-
-
+   if(res == -1)
+     {
+      int error = GetLastError();
+      Print("WebRequest failed. Error code: ", error);
+      Print("Make sure these URLs are allowed:");
+      Print("https://discord.com/*");
+      Print("https://discordapp.com/*");
+      return false;
+     }
    return true;
   }
 
@@ -147,39 +200,29 @@ string EscapeJSON(string text)
    return escaped;
   }
 
-
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-string FormatTradeMessage(TradeInfo& tradeInfo)
+string FormatTradeMessage(const DB_PositionRow &row)
   {
+   string message = "@everyone\n";
+   message += ":red_circle:TRADINGSIGNAL: :red_circle:\n\n";
+   message += StringFormat("----------[Trade Nr. %d | Pos %d]----------\n\n", row.trade_no, row.pos_no);
 
-   string
-  
-   message = "@everyone\n";
-   message += ":red_circle:TRADINGSIGNAL: :red_circle:\n";
-   message += "\n";
-   message +="----------[Trade Nr. "+tradeInfo.tradenummer+"]----------\n";
-   message += "\n";
-   if(tradeInfo.type=="BUY")
-     {
-      message += ":chart_with_upwards_trend: **" + tradeInfo.type + ":** ";
-     }
+   string dir = row.direction; // "LONG"/"SHORT"
+   if(dir == "LONG")
+      message += ":chart_with_upwards_trend: **LONG:** ";
    else
-     {
-      message += ":chart_with_downwards_trend: **" + tradeInfo.type + ":** ";
-     }
-   message += "**Symbol:** "+tradeInfo.symbol + " "+ getPeriodText() + "\n";
-   message += ":arrow_right: **Entry:** " + DoubleToString(tradeInfo.price, _Digits) + " ("+ tradeInfo.sabioentry+")\n";
-   message += "\n";
-   message += ":orange_circle: **SL:** " + DoubleToString(tradeInfo.sl, _Digits) + " ("+ tradeInfo.sabiosl+")\n";
-   message += ":dollar: **TP:** " + DoubleToString(tradeInfo.tp, _Digits) + " ("+tradeInfo.sabiotp+")\n";
-  
-//   message += "Uhrzeit der Meldung: " + TimeToString(TimeCurrent());
-   return message;
+      message += ":chart_with_downwards_trend: **SHORT:** ";
 
-//string message ="@everyone \\n\\n----------[Trade Nr. 88]----------\\n:chart_with_downwards_trend: **Sell: DAX40 M5**:arrow_right: **Entry:** 123456 (Sabio: 12345):orange_circle: **SL:** 123456 (Sabio: 12345):dollar: **TP:** 123456 (Sabio: 12345)";
+   message += "**Symbol:** " + row.symbol + " " + row.tf + "\n";
+   message += ":arrow_right: **Entry:** " + DoubleToString(row.entry, _Digits) + " (" + row.sabio_entry + ")\n\n";
+   message += ":orange_circle: **SL:** " + DoubleToString(row.sl, _Digits) + " (" + row.sabio_sl + ")\n";
+   
+
+   return message;
   }
+
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -188,7 +231,7 @@ bool SendDiscordMessageTest(string message, bool isError = false)
   {
 
    string discord_webhook_save = discord_webhook;
-   string discord_webhook =discord_webhook_test;
+    discord_webhook =discord_webhook_test;
 
    return SendDiscordMessage(message,  false);
 
@@ -200,14 +243,18 @@ bool SendDiscordMessageTest(string message, bool isError = false)
 string getPeriodText()
   {
 
+   ENUM_TIMEFRAMES tf = Period();
+   int sec = PeriodSeconds(tf);
+   if(sec <= 0)
+      return EnumToString(tf);
 
-   if(EnumToString(Period()) == "PERIOD_M2")
-      return "M2";
+   int min = sec / 60;
+   if(min < 60)
+      return "M" + IntegerToString(min);
+   if(min < 24*60)
+      return "H" + IntegerToString(min/60);
+   return "D" + IntegerToString(min/(24*60));
 
-   if(EnumToString(Period()) == "PERIOD_M5")
-      return "M5";
-
-   return "H1";
 
   }
 
@@ -286,15 +333,14 @@ bool SendDiscordMessage(string message, bool isError = false)
   }
 
 
-
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-string FormatSLMessage(TradeInfo& tradeInfo)
+string FormatSLMessage(const DB_PositionRow &row)
   {
-   string  message = "@everyone\n";
-   message += "**Note:** "+tradeInfo.symbol+" Trade "+tradeInfo.tradenummer+" - has been stopped out\n";
-
+   string message = "@everyone\n";
+   message += StringFormat("**Note:** %s %s Trade %d Pos %d - SL erreicht\n",
+                           row.symbol, row.tf, row.trade_no, row.pos_no);
    return message;
   }
 
@@ -303,33 +349,27 @@ string FormatSLMessage(TradeInfo& tradeInfo)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-string FormatTPMessage(TradeInfo& tradeInfo)
+string FormatCancelTradeMessage(const DB_PositionRow &row)
   {
-   string  message = "@everyone\n";
-   message += "**Note:** "+tradeInfo.symbol+" Trade "+tradeInfo.tradenummer+" - target reached :dollar: \n";
-
+   string message = "@everyone\n";
+   message += StringFormat("**Attention:** %s %s Trade %d Pos %d - Order canceln\n",
+                           row.symbol, row.tf, row.trade_no, row.pos_no);
    return message;
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-string FormatCancelTradeMessage(TradeInfo& tradeInfo)
+string FormatUpdateTradeMessage(const DB_PositionRow &row)
   {
-   string  message = "@everyone\n";
-   message += "**Attention:** "+tradeInfo.symbol+" Trade "+tradeInfo.tradenummer+" - cancel the order cause trend is broken\n";
-
+   string message = "@everyone\n";
+   message += StringFormat("**Attention:** %s %s Trade %d Pos %d - SL -> %s (Sabio: %s) | TP -> %s (Sabio: %s)\n",
+                           row.symbol, row.tf, row.trade_no, row.pos_no,
+                           DoubleToString(row.sl, _Digits), row.sabio_sl);
+                          
    return message;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-string FormatUpdateTradeMessage(TradeInfo& tradeInfo)
-  {
-   string  message = "@everyone\n";
-   message += "**Attention:** "+tradeInfo.symbol+" Trade "+tradeInfo.tradenummer+" - I trail my SL price down to "+tradeInfo.sl+" (Sabio: "+tradeInfo.sl+") - Target new: "+tradeInfo.tp+" (Sabio:  "+tradeInfo.tp +")\n";
 
-   return message;
-  }
+
 
 
 //+------------------------------------------------------------------+
@@ -337,17 +377,96 @@ string FormatUpdateTradeMessage(TradeInfo& tradeInfo)
 //+------------------------------------------------------------------+
 string get_discord_webhook()
   {
-   if(Period()==PERIOD_M2)
-     {
-      return LinkChannelM2;
-     }
-   if(Period()==PERIOD_M5)
-     {
-      return LinkChannelM2;
-     }
 
-   Alert("Falsche Zeiteinheit "+ EnumToString(Period())+" eingestellt:. Derzeit nur M2 und M5 definiert!");
-   return discord_webhook_test;
+   if(_Symbol == SYMBOL_NAME_EURUSD)
+      return Webhook_EURUSD;
+
+   if(_Symbol == SYMBOL_NAME_AUDUSD)
+      return Webhook_AUDUSD;
+   if(_Symbol == SYMBOL_NAME_USDCAD)
+      return Webhook_USDCAD;
+   if(_Symbol == SYMBOL_NAME_USDCHF)
+      return Webhook_USDCHF;
+   if(_Symbol == SYMBOL_NAME_USDJPY)
+      return Webhook_USDJPY;
+   if(_Symbol == SYMBOL_NAME_EURJPY)
+      return Webhook_EURJPY;
+   if(_Symbol == SYMBOL_NAME_EURNZD)
+      return Webhook_EURNZD;
+   if(_Symbol == SYMBOL_NAME_XAUUSD)
+      return Webhook_Gold;
+   if(_Symbol == SYMBOL_NAME_WTI)
+      return Webhook_WTI;
+   if(_Symbol == SYMBOL_NAME_NASDAQ)
+      return Webhook_Nasdaq;
+   if(_Symbol == SYMBOL_NAME_GPBUSD)
+      return Webhook_GPBUSD;
+
+   return Webhook_System;
+
+  }
+
+
+#define OBJ_ENTRY_LINE  "PR_HL_ENTRY"   // <- an deinen echten Namen anpassen
+#define OBJ_SL_LINE     "PR_HL_SL"
+#define OBJ_TP_LINE     "PR_HL_TP"
+
+#define OBJ_SABIO_ENTRY "SabioEntry"
+#define OBJ_SABIO_SL    "SabioSL"
+#define OBJ_SABIO_TP    "SabioTP"
+
+
+
+
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+string TF_Text()
+  {
+// liefert z.B. "PERIOD_H1"
+   return EnumToString((ENUM_TIMEFRAMES)_Period);
+  }
+
+// optional hübscher: "H1" statt "PERIOD_H1"
+string TF_Short()
+  {
+   switch((ENUM_TIMEFRAMES)_Period)
+     {
+      case PERIOD_M1:
+         return "M1";
+      case PERIOD_M5:
+         return "M5";
+      case PERIOD_M15:
+         return "M15";
+      case PERIOD_M30:
+         return "M30";
+      case PERIOD_H1:
+         return "H1";
+      case PERIOD_H4:
+         return "H4";
+      case PERIOD_D1:
+         return "D1";
+      case PERIOD_W1:
+         return "W1";
+      case PERIOD_MN1:
+         return "MN1";
+      default:
+         return TF_Text();
+     }
+  }
+
+
+string FormatTradeMessageRow(const DB_PositionRow &row, const string order_type /*BUY/SELL*/)
+  {
+   string msg="@everyone\n:red_circle:TRADINGSIGNAL: :red_circle:\n\n";
+   msg += "----------[Trade Nr. " + IntegerToString(row.trade_no) + " | Pos " + IntegerToString(row.pos_no) + "]----------\n\n";
+   msg += (order_type=="BUY" ? ":chart_with_upwards_trend: **BUY:** " : ":chart_with_downwards_trend: **SELL:** ");
+   msg += "**Symbol:** " + row.symbol + " " + getPeriodText() + "\n";
+   msg += ":arrow_right: **Entry:** " + DoubleToString(row.entry, _Digits) + " (" + row.sabio_entry + ")\n\n";
+   msg += ":orange_circle: **SL:** " + DoubleToString(row.sl, _Digits) + " (" + row.sabio_sl + ")\n";
+
+   return msg;
   }
 
 
@@ -442,4 +561,7 @@ void SendScreenShot(string symbol,int _period, int ScreenWidth = 1912, int Scree
    Sleep(5);
    return;
   }
+//+------------------------------------------------------------------+
+
+
 //+------------------------------------------------------------------+
