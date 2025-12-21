@@ -766,115 +766,130 @@ void UI_CreateOrUpdateOverviewPanel()
 
    UI_PositionOverviewPanel();
   }
+//+--------------
+
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 void UI_UpdateOverviewPanel()
   {
-   UI_CreateOrUpdateOverviewPanel();
-   UI_PositionOverviewPanel();
-
    DB_PositionRow rows[];
    int n = DB_LoadPositions(_Symbol, (ENUM_TIMEFRAMES)_Period, rows);
 
-   // Header
-   string hdr = "OVERVIEW  (LONG | SHORT)";
-   ObjectSetString(0, TA_OVERVIEW_TXT, OBJPROP_TEXT, hdr);
+   UI_CreateOrUpdateOverviewPanel();
 
-   // Welche Trades sind "aktiv"? (primär Meta, fallback: aus rows ableiten, aber NUR wenn nicht-closed vorhanden)
-   int activeL = active_long_trade_no;
-   int activeS = active_short_trade_no;
+   // Panel unter Cancel-Buttons ausrichten
+   UI_PositionOverviewPanel();
 
-   if(activeL <= 0)
+   // Aktive Tradenummern aus DB ableiten (Status nicht CLOSED*)
+   int activeLong = 0;
+   int activeShort = 0;
+   for(int i = 0; i < n; i++)
      {
-      for(int i=0;i<n;i++)
-        {
-         if(rows[i].direction != "LONG") continue;
-         if(rows[i].is_pending <= 0 && rows[i].was_sent <= 0) continue;
-         if(StringFind(rows[i].status, "CLOSED") == 0) continue;
-         activeL = MathMax(activeL, rows[i].trade_no);
-        }
-     }
-   if(activeS <= 0)
-     {
-      for(int i=0;i<n;i++)
-        {
-         if(rows[i].direction != "SHORT") continue;
-         if(rows[i].is_pending <= 0 && rows[i].was_sent <= 0) continue;
-         if(StringFind(rows[i].status, "CLOSED") == 0) continue;
-         activeS = MathMax(activeS, rows[i].trade_no);
-        }
+      if(rows[i].was_sent <= 0 && rows[i].is_pending <= 0)
+         continue;
+      if(StringFind(rows[i].status, "CLOSED") == 0)
+         continue;
+
+      if(rows[i].direction == "LONG")
+         activeLong = MathMax(activeLong, rows[i].trade_no);
+      else if(rows[i].direction == "SHORT")
+         activeShort = MathMax(activeShort, rows[i].trade_no);
      }
 
-   string txtL = "LONG";
-   if(activeL > 0) txtL += StringFormat("  (T%d)", activeL);
-   txtL += "\n";
-   txtL += "----------------\n";
+   // Column-Texts sammeln
+   string longLines[32];
+   string shortLines[32];
+   int longCnt = 0, shortCnt = 0;
 
-   string txtS = "SHORT";
-   if(activeS > 0) txtS += StringFormat(" (T%d)", activeS);
-   txtS += "\n";
-   txtS += "----------------\n";
+   longLines[longCnt++]   = (activeLong > 0)  ? StringFormat("LONG  T%d", activeLong)  : "LONG  (kein aktiver Trade)";
+   shortLines[shortCnt++] = (activeShort > 0) ? StringFormat("SHORT T%d", activeShort) : "SHORT (kein aktiver Trade)";
 
-   int shownL = 0, shownS = 0;
-
-   for(int i=0;i<n;i++)
+   // Positionen für die aktiven Trades auflisten
+   for(int i = 0; i < n; i++)
      {
-      // nur Positionen, die überhaupt relevant sind
-      if(rows[i].is_pending <= 0 && rows[i].was_sent <= 0)
+      if(rows[i].was_sent <= 0 && rows[i].is_pending <= 0)
          continue;
 
       // LONG
-      if(rows[i].direction == "LONG")
+      if(activeLong > 0 && rows[i].direction == "LONG" && rows[i].trade_no == activeLong && rows[i].pos_no > 0)
         {
-         if(activeL <= 0) continue;
-         if(rows[i].trade_no != activeL) continue;
-         string st = rows[i].status;
-         if(st == "") st = (rows[i].is_pending>0 ? "PENDING" : "");
-
-         if(rows[i].pos_no == 0)
-            txtL += StringFormat("T%d TRADE  %s\n", rows[i].trade_no, st);
-         else
-            txtL += StringFormat("T%d P%d  %s\n", rows[i].trade_no, rows[i].pos_no, st);
-         shownL++;
+         if(longCnt < ArraySize(longLines))
+            longLines[longCnt++] = StringFormat("P%d %s  E%s  SL%s", rows[i].pos_no, rows[i].status,
+                                                DoubleToString(rows[i].entry, _Digits),
+                                                DoubleToString(rows[i].sl, _Digits));
         }
 
       // SHORT
-      if(rows[i].direction == "SHORT")
+      if(activeShort > 0 && rows[i].direction == "SHORT" && rows[i].trade_no == activeShort && rows[i].pos_no > 0)
         {
-         if(activeS <= 0) continue;
-         if(rows[i].trade_no != activeS) continue;
-         string st = rows[i].status;
-         if(st == "") st = (rows[i].is_pending>0 ? "PENDING" : "");
-
-         if(rows[i].pos_no == 0)
-            txtS += StringFormat("T%d TRADE  %s\n", rows[i].trade_no, st);
-         else
-            txtS += StringFormat("T%d P%d  %s\n", rows[i].trade_no, rows[i].pos_no, st);
-         shownS++;
+         if(shortCnt < ArraySize(shortLines))
+            shortLines[shortCnt++] = StringFormat("P%d %s  E%s  SL%s", rows[i].pos_no, rows[i].status,
+                                                 DoubleToString(rows[i].entry, _Digits),
+                                                 DoubleToString(rows[i].sl, _Digits));
         }
      }
 
-   if(shownL == 0)
-      txtL += (activeL <= 0 ? "(kein aktiver Trade)\n" : "(keine Positionen)\n");
-   if(shownS == 0)
-      txtS += (activeS <= 0 ? "(kein aktiver Trade)\n" : "(keine Positionen)\n");
+   // Panel-Layout
+   int panel_x = (int)ObjectGetInteger(0, TA_OVERVIEW_BG, OBJPROP_XDISTANCE);
+   int panel_y = (int)ObjectGetInteger(0, TA_OVERVIEW_BG, OBJPROP_YDISTANCE);
+   int panel_w = (int)ObjectGetInteger(0, TA_OVERVIEW_BG, OBJPROP_XSIZE);
+   if(panel_w <= 0) panel_w = 330;
 
-   ObjectSetString(0, TA_OVERVIEW_TXT_LONG, OBJPROP_TEXT, txtL);
-   ObjectSetString(0, TA_OVERVIEW_TXT_SHORT, OBJPROP_TEXT, txtS);
+   int padding = 8;
+   int gap     = 10;
+   int col_w   = (panel_w - padding*2 - gap) / 2;
+   int x_long  = panel_x + padding;
+   int x_short = panel_x + padding + col_w + gap;
+   int y0      = panel_y + 26;   // unter Titel
+   int line_h  = 14;
 
-   // Höhe grob an Anzahl Zeilen anpassen (damit nichts abgeschnitten wird)
-   int linesL = 1, linesS = 1;
-   for(int i=0;i<(int)StringLen(txtL);i++) if(StringGetCharacter(txtL,i) == '\n') linesL++;
-   for(int i=0;i<(int)StringLen(txtS);i++) if(StringGetCharacter(txtS,i) == '\n') linesS++;
-   int maxLines = MathMax(linesL, linesS);
+   int rowsNeeded = MathMax(longCnt, shortCnt);
+   if(rowsNeeded < 1) rowsNeeded = 1;
 
-   int baseH = 60;           // Header + Padding
-   int lineH = 13;           // grob bei FontSize 9
-   int dynH  = baseH + (maxLines * lineH);
-   dynH = MathMax(dynH, 140);
-   dynH = MathMin(dynH, 360);
-   ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_YSIZE, dynH);
+   // Panelhöhe dynamisch
+   int new_h = (y0 - panel_y) + rowsNeeded * line_h + 8;
+   ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_YSIZE, new_h);
+
+   // Titel setzen
+   ObjectSetString(0, TA_OVERVIEW_TXT, OBJPROP_TEXT, "Pyramiden-Übersicht");
+
+   // Zeilen setzen (jede Zeile ist EIN eigenes Label -> garantiert untereinander)
+   for(int r = 0; r < rowsNeeded; r++)
+     {
+      string lt = (r < longCnt)  ? longLines[r]  : "";
+      string st = (r < shortCnt) ? shortLines[r] : "";
+      int yy = y0 + r * line_h;
+      UI_SetOverviewRow(true,  r, x_long,  yy, lt);
+      UI_SetOverviewRow(false, r, x_short, yy, st);
+     }
+  }
+
+// --- OVERVIEW PANEL: Row-Labels (statt \n in einem Label) ---
+string UI_OverviewRowName(const bool isLong, const int idx)
+  {
+   return StringFormat("TA_OV_%s_%d", (isLong ? "L" : "S"), idx);
+  }
+void UI_CreateOrUpdateOverviewRowLabel(const string name)
+  {
+   if(ObjectFind(0, name) >= 0)
+      return;
+
+   ObjectCreate(0, name, OBJ_LABEL, 0, 0, 0);
+   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+   ObjectSetInteger(0, name, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
+   ObjectSetInteger(0, name, OBJPROP_COLOR, clrWhite);
+   ObjectSetInteger(0, name, OBJPROP_FONTSIZE, 8);
+   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
+   ObjectSetString(0, name, OBJPROP_TEXT, "");
+  }
+void UI_SetOverviewRow(const bool isLong, const int idx, const int x, const int y, const string text)
+  {
+   string name = UI_OverviewRowName(isLong, idx);
+   UI_CreateOrUpdateOverviewRowLabel(name);
+   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
+   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
+   ObjectSetString(0, name, OBJPROP_TEXT, text);
   }
 #endif // __GUI__
 //+------------------------------------------------------------------+

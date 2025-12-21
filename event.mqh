@@ -279,6 +279,7 @@ if(id == CHARTEVENT_CHART_CHANGE)
          UI_UpdateNextTradePosUI();
          UI_UpdateOverviewPanel();
          UI_RebuildSLHitButtons();
+         
         }
       return;
      }
@@ -320,6 +321,7 @@ if(id == CHARTEVENT_CHART_CHANGE)
 
          UI_UpdateNextTradePosUI();
          UI_UpdateOverviewPanel();
+           UI_RebuildSLHitButtons();
         }
 
       return;
