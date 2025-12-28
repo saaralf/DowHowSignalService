@@ -8,12 +8,21 @@
 #define __GUI__
 
 
+
+
 // Overview panel internals (keine Abhängigkeit von #define in .mq5 nötig)
 #ifndef TA_OVERVIEW_TXT_LONG
-   #define TA_OVERVIEW_TXT_LONG  "TA_OVERVIEW_TXT_LONG"
+#define TA_OVERVIEW_TXT_LONG  "TA_OVERVIEW_TXT_LONG"
 #endif
 #ifndef TA_OVERVIEW_TXT_SHORT
-   #define TA_OVERVIEW_TXT_SHORT "TA_OVERVIEW_TXT_SHORT"
+#define TA_OVERVIEW_TXT_SHORT "TA_OVERVIEW_TXT_SHORT"
+#endif
+
+#ifndef SL_HL
+#define SL_HL "SL_HL"
+#endif
+#ifndef PR_HL
+#define PR_HL "PR_HL"
 #endif
 //+------------------------------------------------------------------+
 //| Die Funktion erhält den Wert der Höhe des Charts in Pixeln       |
@@ -54,7 +63,11 @@ int getChartWidthInPixels(const long chart_ID = 0)
    return ((int)result);
   }
 
-
+// Name bauen: ButtonSLHit_LONG_2_1
+string UI_SLHitName(const string direction, const int trade_no, const int pos_no)
+  {
+   return SLHIT_PREFIX + direction + "_" + IntegerToString(trade_no) + "_" + IntegerToString(pos_no);
+  }
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -63,68 +76,6 @@ string update_Text(string name, string val)
    return (string)ObjectSetString(0, name, OBJPROP_TEXT, val);
   }
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void createEntryAndSLLinien()
-  {
-
-   xd3 = getChartWidthInPixels() -DistancefromRight-10;
-   yd3 = getChartHeightInPixels()/2;
-   xs3 = 280;
-   ys3= 30;
-   datetime dt_tp = iTime(_Symbol, 0, 0), dt_sl = iTime(_Symbol, 0, 0), dt_prc = iTime(_Symbol, 0, 0);
-   double price_tp = iClose(_Symbol, 0, 0), price_sl = iClose(_Symbol, 0, 0), price_prc = iClose(_Symbol, 0, 0);
-   int window = 0;
-
-   ChartXYToTimePrice(0, xd3, yd3 + ys3, window, dt_prc, price_prc);
-   ChartXYToTimePrice(0, xd5, yd5 + ys5, window, dt_sl, price_sl);
-
-   EnsureHLine(PR_HL, price_prc,color_EntryLine);
-   SetPriceOnObject(PR_HL, price_prc);
-
-
-//createHL(PR_HL, dt_prc, price_prc, EntryLine);
-
-   createButton(EntryButton, "", xd3, yd3, xs3, ys3, PriceButton_font_color, PriceButton_bgcolor, PriceButton_font_size, clrNONE, "Arial Black");
-
-// SL Button
-   xd5 = xd3;
-   yd5 = yd3 + 100;
-   xs5 = xs3;
-   ys5 = 30;
-
-   ChartXYToTimePrice(0, xd5, yd5 + ys5, window, dt_sl, price_sl);
-
-   createHL(SL_HL, dt_sl, price_sl, color_SLLine);
-
-   ObjectMove(0, EntryButton, 0, dt_prc, price_prc);
-
-
-//   DrawHL();
-   if(Sabioedit)
-     {
-      SabioEdit();
-     }
-
-   SendButton();
-   if(!SendOnlyButton)
-     {
-      ObjectSetString(0, SENDTRADEBTN, OBJPROP_TEXT, "T & S"); // label
-      ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_BGCOLOR, TSButton_bgcolor);
-      ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_COLOR, TSButton_font_color);
-     }
-
-
-   createButton(SLButton, "", xd5, yd5, xs5, ys5, SLButton_font_color, SLButton_bgcolor, SLButton_font_size, clrNONE, "Arial Black");
-   ObjectMove(0, SLButton, 0, dt_sl, price_sl);
-
-   update_Text(EntryButton, "Buy Stop @ " + Get_Price_s(PR_HL) + " | Lot: " + DoubleToString(NormalizeDouble(calcLots(SL_Price - Entry_Price), 2), 2));
-   update_Text(SLButton, "SL: " + DoubleToString(((Get_Price_d(PR_HL) - Get_Price_d(SL_HL)) / _Point), 0) + " Points | " + Get_Price_s(SL_HL));
-
-   ChartSetInteger(0, CHART_EVENT_MOUSE_MOVE, true);
-   ChartRedraw(0);
-  }
 
 
 
@@ -136,80 +87,9 @@ void createEntryAndSLLinien()
 void MessageButton()
   {
 
-   ObjectCreate(0, "ButtonCancelOrder", OBJ_BUTTON, 0, 0, 0);
-   ObjectSetInteger(0, "ButtonCancelOrder", OBJPROP_XDISTANCE, 100);          // X position
-   ObjectSetInteger(0, "ButtonCancelOrder", OBJPROP_XSIZE, 150);              // width
-   ObjectSetInteger(0, "ButtonCancelOrder", OBJPROP_YDISTANCE, 90 + 30 + 10); // Y position
-   ObjectSetInteger(0, "ButtonCancelOrder", OBJPROP_YSIZE, 30);               // height
-   ObjectSetInteger(0, "ButtonCancelOrder", OBJPROP_CORNER, 0);               // chart corner
-   ObjectSetString(0, "ButtonCancelOrder", OBJPROP_TEXT, "Cancel Buy Order"); // label
-   ObjectSetInteger(0, "ButtonCancelOrder", OBJPROP_BGCOLOR, ButtonCancelOrder_bgcolor);
-   ObjectSetInteger(0, "ButtonCancelOrder", OBJPROP_COLOR, ButtonCancelOrder_font_color);
-   ObjectSetInteger(0, "ButtonCancelOrder", OBJPROP_FONTSIZE, ButtonCancelOrder_font_size);
-   ObjectSetInteger(0, "ButtonCancelOrder", OBJPROP_SELECTABLE, false);
-   ObjectSetInteger(0, "ButtonCancelOrder", OBJPROP_SELECTED, false);
-   ObjectSetInteger(0, "ButtonCancelOrder", OBJPROP_COLOR, clrGreen);
 
-   ObjectCreate(0, "ButtonCancelOrderSell", OBJ_BUTTON, 0, 0, 0);
-   ObjectSetInteger(0, "ButtonCancelOrderSell", OBJPROP_XDISTANCE, 100 + 150 + 30); // X position
-   ObjectSetInteger(0, "ButtonCancelOrderSell", OBJPROP_XSIZE, 150);                // width
-   ObjectSetInteger(0, "ButtonCancelOrderSell", OBJPROP_YDISTANCE, 90 + 30 + 10);   // Y position
-   ObjectSetInteger(0, "ButtonCancelOrderSell", OBJPROP_YSIZE, 30);                 // height
-   ObjectSetInteger(0, "ButtonCancelOrderSell", OBJPROP_CORNER, 0);                 // chart corner
-   ObjectSetString(0, "ButtonCancelOrderSell", OBJPROP_TEXT, "Cancel Sell Order");  // label
-   ObjectSetInteger(0, "ButtonCancelOrderSell", OBJPROP_BGCOLOR, ButtonCancelOrder_bgcolor);
-   ObjectSetInteger(0, "ButtonCancelOrderSell", OBJPROP_COLOR, ButtonCancelOrder_font_color);
-   ObjectSetInteger(0, "ButtonCancelOrderSell", OBJPROP_FONTSIZE, ButtonCancelOrder_font_size);
-   ObjectSetInteger(0, "ButtonCancelOrderSell", OBJPROP_SELECTABLE, false);
-   ObjectSetInteger(0, "ButtonCancelOrderSell", OBJPROP_SELECTED, false);
-   ObjectSetInteger(0, "ButtonCancelOrderSell", OBJPROP_COLOR, clrRed);
   }
 
-//+------------------------------------------------------------------+
-//|   Delete all objects                                 |
-//+------------------------------------------------------------------+
-void deleteObjects()
-  {
-
-   ObjectDelete(0, EntryButton);
-   ObjectDelete(0, SLButton);
-
-   ObjectDelete(0, SL_HL);
-   ObjectDelete(0, PR_HL);
-   ObjectDelete(0, "SendOnlyButton");
-
-   ObjectDelete(0, "ButtonStoppedout");
-   ObjectDelete(0, "ButtonCancelOrder");
-
-   ObjectDelete(0, "ButtonStoppedoutSell");
-   ObjectDelete(0, "ButtonCancelOrderSell");
-   ObjectDelete(0, "EingabeTrade");
-   ObjectDelete(0, "SabioEntry");
-
-   ObjectDelete(0, "SabioSL");
-   ObjectDelete(0, "InfoButtonCancelOrder");
-   ObjectDelete(0, "ActiveShortTrade");
-   ObjectDelete(0, "InfoButtonStoppedoutSell");
-   ObjectDelete(0, "InfoButtonCancelOrderSell");
-   ObjectDelete(0, "ActiveLongTrade");
-   ObjectDelete(0, "InfoButtonStoppedout");
-
-   ObjectDelete(0, "SL_Long");
-
-   ObjectDelete(0, "SL_Short");
-
-   ObjectDelete(0, "LabelSLLong");
-
-   ObjectDelete(0, "LabelSLShort");
-   ObjectDelete(0, "LabelTradenummer");
-   ObjectDelete(0, "NotizEdit");
-   ObjectDelete(0, "Entry_Long");
-   ObjectDelete(0, "Entry_Short");
-   ObjectDelete(0, "LabelEntryLong");
-   ObjectDelete(0, "LabelEntryShort");
-
-   ChartRedraw(0);
-  }
 // ================= PERSIST / RESTORE LINE PRICES (SQLite Meta) =================
 void DB_SaveLinePrices()
   {
@@ -339,7 +219,7 @@ void SetLinePrice(const string name, double price)
 void DeleteLinesandLabelsShort()
   {
 // löscht alle Objekte, die zu SHORT-Trade-Linien/Labels gehören (inkl. _1.._4)
-   string prefixes[] = {"TP_Short", "SL_Short", "Entry_Short", "LabelTPShort", "LabelSLShort", "LabelEntryShort"};
+   string prefixes[] = { "SL_Short", "Entry_Short",  "LabelSLShort", "LabelEntryShort"};
    int total = ObjectsTotal(0, -1, -1);
    for(int i = total - 1; i >= 0; i--)
      {
@@ -360,7 +240,7 @@ void DeleteLinesandLabelsShort()
 void DeleteLinesandLabelsLong()
   {
 // löscht alle Objekte, die zu LONG-Trade-Linien/Labels gehören (inkl. _1.._4)
-   string prefixes[] = {"TP_Long", "SL_Long", "Entry_Long", "LabelTPLong", "LabelSLLong", "LabelEntryLong"};
+   string prefixes[] = { "SL_Long", "Entry_Long", "LabelSLLong", "LabelEntryLong"};
    int total = ObjectsTotal(0, -1, -1);
    for(int i = total - 1; i >= 0; i--)
      {
@@ -548,36 +428,7 @@ void SendButton()
    ObjectSetInteger(0, POSNB, OBJPROP_ALIGN, ALIGN_CENTER);
    ObjectSetInteger(0, POSNB, OBJPROP_READONLY, false);
 
-   ObjectCreate(0, "ActiveLongTrade", OBJ_EDIT, 0, 0, 0);
-//--- Objektkoordinaten angeben
-   ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_XDISTANCE, 100);
-   ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_YDISTANCE, 90);
-//--- Objektgröße setzen
-   ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_XSIZE, 150);
-   ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_YSIZE, 30);
-//--- den Text setzen
-   ObjectSetString(0, "ActiveLongTrade", OBJPROP_TEXT, "");
-//--- Schriftgröße setzen
-   ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_BGCOLOR, clrNONE);
-   ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_COLOR, clrNONE);
-   ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_FONTSIZE, InfoTradenummerFontSize);
-   ObjectSetString(0, "ActiveLongTrade", OBJPROP_FONT, "Arial");
-
-// Info Button ActiveShortTrade
-   ObjectCreate(0, "ActiveShortTrade", OBJ_EDIT, 0, 0, 0);
-//--- Objektkoordinaten angeben
-   ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_XDISTANCE, 100 + 150 + 30);
-   ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_YDISTANCE, 90);
-//--- Objektgröße setzen
-   ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_XSIZE, 150);
-   ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_YSIZE, 30);
-//--- den Text setzen
-   ObjectSetString(0, "ActiveShortTrade", OBJPROP_TEXT, "");
-//--- Schriftgröße setzen
-   ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_BGCOLOR, clrNONE);
-   ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_COLOR, clrNONE);
-   ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_FONTSIZE, InfoTradenummerFontSize);
-   ObjectSetString(0, "ActiveShortTrade", OBJPROP_FONT, "Arial");
+   
   }
 
 //+------------------------------------------------------------------+
@@ -628,7 +479,7 @@ int UI_GetOverviewTopY()
   {
    int fallback_y = 170; // sinnvoller Default
 
-   // Prefer: Cancel Buttons
+// Prefer: Cancel Buttons
    int y_max = -1;
    string btns[] = {"ButtonCancelOrder", "ButtonCancelOrderSell"};
    for(int i=0;i<ArraySize(btns);i++)
@@ -641,7 +492,7 @@ int UI_GetOverviewTopY()
         }
      }
 
-   // Fallback: ActiveTrade Labels
+// Fallback: ActiveTrade Labels
    if(y_max < 0)
      {
       string lbls[] = {"ActiveLongTrade", "ActiveShortTrade"};
@@ -668,7 +519,7 @@ void UI_PositionOverviewPanel()
    if(ObjectFind(0, TA_OVERVIEW_BG) < 0)
       return;
 
-   // an Cancel-Buttons ausrichten
+// an Cancel-Buttons ausrichten
    int panel_x = 100;          // wie Cancel-Buttons
    int panel_y = UI_GetOverviewTopY();
    int panel_w = 330;          // 150 + 30 + 150
@@ -680,7 +531,7 @@ void UI_PositionOverviewPanel()
    ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_XSIZE, panel_w);
    ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_YSIZE, panel_h);
 
-   // Header (TA_OVERVIEW_TXT)
+// Header (TA_OVERVIEW_TXT)
    if(ObjectFind(0, TA_OVERVIEW_TXT) >= 0)
      {
       ObjectSetInteger(0, TA_OVERVIEW_TXT, OBJPROP_CORNER, CORNER_LEFT_UPPER);
@@ -688,7 +539,7 @@ void UI_PositionOverviewPanel()
       ObjectSetInteger(0, TA_OVERVIEW_TXT, OBJPROP_YDISTANCE, panel_y + 6);
      }
 
-   // Zwei Spalten
+// Zwei Spalten
    int padding = 8;
    int gap     = 10;
    int col_w   = (panel_w - padding*2 - gap) / 2;
@@ -710,186 +561,91 @@ void UI_PositionOverviewPanel()
       ObjectSetInteger(0, TA_OVERVIEW_TXT_SHORT, OBJPROP_YDISTANCE, y_text);
      }
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void UI_CreateOrUpdateOverviewPanel()
-  {
-   if(ObjectFind(0, TA_OVERVIEW_BG) < 0)
-     {
-      ObjectCreate(0, TA_OVERVIEW_BG, OBJ_RECTANGLE_LABEL, 0, 0, 0);
-      ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-      ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_XDISTANCE, 100);
-      ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_YDISTANCE, UI_GetOverviewTopY());
-      ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_XSIZE, 330);
-      ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_YSIZE, 220);
-      ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_BGCOLOR, clrBlack);
-      ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_COLOR, clrGray);
-      // UI-Panel soll IM Vordergrund sein
-      ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_BACK, false);
-      ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_HIDDEN, true);
-     }
 
-   if(ObjectFind(0, TA_OVERVIEW_TXT) < 0)
-     {
-      ObjectCreate(0, TA_OVERVIEW_TXT, OBJ_LABEL, 0, 0, 0);
-      ObjectSetInteger(0, TA_OVERVIEW_TXT, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-      ObjectSetInteger(0, TA_OVERVIEW_TXT, OBJPROP_XDISTANCE, 108);
-      ObjectSetInteger(0, TA_OVERVIEW_TXT, OBJPROP_YDISTANCE, UI_GetOverviewTopY()+6);
-      ObjectSetInteger(0, TA_OVERVIEW_TXT, OBJPROP_COLOR, clrWhite);
-      ObjectSetInteger(0, TA_OVERVIEW_TXT, OBJPROP_FONTSIZE, 10);
-      ObjectSetString(0,  TA_OVERVIEW_TXT, OBJPROP_FONT, "Arial");
-      ObjectSetInteger(0, TA_OVERVIEW_TXT, OBJPROP_HIDDEN, true);
-     }
+#include "CTradeListsDialog.mqh"
 
-   // LONG column
-   if(ObjectFind(0, TA_OVERVIEW_TXT_LONG) < 0)
-     {
-      ObjectCreate(0, TA_OVERVIEW_TXT_LONG, OBJ_LABEL, 0, 0, 0);
-      ObjectSetInteger(0, TA_OVERVIEW_TXT_LONG, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-      ObjectSetInteger(0, TA_OVERVIEW_TXT_LONG, OBJPROP_COLOR, clrWhite);
-      ObjectSetInteger(0, TA_OVERVIEW_TXT_LONG, OBJPROP_FONTSIZE, 9);
-      ObjectSetString(0,  TA_OVERVIEW_TXT_LONG, OBJPROP_FONT, "Consolas");
-      ObjectSetInteger(0, TA_OVERVIEW_TXT_LONG, OBJPROP_HIDDEN, true);
-     }
+// --------- Globale Wrapper (einfach in OnInit/OnTick/OnDeinit nutzbar) ----------
+CTradeListsDialog g_TA_TradeLists;
+bool g_TA_TradeListsCreated = false;
 
-   // SHORT column
-   if(ObjectFind(0, TA_OVERVIEW_TXT_SHORT) < 0)
-     {
-      ObjectCreate(0, TA_OVERVIEW_TXT_SHORT, OBJ_LABEL, 0, 0, 0);
-      ObjectSetInteger(0, TA_OVERVIEW_TXT_SHORT, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-      ObjectSetInteger(0, TA_OVERVIEW_TXT_SHORT, OBJPROP_COLOR, clrWhite);
-      ObjectSetInteger(0, TA_OVERVIEW_TXT_SHORT, OBJPROP_FONTSIZE, 9);
-      ObjectSetString(0,  TA_OVERVIEW_TXT_SHORT, OBJPROP_FONT, "Consolas");
-      ObjectSetInteger(0, TA_OVERVIEW_TXT_SHORT, OBJPROP_HIDDEN, true);
-     }
+int UI_TradeLists_TopY()
+{
+   // unter das bestehende Overview-Panel (falls vorhanden)
+   if(ObjectFind(0, TA_OVERVIEW_BG) >= 0)
+   {
+      int y = (int)ObjectGetInteger(0, TA_OVERVIEW_BG, OBJPROP_YDISTANCE);
+      int h = (int)ObjectGetInteger(0, TA_OVERVIEW_BG, OBJPROP_YSIZE);
+      return y + h + 10;
+   }
+   // fallback: unter Cancel Buttons / Active Labels
+   return UI_GetOverviewTopY() + 10;
+}
 
-   UI_PositionOverviewPanel();
-  }
-//+--------------
+int UI_TradeLists_Height()
+{
+   int ch = (int)ChartGetInteger(0, CHART_HEIGHT_IN_PIXELS, 0);
+   int y  = UI_TradeLists_TopY();
+   int h  = ch - y - 10;
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void UI_UpdateOverviewPanel()
-  {
-   DB_PositionRow rows[];
-   int n = DB_LoadPositions(_Symbol, (ENUM_TIMEFRAMES)_Period, rows);
+   if(h < 160) h = 160;
+   if(h > 360) h = 360;
+   return h;
+}
 
-   UI_CreateOrUpdateOverviewPanel();
-
-   // Panel unter Cancel-Buttons ausrichten
-   UI_PositionOverviewPanel();
-
-   // Aktive Tradenummern aus DB ableiten (Status nicht CLOSED*)
-   int activeLong = 0;
-   int activeShort = 0;
-   for(int i = 0; i < n; i++)
-     {
-      if(rows[i].was_sent <= 0 && rows[i].is_pending <= 0)
-         continue;
-      if(StringFind(rows[i].status, "CLOSED") == 0)
-         continue;
-
-      if(rows[i].direction == "LONG")
-         activeLong = MathMax(activeLong, rows[i].trade_no);
-      else if(rows[i].direction == "SHORT")
-         activeShort = MathMax(activeShort, rows[i].trade_no);
-     }
-
-   // Column-Texts sammeln
-   string longLines[32];
-   string shortLines[32];
-   int longCnt = 0, shortCnt = 0;
-
-   longLines[longCnt++]   = (activeLong > 0)  ? StringFormat("LONG  T%d", activeLong)  : "LONG  (kein aktiver Trade)";
-   shortLines[shortCnt++] = (activeShort > 0) ? StringFormat("SHORT T%d", activeShort) : "SHORT (kein aktiver Trade)";
-
-   // Positionen für die aktiven Trades auflisten
-   for(int i = 0; i < n; i++)
-     {
-      if(rows[i].was_sent <= 0 && rows[i].is_pending <= 0)
-         continue;
-
-      // LONG
-      if(activeLong > 0 && rows[i].direction == "LONG" && rows[i].trade_no == activeLong && rows[i].pos_no > 0)
-        {
-         if(longCnt < ArraySize(longLines))
-            longLines[longCnt++] = StringFormat("P%d %s  E%s  SL%s", rows[i].pos_no, rows[i].status,
-                                                DoubleToString(rows[i].entry, _Digits),
-                                                DoubleToString(rows[i].sl, _Digits));
-        }
-
-      // SHORT
-      if(activeShort > 0 && rows[i].direction == "SHORT" && rows[i].trade_no == activeShort && rows[i].pos_no > 0)
-        {
-         if(shortCnt < ArraySize(shortLines))
-            shortLines[shortCnt++] = StringFormat("P%d %s  E%s  SL%s", rows[i].pos_no, rows[i].status,
-                                                 DoubleToString(rows[i].entry, _Digits),
-                                                 DoubleToString(rows[i].sl, _Digits));
-        }
-     }
-
-   // Panel-Layout
-   int panel_x = (int)ObjectGetInteger(0, TA_OVERVIEW_BG, OBJPROP_XDISTANCE);
-   int panel_y = (int)ObjectGetInteger(0, TA_OVERVIEW_BG, OBJPROP_YDISTANCE);
-   int panel_w = (int)ObjectGetInteger(0, TA_OVERVIEW_BG, OBJPROP_XSIZE);
-   if(panel_w <= 0) panel_w = 330;
-
-   int padding = 8;
-   int gap     = 10;
-   int col_w   = (panel_w - padding*2 - gap) / 2;
-   int x_long  = panel_x + padding;
-   int x_short = panel_x + padding + col_w + gap;
-   int y0      = panel_y + 26;   // unter Titel
-   int line_h  = 14;
-
-   int rowsNeeded = MathMax(longCnt, shortCnt);
-   if(rowsNeeded < 1) rowsNeeded = 1;
-
-   // Panelhöhe dynamisch
-   int new_h = (y0 - panel_y) + rowsNeeded * line_h + 8;
-   ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_YSIZE, new_h);
-
-   // Titel setzen
-   ObjectSetString(0, TA_OVERVIEW_TXT, OBJPROP_TEXT, "Pyramiden-Übersicht");
-
-   // Zeilen setzen (jede Zeile ist EIN eigenes Label -> garantiert untereinander)
-   for(int r = 0; r < rowsNeeded; r++)
-     {
-      string lt = (r < longCnt)  ? longLines[r]  : "";
-      string st = (r < shortCnt) ? shortLines[r] : "";
-      int yy = y0 + r * line_h;
-      UI_SetOverviewRow(true,  r, x_long,  yy, lt);
-      UI_SetOverviewRow(false, r, x_short, yy, st);
-     }
-  }
-
-// --- OVERVIEW PANEL: Row-Labels (statt \n in einem Label) ---
-string UI_OverviewRowName(const bool isLong, const int idx)
-  {
-   return StringFormat("TA_OV_%s_%d", (isLong ? "L" : "S"), idx);
-  }
-void UI_CreateOrUpdateOverviewRowLabel(const string name)
-  {
-   if(ObjectFind(0, name) >= 0)
+void UI_TradeLists_Init()
+{
+   if(g_TA_TradeListsCreated)
       return;
 
-   ObjectCreate(0, name, OBJ_LABEL, 0, 0, 0);
-   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-   ObjectSetInteger(0, name, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
-   ObjectSetInteger(0, name, OBJPROP_COLOR, clrWhite);
-   ObjectSetInteger(0, name, OBJPROP_FONTSIZE, 8);
-   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
-   ObjectSetString(0, name, OBJPROP_TEXT, "");
-  }
-void UI_SetOverviewRow(const bool isLong, const int idx, const int x, const int y, const string text)
-  {
-   string name = UI_OverviewRowName(isLong, idx);
-   UI_CreateOrUpdateOverviewRowLabel(name);
-   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
-   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
-   ObjectSetString(0, name, OBJPROP_TEXT, text);
-  }
+   // links im Chart (an deine Cancel-Buttons angelehnt)
+   int x = 100;    // wenn du "ganz links": z.B. 10
+   int y = UI_TradeLists_TopY();
+   int w = 330;
+   int h = UI_TradeLists_Height();
+
+   if(!g_TA_TradeLists.Create(0, "TA_TRADES_LISTS", 0, x, y, x+w, y+h))
+   {
+      Print("UI_TradeLists_Init: Create failed err=", GetLastError());
+      return;
+   }
+   g_TA_TradeLists.Run();
+   g_TA_TradeListsCreated = true;
+   g_TA_TradeLists.ForceRefresh();
+}
+
+void UI_TradeLists_Deinit(const int reason)
+{
+   if(!g_TA_TradeListsCreated)
+      return;
+   g_TA_TradeLists.Destroy(reason);
+   g_TA_TradeListsCreated = false;
+}
+
+void UI_TradeLists_Refresh()
+{
+   if(g_TA_TradeListsCreated)
+      g_TA_TradeLists.Refresh();
+}
+
+// an OnChartEvent weiterreichen (Scroll/Klick)
+void UI_TradeLists_ChartEvent(const int id,const long &lparam,const double &dparam,const string &sparam)
+{
+   if(g_TA_TradeListsCreated)
+      g_TA_TradeLists.ChartEvent(id, lparam, dparam, sparam);
+}
+
+// optional: in OnTick aufrufen (throttled)
+void UI_TradeLists_AutoRefresh()
+{
+   static uint last_ms = 0;
+   uint now_ms = GetTickCount();
+   if(now_ms - last_ms < 1500)
+      return;
+
+   last_ms = now_ms;
+   UI_TradeLists_Refresh();
+}
+
+
 #endif // __GUI__
 //+------------------------------------------------------------------+

@@ -16,6 +16,10 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
                   const string &sparam) // Parameter des Ereignisses des Typs string, name of the object, state
   {
 
+
+if(UI_TradesPanel_OnChartEvent(id, lparam, dparam, sparam))
+   return;
+
 // Wenn Linien verschoben wurden: sofort in SQLite speichern (damit nach Neustart/TF-Wechsel alles wieder da ist)
    if(id == CHARTEVENT_OBJECT_CHANGE || id == CHARTEVENT_OBJECT_DRAG)
      {
@@ -32,9 +36,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
 
    if(id == CHARTEVENT_MOUSE_MOVE)
      {
-      CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-      CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-
+     
       int MouseD_X = (int)lparam;
       int MouseD_Y = (int)dparam;
 
@@ -119,13 +121,13 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
            {
             double lots = calcLots(SL_Price - Entry_Price);
             lots = NormalizeDouble(lots, 2);
-            ui_direction_is_long = 0;
+            ui_direction_is_long = false;
             update_Text(EntryButton, "Sell Stop @ " + Get_Price_s(PR_HL) + " | Lot: " + DoubleToString(lots, 2));
             update_Text(SLButton, "SL: " + DoubleToString(((Get_Price_d(SL_HL) - Get_Price_d(PR_HL)) / _Point), 0) + " Points | " + Get_Price_s(SL_HL));
            }
          else
            {
-            ui_direction_is_long = 1;
+            ui_direction_is_long = true;
            }
 
          ChartRedraw(0);
@@ -206,11 +208,11 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
         }
       prevMouseState = MouseState;
      }
-if(id == CHARTEVENT_CHART_CHANGE)
-{
-   UI_ReanchorRightPanel();
-   return;
-}
+   if(id == CHARTEVENT_CHART_CHANGE)
+     {
+      UI_ReanchorRightPanel();
+      return;
+     }
 
 // Klick Button Send only
 //+------------------------------------------------------------------+
@@ -236,96 +238,6 @@ if(id == CHARTEVENT_CHART_CHANGE)
       return;
      }
 
-//+------------------------------------------------------------------+
-//| Klick Button Cancel Long Order                                                             |
-//+------------------------------------------------------------------+
-   if(ObjectGetInteger(0, "ButtonCancelOrder", OBJPROP_STATE) != 0)
-     {
-      ObjectSetInteger(0, "ButtonCancelOrder", OBJPROP_STATE, 0);
-  
-      if(is_long_trade)
-        {
-         // 1) Discord nur EINMAL senden
-         DB_PositionRow r;
-         r.symbol    = _Symbol;
-         r.tf        = TF_ToString((ENUM_TIMEFRAMES)_Period);
-         r.direction = "LONG";
-         r.trade_no  = active_long_trade_no;
-         r.pos_no    = 0;
-
-         string message = FormatCancelTradeMessage(r);
-         bool ret = SendDiscordMessage(message);
-
-         // 2) DB: Trade sauber "geschlossen" markieren, damit OnInit ihn NICHT wieder aktiviert
-         DB_UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period, "LONG", active_long_trade_no, 0, "CLOSED_CANCEL", 0);
-
-         // 3) Broker-Pending löschen (falls vorhanden)
-         DeleteBuyStopOrderForCurrentChart();
-
-         // 4) Runtime-State komplett zurücksetzen
-         is_long_trade       = false;
-         HitEntryPriceLong   = false;
-
-         // WICHTIG: aktive Tradenummer löschen, sonst "reanimiert" OnInit das wieder
-         active_long_trade_no = 0;
-         DB_SetMetaInt(DB_Key("active_long_trade_no"), active_long_trade_no);
-
-         // UI cleanup
-         ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_COLOR, clrNONE);
-         ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_BGCOLOR, clrNONE);
-         DeleteLinesandLabelsLong();
-
-         // optional: Panels refresh
-         UI_UpdateNextTradePosUI();
-         UI_UpdateOverviewPanel();
-         UI_RebuildSLHitButtons();
-         
-        }
-      return;
-     }
-
-//+------------------------------------------------------------------+
-//|  Klick Button Cancel Short Order                                                                 |
-//+------------------------------------------------------------------+
-   if(ObjectGetInteger(0, "ButtonCancelOrderSell", OBJPROP_STATE) != 0)
-     {
-      ObjectSetInteger(0, "ButtonCancelOrderSell", OBJPROP_STATE, 0);
-      Print("Klicked ButtonCancelOrderSell");
-
-      if(is_sell_trade)
-        {
-         DB_PositionRow r;
-         r.symbol    = _Symbol;
-         r.tf        = TF_ToString((ENUM_TIMEFRAMES)_Period);
-         r.direction = "SHORT";
-         r.trade_no  = active_short_trade_no;
-         r.pos_no    = 0;
-
-         string message = FormatCancelTradeMessage(r);
-         bool ret = SendDiscordMessage(message);
-
-         DB_UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period, "SHORT", active_short_trade_no, 0, "CLOSED_CANCEL", 0);
-
-         DeleteSellStopOrderForCurrentChart();
-
-         is_sell_trade         = false;
-         is_sell_trade_pending = false;
-         HitEntryPriceShort    = false;
-
-         active_short_trade_no = 0;
-         DB_SetMetaInt(DB_Key("active_short_trade_no"), active_short_trade_no);
-
-         ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_COLOR, clrNONE);
-         ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_BGCOLOR, clrNONE);
-         DeleteLinesandLabelsShort();
-
-         UI_UpdateNextTradePosUI();
-         UI_UpdateOverviewPanel();
-           UI_RebuildSLHitButtons();
-        }
-
-      return;
-     }
 
 
 
@@ -347,69 +259,228 @@ if(id == CHARTEVENT_CHART_CHANGE)
      {
       last_ui_direction_is_long = ui_direction_is_long;
       UI_UpdateNextTradePosUI();
-      UI_UpdateOverviewPanel();
+     
       UI_UpdateAllLineTags();
      }
 
   } // Ende ChartEvent
+
+
+
   
+// Klick: irgendein SLHit Button? (pro Position: Cancel / SL erreicht)
+
+// Parse: erkennt diese Namen
+//   ButtonSLHit_LONG_2_1        -> action="SL"
+//   CancelButtonSLHit_LONG_2_1  -> action="CANCEL"
+//   SLButtonSLHit_LONG_2_1      -> action="SL"
+//   StoppedButtonSLHit_LONG_2_1 -> action="SL" (Fallback)
+bool UI_ParseSLHitActionName(const string obj_name,
+                             string &action,
+                             string &direction,
+                             int &trade_no,
+                             int &pos_no)
+{
+   action = "";
+   direction = "";
+   trade_no = 0;
+   pos_no = 0;
+
+   string base = obj_name;
+
+   // Prefixe vor dem eigentlichen ButtonSLHit_... (UI_RebuildSLHitButtons baut daraus z.B. "Cancel"+btn)
+   const string P_CANCEL  = "Cancel";
+   const string P_SL      = "SL";
+   const string P_STOPPED = "Stopped";
+
+   if(StringFind(obj_name, P_CANCEL + SLHIT_PREFIX, 0) == 0)
+   {
+      action = "CANCEL";
+      base   = StringSubstr(obj_name, StringLen(P_CANCEL)); // -> ButtonSLHit_...
+   }
+   else if(StringFind(obj_name, P_SL + SLHIT_PREFIX, 0) == 0)
+   {
+      action = "SL";
+      base   = StringSubstr(obj_name, StringLen(P_SL)); // -> ButtonSLHit_...
+   }
+   else if(StringFind(obj_name, P_STOPPED + SLHIT_PREFIX, 0) == 0)
+   {
+      action = "SL";
+      base   = StringSubstr(obj_name, StringLen(P_STOPPED)); // -> ButtonSLHit_...
+   }
+   else if(StringFind(obj_name, SLHIT_PREFIX, 0) == 0)
+   {
+      // Backward kompatibel: alter "ein Button pro Zeile" Modus
+      action = "SL";
+      base   = obj_name;
+   }
+   else
+   {
+      return false;
+   }
+
+   return UI_ParseSLHitName(base, direction, trade_no, pos_no);
+}
+
+// Prüft, ob innerhalb einer Trade-Nummer (und Richtung) noch irgendeine pending Position existiert.
+// (falls nein -> Trade ist "zu" und darf nicht mehr als aktiv gelten)
+bool UI_TradeHasAnyPendingPosition(const string direction, const int trade_no)
+{
+   DB_PositionRow rows[];
+   int n = DB_LoadPositions(_Symbol, _Period, rows);
+
+   for(int i = 0; i < n; i++)
+   {
+      if(rows[i].direction != direction)   continue;
+      if(rows[i].trade_no   != trade_no)   continue;
+
+      // Nur echte/gesendete Positionen berücksichtigen
+      if(rows[i].was_sent   != 1)          continue;
+
+      // Pending/offen?
+      if(rows[i].is_pending != 1)          continue;
+
+      // Alles was mit "CLOSED" beginnt, ist zu
+      if(StringFind(rows[i].status, "CLOSED", 0) == 0) continue;
+
+      return true;
+   }
+   return false;
+}
+
+void UI_CloseOnePositionAndNotify(const string action,
+                                  const string direction,
+                                  const int trade_no,
+                                  const int pos_no)
+{
+   // 1) Discord
+   DB_PositionRow r;
+   r.symbol    = _Symbol;
+   r.tf        = TF_ToString((ENUM_TIMEFRAMES)_Period);
+   r.direction = direction;
+   r.trade_no  = trade_no;
+   r.pos_no    = pos_no;
+
+   string message = "";
+   string new_status = "CLOSED";
+
+   if(action == "CANCEL")
+   {
+      message    = FormatCancelTradeMessage(r);
+      new_status = "CLOSED_CANCEL";
+   }
+   else // "SL"
+   {
+      message    = FormatSLMessage(r);
+      new_status = "CLOSED_SL";
+   }
+
+   SendDiscordMessage(message);
+
+   // 2) DB
+   DB_UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period,
+                          direction, trade_no, pos_no,
+                          new_status, 0);
+
+   // 3) Linien/Labels dieser Position entfernen (falls vorhanden)
+   string suf = "_" + IntegerToString(pos_no);
+
+   if(direction == "LONG")
+   {
+      ObjectDelete(0, Entry_Long + suf);
+      ObjectDelete(0, SL_Long + suf);
+      ObjectDelete(0, LabelEntryLong + suf);
+      ObjectDelete(0, LabelSLLong + suf);
+   }
+   else
+   {
+      ObjectDelete(0, Entry_Short + suf);
+      ObjectDelete(0, SL_Short + suf);
+      ObjectDelete(0, LabelEntryShort + suf);
+      ObjectDelete(0, LabelSLShort + suf);
+   }
+
+   UI_UpdateAllLineTags();
+
+   // 4) Falls das die letzte pending Position des Trades war -> Runtime + Meta zurücksetzen
+   if(!UI_TradeHasAnyPendingPosition(direction, trade_no))
+   {
+      if(direction == "LONG")
+      {
+         if(active_long_trade_no == trade_no)
+         {
+            active_long_trade_no = 0;
+            DB_SetMetaInt(DB_Key("active_long_trade_no"), 0);
+         }
+
+         is_long_trade     = false;
+         HitEntryPriceLong = false;
+
+         if(ObjectFind(0, "ActiveLongTrade") >= 0)
+         {
+            ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_COLOR, clrNONE);
+            ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_BGCOLOR, clrNONE);
+         }
+      }
+      else
+      {
+         if(active_short_trade_no == trade_no)
+         {
+            active_short_trade_no = 0;
+            DB_SetMetaInt(DB_Key("active_short_trade_no"), 0);
+         }
+
+         is_sell_trade         = false;
+         is_sell_trade_pending = false;
+         HitEntryPriceShort    = false;
+
+         if(ObjectFind(0, "ActiveShortTrade") >= 0)
+         {
+            ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_COLOR, clrNONE);
+            ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_BGCOLOR, clrNONE);
+         }
+      }
+   }
+
+   // 5) UI Refresh
+   UI_UpdateNextTradePosUI();
   
-  
-// Klick: irgendein SLHit Button?
+   UI_RebuildSLHitButtons();
+   ChartRedraw(0);
+}
+
 void UI_CheckSLHitButtonClicks()
-  {
+{
    int total = ObjectsTotal(0, -1, -1);
-   for(int i = 0; i < total; i++)
-     {
+
+   for(int i = total - 1; i >= 0; i--)
+   {
       string name = ObjectName(0, i);
-      if(StringFind(name, SLHIT_PREFIX, 0) != 0)
+
+      string action, direction;
+      int trade_no, pos_no;
+
+      if(!UI_ParseSLHitActionName(name, action, direction, trade_no, pos_no))
          continue;
 
-      if(ObjectGetInteger(0, name, OBJPROP_STATE) != 0)
-        {
-         ObjectSetInteger(0, name, OBJPROP_STATE, 0);
+      // Klick?
+      if(ObjectGetInteger(0, name, OBJPROP_STATE) == 0)
+         continue;
 
-         string dir;
-         int trade_no, pos_no;
-         if(!UI_ParseSLHitName(name, dir, trade_no, pos_no))
-            return;
+      // Reset des Button-States (verhindert Doppelevents)
+      ObjectSetInteger(0, name, OBJPROP_STATE, 0);
 
-         // --- DB: Position schließen (SL hit)
-         DB_PositionRow row;
-         bool ok = DB_GetPosition(_Symbol, _Period, dir, trade_no, pos_no, row); // falls du die Funktion noch nicht hast, sag Bescheid – dann bauen wir sie sauber.
-         if(ok)
-           {
-            row.status = "CLOSED_SL";
-            row.is_pending = 0;
-            row.updated_at = TimeCurrent();
-            DB_UpsertPosition(row);
-           }
+      Print("[SLHIT] click action=", action,
+            " dir=", direction,
+            " trade=", trade_no,
+            " pos=", pos_no);
 
-         // --- Linien löschen (deine Namenslogik: TP_Long + suf, etc.)
-         string suf = "_" + IntegerToString(pos_no);
+      UI_CloseOnePositionAndNotify(action, direction, trade_no, pos_no);
 
-         if(dir == "LONG")
-           {
+      // Safety: nach einer Aktion stoppen, weil Objekte neu aufgebaut werden
+      return;
+   }
+}
 
-            ObjectDelete(0, SL_Long + suf);
-            ObjectDelete(0, Entry_Long + suf);
-           }
-         else
-           {
 
-            ObjectDelete(0, SL_Short + suf);
-            ObjectDelete(0, Entry_Short + suf);
-           }
-
-         // Optional: Discord Info
-         SendDiscordMessage("SL erreicht: " + dir + " T" + IntegerToString(trade_no) + " P" + IntegerToString(pos_no));
-
-         // UI neu aufbauen
-         UI_RebuildSLHitButtons();
-         return;
-        }
-     }
-  }
-
-  
 #endif // __EVENTHANDLER__

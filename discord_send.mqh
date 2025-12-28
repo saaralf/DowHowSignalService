@@ -1,4 +1,9 @@
-﻿
+﻿//+------------------------------------------------------------------+
+//|                                                      ProjectName |
+//|                                      Copyright 2020, CompanyName |
+//|                                       http://www.companyname.net |
+//+------------------------------------------------------------------+
+
 #ifndef __DISCORD_SEND__
 #define __DISCORD_SEND__
 
@@ -124,15 +129,17 @@ void DiscordSend()
    if(isLong)
      {
       // Info-Label sicht- und farbig machen
-      ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_COLOR, clrWhite);
-      ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_BGCOLOR, clrRed);
-      update_Text("ActiveLongTrade", "ACTIVE POSITION");
+      showActive_long(true);
+      showCancel_long(true);
+      update_Text(TP_BTN_ACTIVE_LONG, "ACTIVE POSITION");
+      UI_TradesPanel_RebuildRows();
      }
    else
      {
-      ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_COLOR, clrWhite);
-      ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_BGCOLOR, clrRed);
-      update_Text("ActiveShortTrade", "ACTIVE POSITION");
+      showActive_short(true);
+      showCancel_short(true);
+      update_Text(TP_BTN_ACTIVE_SHORT, "ACTIVE POSITION");
+      UI_TradesPanel_RebuildRows();
      }
 
 // --- Meta aktualisieren
@@ -151,12 +158,14 @@ void DiscordSend()
          active_long_trade_no = trade_no;
          is_long_trade = true;
          DB_SetMetaInt(DB_Key("active_long_trade_no"), active_long_trade_no);
+         UI_TradesPanel_RebuildRows();
         }
       else
         {
          active_short_trade_no = trade_no;
          is_sell_trade = true;
          DB_SetMetaInt(DB_Key("active_short_trade_no"), active_short_trade_no);
+         UI_TradesPanel_RebuildRows();
         }
      }
 
@@ -194,9 +203,9 @@ void DiscordSend()
    else
       update_Text(TRNB, IntegerToString(last_trade_nummer + 1));
 
-   // --- Panels/Übersicht aktualisieren
+// --- Panels/Übersicht aktualisieren
    UI_UpdateNextTradePosUI();
-   UI_UpdateOverviewPanel();
+
   }
 
 
