@@ -15,6 +15,8 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
                   const double &dparam, // Parameter des Ereignisses des Typs double, Y cordinates
                   const string &sparam) // Parameter des Ereignisses des Typs string, name of the object, state
   {
+   CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
 
 
 if(UI_TradesPanel_OnChartEvent(id, lparam, dparam, sparam))
@@ -288,7 +290,7 @@ bool UI_ParseSLHitActionName(const string obj_name,
 
    string base = obj_name;
 
-   // Prefixe vor dem eigentlichen ButtonSLHit_... (UI_RebuildSLHitButtons baut daraus z.B. "Cancel"+btn)
+   // Prefixe vor dem eigentlichen ButtonSLHit_...
    const string P_CANCEL  = "Cancel";
    const string P_SL      = "SL";
    const string P_STOPPED = "Stopped";
@@ -383,22 +385,35 @@ void UI_CloseOnePositionAndNotify(const string action,
                           new_status, 0);
 
    // 3) Linien/Labels dieser Position entfernen (falls vorhanden)
-   string suf = "_" + IntegerToString(pos_no);
+// 3) Linien/Labels dieser Position entfernen (falls vorhanden)
+// robust: erst trade+pos, dann pos-only fallback
+string suf_tp = "_" + IntegerToString(trade_no) + "_" + IntegerToString(pos_no);
+string suf_p  = "_" + IntegerToString(pos_no);
 
-   if(direction == "LONG")
-   {
-      ObjectDelete(0, Entry_Long + suf);
-      ObjectDelete(0, SL_Long + suf);
-      ObjectDelete(0, LabelEntryLong + suf);
-      ObjectDelete(0, LabelSLLong + suf);
-   }
-   else
-   {
-      ObjectDelete(0, Entry_Short + suf);
-      ObjectDelete(0, SL_Short + suf);
-      ObjectDelete(0, LabelEntryShort + suf);
-      ObjectDelete(0, LabelSLShort + suf);
-   }
+if(direction == "LONG")
+{
+   ObjectDelete(0, Entry_Long + suf_tp);
+   ObjectDelete(0, SL_Long    + suf_tp);
+   ObjectDelete(0, LabelEntryLong + suf_tp);
+   ObjectDelete(0, LabelSLLong    + suf_tp);
+
+   ObjectDelete(0, Entry_Long + suf_p);
+   ObjectDelete(0, SL_Long    + suf_p);
+   ObjectDelete(0, LabelEntryLong + suf_p);
+   ObjectDelete(0, LabelSLLong    + suf_p);
+}
+else
+{
+   ObjectDelete(0, Entry_Short + suf_tp);
+   ObjectDelete(0, SL_Short    + suf_tp);
+   ObjectDelete(0, LabelEntryShort + suf_tp);
+   ObjectDelete(0, LabelSLShort    + suf_tp);
+
+   ObjectDelete(0, Entry_Short + suf_p);
+   ObjectDelete(0, SL_Short    + suf_p);
+   ObjectDelete(0, LabelEntryShort + suf_p);
+   ObjectDelete(0, LabelSLShort    + suf_p);
+}
 
    UI_UpdateAllLineTags();
 
@@ -445,7 +460,6 @@ void UI_CloseOnePositionAndNotify(const string action,
    // 5) UI Refresh
    UI_UpdateNextTradePosUI();
   
-   UI_RebuildSLHitButtons();
    ChartRedraw(0);
 }
 

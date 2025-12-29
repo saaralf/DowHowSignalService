@@ -24,6 +24,8 @@
 #ifndef PR_HL
 #define PR_HL "PR_HL"
 #endif
+
+
 //+------------------------------------------------------------------+
 //| Die Funktion erhält den Wert der Höhe des Charts in Pixeln       |
 //+------------------------------------------------------------------+
@@ -81,14 +83,6 @@ string update_Text(string name, string val)
 
 
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void MessageButton()
-  {
-
-
-  }
 
 // ================= PERSIST / RESTORE LINE PRICES (SQLite Meta) =================
 void DB_SaveLinePrices()
@@ -167,7 +161,8 @@ void CreateLabelsTPcolor_SLLines(string LABEL_NAME, string text, double price2, 
 
       // Grund-Layout nur beim ersten Erzeugen
       ObjectSetInteger(0, LABEL_NAME, OBJPROP_COLOR, clr1);
-      ObjectSetInteger(0, LABEL_NAME, OBJPROP_FONTSIZE, 12);
+      ObjectSetInteger(0, LABEL_NAME, OBJPROP_FONTSIZE, InpFontSize);
+      ObjectSetString(0, LABEL_NAME, OBJPROP_FONT, InpFont);
       ObjectSetString(0, LABEL_NAME, OBJPROP_TEXT, " ");
      }
    else
@@ -325,7 +320,7 @@ void DeleteSellStopOrderForCurrentChart()
 //+------------------------------------------------------------------+
 //| Create Trading Button                                                                 |
 //+------------------------------------------------------------------+
-bool createButton(string objName, string text, int xD, int yD, int xS, int yS, color clrTxt, color clrBG, int fontsize = 12, color clrBorder = clrNONE, string font = "Calibri")
+bool createButton(string objName, string text, int xD, int yD, int xS, int yS, color clrTxt, color clrBG, int fontsize = 8, color clrBorder = clrNONE, string font = "Arial")
   {
    ResetLastError();
    if(!ObjectCreate(0, objName, OBJ_BUTTON, 0, 0, TimeCurrent()))
@@ -339,8 +334,8 @@ bool createButton(string objName, string text, int xD, int yD, int xS, int yS, c
    ObjectSetInteger(0, objName, OBJPROP_YSIZE, yS);
    ObjectSetInteger(0, objName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
    ObjectSetString(0, objName, OBJPROP_TEXT, text);
-   ObjectSetInteger(0, objName, OBJPROP_FONTSIZE, fontsize);
-   ObjectSetString(0, objName, OBJPROP_FONT, font);
+   ObjectSetInteger(0, objName, OBJPROP_FONTSIZE, InpFontSize);
+   ObjectSetString(0, objName, OBJPROP_FONT, InpFont);
    ObjectSetInteger(0, objName, OBJPROP_COLOR, clrTxt);
    ObjectSetInteger(0, objName, OBJPROP_BGCOLOR, clrBG);
    ObjectSetInteger(0, objName, OBJPROP_BORDER_COLOR, clrBorder);
@@ -402,7 +397,9 @@ void SendButton()
       ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_BGCOLOR, SendOnlyButton_bgcolor);
       ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_COLOR, SendOnlyButton_font_color);
      }
-   ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_FONTSIZE, SendOnlyButton_font_size);
+   
+   ObjectSetString(0, SENDTRADEBTN, OBJPROP_FONT, InpFont);
+   ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_FONTSIZE, InpFontSize);
 
 // TRNB (TradeNo) links
    ObjectCreate(0, TRNB, OBJ_EDIT, 0, 0, 0);
@@ -415,6 +412,9 @@ void SendButton()
    ObjectSetInteger(0, TRNB, OBJPROP_COLOR, clrBlack);
    ObjectSetInteger(0, TRNB, OBJPROP_ALIGN, ALIGN_CENTER);
    ObjectSetInteger(0, TRNB, OBJPROP_READONLY, false);
+   
+   ObjectSetString(0, TRNB, OBJPROP_FONT, InpFont);
+   ObjectSetInteger(0, TRNB, OBJPROP_FONTSIZE, InpFontSize);
 
 // POSNB (PosNo) rechts daneben
    ObjectCreate(0, POSNB, OBJ_EDIT, 0, 0, 0);
@@ -427,6 +427,8 @@ void SendButton()
    ObjectSetInteger(0, POSNB, OBJPROP_COLOR, clrBlack);
    ObjectSetInteger(0, POSNB, OBJPROP_ALIGN, ALIGN_CENTER);
    ObjectSetInteger(0, POSNB, OBJPROP_READONLY, false);
+      ObjectSetString(0, POSNB, OBJPROP_FONT, InpFont);
+   ObjectSetInteger(0, POSNB, OBJPROP_FONTSIZE, InpFontSize);
 
    
   }
@@ -562,10 +564,9 @@ void UI_PositionOverviewPanel()
      }
   }
 
-#include "CTradeListsDialog.mqh"
 
 // --------- Globale Wrapper (einfach in OnInit/OnTick/OnDeinit nutzbar) ----------
-CTradeListsDialog g_TA_TradeLists;
+
 bool g_TA_TradeListsCreated = false;
 
 int UI_TradeLists_TopY()
@@ -592,47 +593,16 @@ int UI_TradeLists_Height()
    return h;
 }
 
-void UI_TradeLists_Init()
-{
-   if(g_TA_TradeListsCreated)
-      return;
-
-   // links im Chart (an deine Cancel-Buttons angelehnt)
-   int x = 100;    // wenn du "ganz links": z.B. 10
-   int y = UI_TradeLists_TopY();
-   int w = 330;
-   int h = UI_TradeLists_Height();
-
-   if(!g_TA_TradeLists.Create(0, "TA_TRADES_LISTS", 0, x, y, x+w, y+h))
-   {
-      Print("UI_TradeLists_Init: Create failed err=", GetLastError());
-      return;
-   }
-   g_TA_TradeLists.Run();
-   g_TA_TradeListsCreated = true;
-   g_TA_TradeLists.ForceRefresh();
-}
 
 void UI_TradeLists_Deinit(const int reason)
 {
    if(!g_TA_TradeListsCreated)
       return;
-   g_TA_TradeLists.Destroy(reason);
+
    g_TA_TradeListsCreated = false;
 }
 
-void UI_TradeLists_Refresh()
-{
-   if(g_TA_TradeListsCreated)
-      g_TA_TradeLists.Refresh();
-}
 
-// an OnChartEvent weiterreichen (Scroll/Klick)
-void UI_TradeLists_ChartEvent(const int id,const long &lparam,const double &dparam,const string &sparam)
-{
-   if(g_TA_TradeListsCreated)
-      g_TA_TradeLists.ChartEvent(id, lparam, dparam, sparam);
-}
 
 // optional: in OnTick aufrufen (throttled)
 void UI_TradeLists_AutoRefresh()
@@ -643,7 +613,7 @@ void UI_TradeLists_AutoRefresh()
       return;
 
    last_ms = now_ms;
-   UI_TradeLists_Refresh();
+  
 }
 
 
