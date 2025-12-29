@@ -34,6 +34,7 @@ input string SYMBOL_NAME_GPBUSD ="GPBUSD";
 input string SYMBOL_NAME_USDCAD ="USDCAD";
 input string SYMBOL_NAME_USDCHF ="USDCHF";
 input string SYMBOL_NAME_USDJPY ="USDJPY";
+input string SYMBOL_NAME_NZDUSD ="NZDUSD";
 input string  SYMBOL_NAME_EURJPY ="EURJPY";
 input string  SYMBOL_NAME_EURNZD ="EURNZD";
 input string  SYMBOL_NAME_XAUUSD ="XAUUSD";
@@ -61,37 +62,7 @@ input string SYMBOL_NAME_0019 ="";
 input string SYMBOL_NAME_0020 ="";
 
 
-#define SYMBOL_NAME_EURUSD SYMBOL_NAME_EURUSD
-#define SYMBOL_NAME_AUDUSD SYMBOL_NAME_AUDUSD
-#define SYMBOL_NAME_GPBUSD SYMBOL_NAME_GPBUSD
-#define SYMBOL_NAME_USDCAD SYMBOL_NAME_USDCAD
-#define SYMBOL_NAME_USDCHF SYMBOL_NAME_USDCHF
-#define SYMBOL_NAME_USDJPY SYMBOL_NAME_USDJPY
-#define SYMBOL_NAME_EURJPY SYMBOL_NAME_EURJPY
-#define SYMBOL_NAME_EURNZD SYMBOL_NAME_EURNZD
-#define SYMBOL_NAME_XAUUSD SYMBOL_NAME_XAUUSD
-#define SYMBOL_NAME_WTI SYMBOL_NAME_WTI
-#define SYMBOL_NAME_NASDAQ SYMBOL_NAME_NASDAQ
-#define SYMBOL_NAME_0001 SYMBOL_NAME_0001
-#define SYMBOL_NAME_0002 SYMBOL_NAME_0002
-#define SYMBOL_NAME_0003 SYMBOL_NAME_0003
-#define SYMBOL_NAME_0004 SYMBOL_NAME_0004
-#define SYMBOL_NAME_0005 SYMBOL_NAME_0005
-#define SYMBOL_NAME_0006 SYMBOL_NAME_0006
-#define SYMBOL_NAME_0007 SYMBOL_NAME_0007
-#define SYMBOL_NAME_0008 SYMBOL_NAME_0008
-#define SYMBOL_NAME_0009 SYMBOL_NAME_0009
-#define SYMBOL_NAME_0010 SYMBOL_NAME_0010
-#define SYMBOL_NAME_0011 SYMBOL_NAME_0011
-#define SYMBOL_NAME_0012 SYMBOL_NAME_0012
-#define SYMBOL_NAME_0013 SYMBOL_NAME_0013
-#define SYMBOL_NAME_0014 SYMBOL_NAME_0014
-#define SYMBOL_NAME_0015 SYMBOL_NAME_0015
-#define SYMBOL_NAME_0016 SYMBOL_NAME_0016
-#define SYMBOL_NAME_0017 SYMBOL_NAME_0017
-#define SYMBOL_NAME_0018 SYMBOL_NAME_0018
-#define SYMBOL_NAME_0019 SYMBOL_NAME_0019
-#define SYMBOL_NAME_0020 SYMBOL_NAME_0020
+
 
 bool isWebRequestEnabled = false;
 datetime lastMessageTime = 0;
@@ -352,8 +323,8 @@ string FormatSLMessage(const DB_PositionRow &row)
 string FormatCancelTradeMessage(const DB_PositionRow &row)
   {
    string message = "@everyone\n";
-   message += StringFormat("**Attention:** %s %s Trade %d Pos %d - Order canceln\n",
-                           row.symbol, row.tf, row.trade_no, row.pos_no);
+   message += StringFormat("**Attention:** %s %s Trade %d all Pos - Order canceln\n",
+                           row.symbol, row.tf, row.trade_no);
    return message;
   }
 //+------------------------------------------------------------------+
@@ -401,19 +372,14 @@ string get_discord_webhook()
       return Webhook_Nasdaq;
    if(_Symbol == SYMBOL_NAME_GPBUSD)
       return Webhook_GPBUSD;
-
+   if(_Symbol == SYMBOL_NAME_NZDUSD)
+      return Webhook_NZDUSD;
    return Webhook_System;
 
   }
 
 
-#define OBJ_ENTRY_LINE  "PR_HL_ENTRY"   // <- an deinen echten Namen anpassen
-#define OBJ_SL_LINE     "PR_HL_SL"
-#define OBJ_TP_LINE     "PR_HL_TP"
 
-#define OBJ_SABIO_ENTRY "SabioEntry"
-#define OBJ_SABIO_SL    "SabioSL"
-#define OBJ_SABIO_TP    "SabioTP"
 
 
 
