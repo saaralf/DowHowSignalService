@@ -531,3 +531,32 @@ void SendScreenShot(string symbol,int _period, int ScreenWidth = 1912, int Scree
 
 
 //+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+string FormatLineMoveMessage(const DB_PositionRow &row,
+                             const string kind,
+                             const double old_price,
+                             const double new_price)
+{
+   string what = kind;
+   if(kind == "entry") what = "Entry";
+   else if(kind == "sl") what = "SL";
+
+   string icon = (row.direction == "LONG") ? ":chart_with_upwards_trend:" : ":chart_with_downwards_trend:";
+
+   string message = "@everyone\n";
+   message += icon + " **UPDATE:** " + row.symbol + " " + row.tf + "\n";
+   message += StringFormat("Trade %d | Pos %d | **%s**\n", row.trade_no, row.pos_no, row.direction);
+
+   if(old_price > 0.0)
+      message += StringFormat("**%s:** %s -> %s\n",
+                              what,
+                              DoubleToString(old_price, _Digits),
+                              DoubleToString(new_price, _Digits));
+   else
+      message += StringFormat("**%s:** %s\n", what, DoubleToString(new_price, _Digits));
+
+   message += "(Linie & Tag aktualisiert)\n";
+   return message;
+}

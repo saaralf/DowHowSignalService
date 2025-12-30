@@ -6,6 +6,79 @@
 #ifndef __EVENTHANDLER__
 #define __EVENTHANDLER__
 
+// ------------------------------------------------------------------
+// TradePos-Drag Tracking (damit Discord nur 1x pro Drag gesendet wird)
+// Hinweis: Bei manchen MT5-Objekten kommt CHARTEVENT_OBJECT_CHANGE nicht
+// zuverlässig. Darum finalisieren wir zusätzlich beim MouseUp.
+// ------------------------------------------------------------------
+static bool   g_tp_drag_active   = false;
+static string g_tp_drag_name     = "";
+static string g_tp_drag_dir      = "";   // "LONG" / "SHORT"
+static string g_tp_drag_kind     = "";   // "entry" / "sl"
+static int    g_tp_drag_trade_no = 0;
+static int    g_tp_drag_pos_no   = 0;
+static double g_tp_drag_old      = 0.0;
+static double g_tp_drag_last     = 0.0;
+static uint   g_tp_drag_last_ms  = 0;
+
+// Finalisiert eine TradePos-Linienverschiebung: Tag updaten, speichern, Discord senden
+ void TP_FinalizeLineMove()
+{
+   if(!g_tp_drag_active || g_tp_drag_name == "")
+      return;
+
+   // Sicherheitscheck: Objekt muss existieren
+   if(ObjectFind(0, g_tp_drag_name) < 0)
+   {
+      g_tp_drag_active = false;
+      g_tp_drag_name = "";
+      return;
+   }
+
+   const double new_price = g_tp_drag_last;
+   const double old_price = g_tp_drag_old;
+
+   // UI: Tag sauber nachziehen
+   UI_CreateOrUpdateLineTag(g_tp_drag_name);
+   ChartRedraw(0);
+
+   // DB: persistieren (erst nach dem old/new Vergleich)
+   DB_SaveLinePrices();
+
+   // Discord: nur melden, wenn sich der Preis wirklich geändert hat
+   const double pt = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+   const bool changed = (old_price <= 0.0) || (MathAbs(new_price - old_price) > pt*0.25);
+
+   if(changed && (g_tp_drag_kind == "entry" || g_tp_drag_kind == "sl"))
+   {
+      const string what = (g_tp_drag_kind == "entry") ? "Entry" : "SL";
+      string msg = "@everyone\n";
+      msg += StringFormat("**UPDATE:** %s %s Trade %d Pos %d (%s)\n",
+                          _Symbol, TF_ToString((ENUM_TIMEFRAMES)_Period),
+                          g_tp_drag_trade_no, g_tp_drag_pos_no, g_tp_drag_dir);
+      if(old_price > 0.0)
+         msg += StringFormat("**%s:** %s -> %s\n",
+                             what,
+                             DoubleToString(old_price, _Digits),
+                             DoubleToString(new_price, _Digits));
+      else
+         msg += StringFormat("**%s:** %s\n", what, DoubleToString(new_price, _Digits));
+      msg += "(Linie verschoben, Tag nachgezogen)\n";
+      SendDiscordMessage(msg);
+   }
+
+   // Reset
+   g_tp_drag_active   = false;
+   g_tp_drag_name     = "";
+   g_tp_drag_dir      = "";
+   g_tp_drag_kind     = "";
+   g_tp_drag_trade_no = 0;
+   g_tp_drag_pos_no   = 0;
+   g_tp_drag_old      = 0.0;
+   g_tp_drag_last     = 0.0;
+   g_tp_drag_last_ms  = 0;
+}
+
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -17,17 +90,99 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
   {
    CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
 
-
+   
 if(UI_TradesPanel_OnChartEvent(id, lparam, dparam, sparam))
    return;
 
-// Wenn Linien verschoben wurden: sofort in SQLite speichern (damit nach Neustart/TF-Wechsel alles wieder da ist)
-   if(id == CHARTEVENT_OBJECT_CHANGE || id == CHARTEVENT_OBJECT_DRAG)
-     {
-      if(sparam == PR_HL || sparam == SL_HL)
-         DB_SaveLinePrices();
-     }
+   
+
+
+
+// --- Trade-Pos-Linien: Tag live nachziehen (DRAG), Discord/DB genau 1x pro Drag (Finalize)
+if(id == CHARTEVENT_OBJECT_DRAG)
+{
+   string direction, kind;
+   int trade_no, pos_no;
+
+   // Nur Entry/SL der TradePos-Linien tracken
+   if(UI_ParseTradePosFromName(sparam, direction, trade_no, pos_no, kind) && (kind == "entry" || kind == "sl"))
+   {
+      const double cur_price = ObjectGetDouble(0, sparam, OBJPROP_PRICE);
+
+      // Drag-Start (neues Objekt oder vorher nicht aktiv)
+      if(!g_tp_drag_active || g_tp_drag_name != sparam)
+      {
+         g_tp_drag_active   = true;
+         g_tp_drag_name     = sparam;
+         g_tp_drag_dir      = direction;
+         g_tp_drag_kind     = kind;
+         g_tp_drag_trade_no = trade_no;
+         g_tp_drag_pos_no   = pos_no;
+         g_tp_drag_last_ms  = GetTickCount();
+         g_tp_drag_last     = cur_price;
+
+         // old aus DB holen (falls vorhanden), sonst erstes Drag-Price als Fallback
+         g_tp_drag_old = 0.0;
+         DB_PositionRow row;
+         if(DB_GetPosition(_Symbol, (ENUM_TIMEFRAMES)_Period, direction, trade_no, pos_no, row))
+            g_tp_drag_old = (kind == "entry") ? row.entry : row.sl;
+         if(g_tp_drag_old <= 0.0)
+            g_tp_drag_old = cur_price;
+      }
+      else
+      {
+         // laufender Drag
+         g_tp_drag_last_ms = GetTickCount();
+         g_tp_drag_last    = cur_price;
+      }
+
+      // Tag live nachziehen
+      UI_CreateOrUpdateLineTag(sparam);
+
+      static uint last_redraw = 0;
+      uint now = GetTickCount();
+      if(now - last_redraw > 50)   // ~20 FPS
+      {
+         ChartRedraw(0);
+         last_redraw = now;
+      }
+
+      return; // TradePos-Drag fertig behandelt
+   }
+
+   // sonstige Trade-Linien (z.B. TP): nur Tag live
+   if(UI_IsTradePosLine(sparam))
+   {
+      UI_CreateOrUpdateLineTag(sparam);
+      return;
+   }
+}
+
+if(id == CHARTEVENT_OBJECT_CHANGE)
+{
+   // Wenn MT5 CHANGE liefert: finalize sofort (Discord + DB)
+   if(g_tp_drag_active && sparam == g_tp_drag_name)
+   {
+      g_tp_drag_last = ObjectGetDouble(0, sparam, OBJPROP_PRICE);
+      TP_FinalizeLineMove();
+      return;
+   }
+
+   // Basislinien (PR_HL/SL_HL) und andere Trade-Linien: nur speichern/Tag
+   if(sparam == PR_HL || sparam == SL_HL || UI_IsTradePosLine(sparam))
+   {
+      if(UI_IsTradePosLine(sparam))
+         UI_CreateOrUpdateLineTag(sparam);
+
+      DB_SaveLinePrices();
+      return;
+   }
+}
+
+
 
 // Preise der Linien direkt als double holen
    Entry_Price = Get_Price_d(PR_HL);
@@ -44,10 +199,15 @@ if(UI_TradesPanel_OnChartEvent(id, lparam, dparam, sparam))
 
       int MouseState = (int)StringToInteger(sparam);
 
-      int XD_R3 = (int)ObjectGetInteger(0, EntryButton, OBJPROP_XDISTANCE);
-      int YD_R3 = (int)ObjectGetInteger(0, EntryButton, OBJPROP_YDISTANCE);
-      int XS_R3 = (int)ObjectGetInteger(0, EntryButton, OBJPROP_XSIZE);
-      int YS_R3 = (int)ObjectGetInteger(0, EntryButton, OBJPROP_YSIZE);
+      // Fallback-Finalize: Wenn MT5 kein CHARTEVENT_OBJECT_CHANGE feuert,
+      // senden wir Discord + speichern beim MouseUp (state==0).
+      if(MouseState == 0 && g_tp_drag_active)
+         TP_FinalizeLineMove();
+
+      int XD_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_XDISTANCE);
+      int YD_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_YDISTANCE);
+      int XS_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_XSIZE);
+      int YS_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_YSIZE);
 
       int XD_R5 = (int)ObjectGetInteger(0, SLButton, OBJPROP_XDISTANCE);
       int YD_R5 = (int)ObjectGetInteger(0, SLButton, OBJPROP_YDISTANCE);
@@ -59,16 +219,16 @@ if(UI_TradesPanel_OnChartEvent(id, lparam, dparam, sparam))
 
          mlbDownX3 = MouseD_X;
          mlbDownY3 = MouseD_Y;
-         mlbDownXD_R3 = XD_R3;
-         mlbDownYD_R3 = YD_R3;
+         mlbDownXD_R3 = XD_EntryButton;
+         mlbDownYD_R3 = YD_EntryButton;
 
          mlbDownX5 = MouseD_X;
          mlbDownY5 = MouseD_Y;
          mlbDownXD_R5 = XD_R5;
          mlbDownYD_R5 = YD_R5;
 
-         if(MouseD_X >= XD_R3 && MouseD_X <= XD_R3 + XS_R3 &&
-            MouseD_Y >= YD_R3 && MouseD_Y <= YD_R3 + YS_R3)
+         if(MouseD_X >= XD_EntryButton && MouseD_X <= XD_EntryButton + XS_EntryButton &&
+            MouseD_Y >= YD_EntryButton && MouseD_Y <= YD_EntryButton + YS_EntryButton)
            {
             movingState_R3 = true;
            }
@@ -152,7 +312,7 @@ if(UI_TradesPanel_OnChartEvent(id, lparam, dparam, sparam))
          double price_PRC = 0, price_SL1 = 0, price_TP1 = 0;
          int window = 0;
 
-         ChartXYToTimePrice(0, XD_R3, YD_R3 + YS_R3, window, dt_PRC, price_PRC);
+         ChartXYToTimePrice(0, XD_EntryButton, YD_EntryButton + YS_EntryButton, window, dt_PRC, price_PRC);
 
          ChartXYToTimePrice(0, XD_R5, YD_R5 + YS_R5, window, dt_SL1, price_SL1);
 
@@ -212,8 +372,7 @@ if(UI_TradesPanel_OnChartEvent(id, lparam, dparam, sparam))
      }
    if(id == CHARTEVENT_CHART_CHANGE)
      {
-      UI_ReanchorRightPanel();
-      return;
+       return;
      }
 
 // Klick Button Send only
@@ -243,8 +402,6 @@ if(UI_TradesPanel_OnChartEvent(id, lparam, dparam, sparam))
 
 
 
-// ... nach Cancel-Buttons:
-   UI_CheckSLHitButtonClicks();
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -270,60 +427,6 @@ if(UI_TradesPanel_OnChartEvent(id, lparam, dparam, sparam))
 
 
   
-// Klick: irgendein SLHit Button? (pro Position: Cancel / SL erreicht)
-
-// Parse: erkennt diese Namen
-//   ButtonSLHit_LONG_2_1        -> action="SL"
-//   CancelButtonSLHit_LONG_2_1  -> action="CANCEL"
-//   SLButtonSLHit_LONG_2_1      -> action="SL"
-//   StoppedButtonSLHit_LONG_2_1 -> action="SL" (Fallback)
-bool UI_ParseSLHitActionName(const string obj_name,
-                             string &action,
-                             string &direction,
-                             int &trade_no,
-                             int &pos_no)
-{
-   action = "";
-   direction = "";
-   trade_no = 0;
-   pos_no = 0;
-
-   string base = obj_name;
-
-   // Prefixe vor dem eigentlichen ButtonSLHit_...
-   const string P_CANCEL  = "Cancel";
-   const string P_SL      = "SL";
-   const string P_STOPPED = "Stopped";
-
-   if(StringFind(obj_name, P_CANCEL + SLHIT_PREFIX, 0) == 0)
-   {
-      action = "CANCEL";
-      base   = StringSubstr(obj_name, StringLen(P_CANCEL)); // -> ButtonSLHit_...
-   }
-   else if(StringFind(obj_name, P_SL + SLHIT_PREFIX, 0) == 0)
-   {
-      action = "SL";
-      base   = StringSubstr(obj_name, StringLen(P_SL)); // -> ButtonSLHit_...
-   }
-   else if(StringFind(obj_name, P_STOPPED + SLHIT_PREFIX, 0) == 0)
-   {
-      action = "SL";
-      base   = StringSubstr(obj_name, StringLen(P_STOPPED)); // -> ButtonSLHit_...
-   }
-   else if(StringFind(obj_name, SLHIT_PREFIX, 0) == 0)
-   {
-      // Backward kompatibel: alter "ein Button pro Zeile" Modus
-      action = "SL";
-      base   = obj_name;
-   }
-   else
-   {
-      return false;
-   }
-
-   return UI_ParseSLHitName(base, direction, trade_no, pos_no);
-}
-
 // Prüft, ob innerhalb einer Trade-Nummer (und Richtung) noch irgendeine pending Position existiert.
 // (falls nein -> Trade ist "zu" und darf nicht mehr als aktiv gelten)
 bool UI_TradeHasAnyPendingPosition(const string direction, const int trade_no)
@@ -463,38 +566,6 @@ else
    ChartRedraw(0);
 }
 
-void UI_CheckSLHitButtonClicks()
-{
-   int total = ObjectsTotal(0, -1, -1);
-
-   for(int i = total - 1; i >= 0; i--)
-   {
-      string name = ObjectName(0, i);
-
-      string action, direction;
-      int trade_no, pos_no;
-
-      if(!UI_ParseSLHitActionName(name, action, direction, trade_no, pos_no))
-         continue;
-
-      // Klick?
-      if(ObjectGetInteger(0, name, OBJPROP_STATE) == 0)
-         continue;
-
-      // Reset des Button-States (verhindert Doppelevents)
-      ObjectSetInteger(0, name, OBJPROP_STATE, 0);
-
-      Print("[SLHIT] click action=", action,
-            " dir=", direction,
-            " trade=", trade_no,
-            " pos=", pos_no);
-
-      UI_CloseOnePositionAndNotify(action, direction, trade_no, pos_no);
-
-      // Safety: nach einer Aktion stoppen, weil Objekte neu aufgebaut werden
-      return;
-   }
-}
 
 
 #endif // __EVENTHANDLER__

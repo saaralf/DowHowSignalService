@@ -131,6 +131,8 @@ void DiscordSend()
       // Info-Label sicht- und farbig machen
       showActive_long(true);
       showCancel_long(true);
+      ObjectSetInteger(0,TP_BTN_ACTIVE_LONG,OBJPROP_BGCOLOR,clrBlack);
+      ObjectSetInteger(0,TP_BTN_ACTIVE_LONG,OBJPROP_BORDER_COLOR,clrRed);
       update_Text(TP_BTN_ACTIVE_LONG, "ACTIVE POSITION");
       UI_TradesPanel_RebuildRows();
      }
@@ -138,6 +140,8 @@ void DiscordSend()
      {
       showActive_short(true);
       showCancel_short(true);
+      ObjectSetInteger(0,TP_BTN_ACTIVE_SHORT,OBJPROP_BGCOLOR,clrBlack);
+      ObjectSetInteger(0,TP_BTN_ACTIVE_SHORT,OBJPROP_BORDER_COLOR,clrRed);
       update_Text(TP_BTN_ACTIVE_SHORT, "ACTIVE POSITION");
       UI_TradesPanel_RebuildRows();
      }
@@ -169,27 +173,6 @@ void DiscordSend()
         }
      }
 
-// --- Linien pro PosNo zeichnen
-   string suf = "_" +IntegerToString(trade_no)+"_"+ IntegerToString(pos_no);
-
-   if(isLong)
-     {
-
-      CreateEntryAndSLLines(SL_Long + suf, TimeCurrent(), SL_Price, Tradecolor_SLLineLong);
-      CreateEntryAndSLLines(Entry_Long + suf, TimeCurrent(), Entry_Price, TradeEntryLineLong);
-     }
-   else
-     {
-
-      CreateEntryAndSLLines(SL_Short + suf, TimeCurrent(), SL_Price, Tradecolor_SLLineShort);
-      CreateEntryAndSLLines(Entry_Short + suf, TimeCurrent(), Entry_Price, TradeEntryLineShort);
-     }
-
-   UI_SetLineMeta(SL_Long + suf, trade_no, pos_no, "LONG", "SL");
-   UI_SetLineMeta(Entry_Long + suf, trade_no, pos_no, "LONG", "ENTRY");
-
-   UI_CreateOrUpdateLineTag(SL_Long + suf);
-   UI_CreateOrUpdateLineTag(Entry_Long + suf);
 
 // --- TRNB sinnvoll setzen:
 // wenn Richtung weiterläuft -> gleiche TradeNo anzeigen
