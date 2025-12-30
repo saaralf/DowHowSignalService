@@ -185,87 +185,88 @@ bool UI_TradesPanel_Create(const int x, const int y, const int w, const int h)
    return true;
   }
 
+
+#ifndef OBJ_ALL_PERIODS
+#define OBJ_ALL_PERIODS 0xFFFFFFFF
+#endif
+
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void showCancel_long(bool show)
+color TP_PanelBg()
   {
+   if(ObjectFind(0, TP_BG) >= 0)
+      return (color)ObjectGetInteger(0, TP_BG, OBJPROP_BGCOLOR);
+   return clrBlack; // Fallback
+  }
 
-   if(show)
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void TP_SetButtonVisible(const string name, const bool visible, const string caption,
+                         const color txt_col, const color bg_col, const color border_col)
+  {
+   if(ObjectFind(0, name) < 0)
+      return;
+
+   if(visible)
      {
-      ObjectSetInteger(0, TP_BTN_CANCEL_LONG, OBJPROP_COLOR, clrBlack);
-      ObjectSetInteger(0, TP_BTN_CANCEL_LONG, OBJPROP_BGCOLOR, clrWhite);
-      ObjectSetInteger(0, TP_BTN_CANCEL_LONG, OBJPROP_BORDER_COLOR, clrBlack);
-     }
+      ObjectSetInteger(0, name, OBJPROP_TIMEFRAMES, OBJ_ALL_PERIODS);
+      ObjectSetString(0, name, OBJPROP_TEXT, caption);
 
+      ObjectSetInteger(0, name, OBJPROP_COLOR,        txt_col);
+      ObjectSetInteger(0, name, OBJPROP_BGCOLOR,      bg_col);
+      ObjectSetInteger(0, name, OBJPROP_BORDER_COLOR, border_col);
+     }
    else
      {
-      ObjectSetInteger(0, TP_BTN_CANCEL_LONG, OBJPROP_COLOR, clrNONE);
-      ObjectSetInteger(0, TP_BTN_CANCEL_LONG, OBJPROP_BGCOLOR, clrNONE);
-      ObjectSetInteger(0, TP_BTN_CANCEL_LONG, OBJPROP_BORDER_COLOR, clrNONE);
+      // wirklich unsichtbar
+      ObjectSetInteger(0, name, OBJPROP_TIMEFRAMES, 0);
+
+      // optional: gegen “Rahmen-Flicker”
+      color bg = TP_PanelBg();
+      ObjectSetString(0, name, OBJPROP_TEXT, "");
+      ObjectSetInteger(0, name, OBJPROP_COLOR,        bg);
+      ObjectSetInteger(0, name, OBJPROP_BGCOLOR,      bg);
+      ObjectSetInteger(0, name, OBJPROP_BORDER_COLOR, bg);
      }
   }
+
+
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 void showActive_long(bool show)
   {
-
-   if(show)
-     {
-      ObjectSetInteger(0, TP_BTN_ACTIVE_LONG, OBJPROP_COLOR, clrWhite);
-      ObjectSetInteger(0, TP_BTN_ACTIVE_LONG, OBJPROP_BGCOLOR, clrRed);
-      ObjectSetInteger(0, TP_BTN_ACTIVE_LONG, OBJPROP_BORDER_COLOR, clrWhite);
-     }
-
-   else
-     {
-      ObjectSetInteger(0, TP_BTN_ACTIVE_LONG, OBJPROP_COLOR, clrNONE);
-      ObjectSetInteger(0, TP_BTN_ACTIVE_LONG, OBJPROP_BGCOLOR, clrNONE);
-      ObjectSetInteger(0, TP_BTN_ACTIVE_LONG, OBJPROP_BORDER_COLOR, clrNONE);
-     }
-  }
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void showCancel_short(bool show)
-  {
-
-   if(show)
-     {
-      ObjectSetInteger(0, TP_BTN_CANCEL_SHORT, OBJPROP_COLOR, clrBlack);
-      ObjectSetInteger(0, TP_BTN_CANCEL_SHORT, OBJPROP_BGCOLOR, clrWhite);
-      ObjectSetInteger(0, TP_BTN_CANCEL_SHORT, OBJPROP_BORDER_COLOR, clrBlack);
-     }
-
-   else
-     {
-      ObjectSetInteger(0, TP_BTN_CANCEL_SHORT, OBJPROP_COLOR, clrNONE);
-      ObjectSetInteger(0, TP_BTN_CANCEL_SHORT, OBJPROP_BGCOLOR, clrNONE);
-      ObjectSetInteger(0, TP_BTN_CANCEL_SHORT, OBJPROP_BORDER_COLOR, clrNONE);
-     }
+   TP_SetButtonVisible(TP_BTN_ACTIVE_LONG, show, "Active Trade",
+                       clrWhite, clrRed, clrWhite);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 void showActive_short(bool show)
   {
-
-   if(show)
-     {
-      ObjectSetInteger(0, TP_BTN_ACTIVE_SHORT, OBJPROP_COLOR, clrWhite);
-      ObjectSetInteger(0, TP_BTN_ACTIVE_SHORT, OBJPROP_BGCOLOR, clrRed);
-      ObjectSetInteger(0, TP_BTN_ACTIVE_SHORT, OBJPROP_BORDER_COLOR, clrWhite);
-     }
-
-   else
-     {
-      ObjectSetInteger(0, TP_BTN_ACTIVE_SHORT, OBJPROP_COLOR, clrNONE);
-      ObjectSetInteger(0, TP_BTN_ACTIVE_SHORT, OBJPROP_BGCOLOR, clrNONE);
-      ObjectSetInteger(0, TP_BTN_ACTIVE_SHORT, OBJPROP_BORDER_COLOR, clrNONE);
-     }
+   TP_SetButtonVisible(TP_BTN_ACTIVE_SHORT, show, "Active Trade",
+                       clrWhite, clrRed, clrWhite);
   }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void showCancel_long(bool show)
+  {
+   TP_SetButtonVisible(TP_BTN_CANCEL_LONG, show, "Cancel Trade",
+                       clrBlack, clrWhite, clrBlack);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void showCancel_short(bool show)
+  {
+   TP_SetButtonVisible(TP_BTN_CANCEL_SHORT, show, "Cancel Trade",
+                       clrBlack, clrWhite, clrBlack);
+  }
+
+
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -308,14 +309,18 @@ void UI_TradesPanel_Destroy()
 // Voraussetzung: Entry_Long, SL_Long, Entry_Short, SL_Short sind string-Constants.
 // ============================================================================
 
+
+
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 bool UI_DeleteObjectIfExists(const string name)
   {
    if(ObjectFind(0, name) >= 0)
-      return ObjectDelete(0, name);
+      return UI_Reg_DeleteOne(name);
+   UI_Reg_Remove(name); // falls nur Registry-Rest
    return true;
+
   }
 
 //+------------------------------------------------------------------+
@@ -327,8 +332,7 @@ bool UI_DeleteLineAndTag(const string line_name)
 
    ok = UI_DeleteObjectIfExists(line_name) && ok;
 
-// Tag-Objekt mit gleichem Namen + "_TAG" (falls du es nutzt)
-   string tag_name = line_name + "_TAG";
+   string tag_name = line_name + LINE_TAG_SUFFIX;
    ok = UI_DeleteObjectIfExists(tag_name) && ok;
 
    return ok;
@@ -555,16 +559,16 @@ void UI_TradesPanel_RebuildRows()
             UI_CreateOrUpdateLineTag(Entry_Long + suf);
             CreateEntryAndSLLines(SL_Long + suf, TimeCurrent(), sl_draw, Tradecolor_SLLineLong);
             UI_CreateOrUpdateLineTag(SL_Long + suf);
-               DB_SaveTradeLines(suf);
+            DB_SaveTradeLines(suf);
            }
          else
             if(rows[i].direction == "SHORT")
               {
                CreateEntryAndSLLines(Entry_Short + suf, TimeCurrent(), entry_draw, TradeEntryLineShort);
-                UI_CreateOrUpdateLineTag(Entry_Short + suf);
+               UI_CreateOrUpdateLineTag(Entry_Short + suf);
                CreateEntryAndSLLines(SL_Short + suf, TimeCurrent(), sl_draw, Tradecolor_SLLineShort);
-                     UI_CreateOrUpdateLineTag(SL_Short + suf);
-                        DB_SaveTradeLines(suf);
+               UI_CreateOrUpdateLineTag(SL_Short + suf);
+               DB_SaveTradeLines(suf);
               }
         }
 
@@ -681,12 +685,22 @@ void UI_TradesPanel_RebuildRows()
       showActive_long(true);
       showCancel_long(true);
      }
+   else
+     {
+      showActive_long(false);
+      showCancel_long(false);
+     }
    if(anyShort)
      {
       showActive_short(true);
       showCancel_short(true);
      }
-UI_UpdateAllLineTags();
+   else
+     {
+      showActive_short(false);
+      showCancel_short(false);
+     }
+   UI_UpdateAllLineTags();
    ChartRedraw(0);
   }
 
@@ -753,6 +767,7 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
 
          // 2) DB: Trade sauber "geschlossen" markieren, damit OnInit ihn NICHT wieder aktiviert
          DB_UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period, "LONG", active_long_trade_no, 0, "CLOSED_CANCEL", 0);
+         Cache_UpdateStatusLocal("LONG",  active_long_trade_no,  0, "CLOSED_CANCEL", 0);
 
          // 3) Broker-Pending löschen (falls vorhanden)
 
@@ -761,19 +776,19 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
          is_long_trade = false;
          HitEntryPriceLong = false;
 
-         // WICHTIG: aktive Tradenummer löschen, sonst "reanimiert" OnInit das wieder
-         active_long_trade_no = 0;
-         DB_SetMetaInt(DB_Key("active_long_trade_no"), active_long_trade_no);
 
          // UI cleanup
          ObjectSetInteger(0, TP_BTN_ACTIVE_LONG, OBJPROP_COLOR, clrNONE);
          ObjectSetInteger(0, TP_BTN_ACTIVE_LONG, OBJPROP_BGCOLOR, clrNONE);
-            ObjectSetInteger(0, TP_BTN_ACTIVE_LONG, OBJPROP_BORDER_COLOR, clrNONE);
+         ObjectSetInteger(0, TP_BTN_ACTIVE_LONG, OBJPROP_BORDER_COLOR, clrNONE);
          ObjectSetInteger(0, TP_BTN_CANCEL_LONG, OBJPROP_COLOR, clrNONE);
          ObjectSetInteger(0, TP_BTN_CANCEL_LONG, OBJPROP_BGCOLOR, clrNONE);
-             ObjectSetInteger(0, TP_BTN_CANCEL_LONG, OBJPROP_BORDER_COLOR, clrNONE);
+         ObjectSetInteger(0, TP_BTN_CANCEL_LONG, OBJPROP_BORDER_COLOR, clrNONE);
          DeleteLinesandLabelsLong();
          int d = UI_DeleteTradeLinesByTradeNo(active_long_trade_no);
+         // WICHTIG: aktive Tradenummer löschen, sonst "reanimiert" OnInit das wieder
+         active_long_trade_no = 0;
+         DB_SetMetaInt(DB_Key("active_long_trade_no"), active_long_trade_no);
 
          UI_TradesPanel_RebuildRows();
          Print("Deleted objects for trade ", active_long_trade_no, ": ", d);
@@ -801,6 +816,7 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
          bool ret = SendDiscordMessage(message);
 
          DB_UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period, "SHORT", active_short_trade_no, 0, "CLOSED_CANCEL", 0);
+         Cache_UpdateStatusLocal("LONG",  active_long_trade_no,  0, "CLOSED_CANCEL", 0);
 
 
 
@@ -808,17 +824,17 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
          is_sell_trade_pending = false;
          HitEntryPriceShort = false;
 
-         active_short_trade_no = 0;
-         DB_SetMetaInt(DB_Key("active_short_trade_no"), active_short_trade_no);
 
          ObjectSetInteger(0, TP_BTN_ACTIVE_SHORT, OBJPROP_COLOR, clrNONE);
          ObjectSetInteger(0, TP_BTN_ACTIVE_SHORT, OBJPROP_BGCOLOR, clrNONE);
-           ObjectSetInteger(0, TP_BTN_ACTIVE_SHORT, OBJPROP_BORDER_COLOR, clrNONE);
+         ObjectSetInteger(0, TP_BTN_ACTIVE_SHORT, OBJPROP_BORDER_COLOR, clrNONE);
          ObjectSetInteger(0, TP_BTN_CANCEL_SHORT, OBJPROP_COLOR, clrNONE);
          ObjectSetInteger(0, TP_BTN_CANCEL_SHORT, OBJPROP_BGCOLOR, clrNONE);
-                ObjectSetInteger(0, TP_BTN_CANCEL_SHORT, OBJPROP_BORDER_COLOR, clrNONE);
-         DeleteLinesandLabelsShort();
+         ObjectSetInteger(0, TP_BTN_CANCEL_SHORT, OBJPROP_BORDER_COLOR, clrNONE);
+
          int d = UI_DeleteTradeLinesByTradeNo(active_short_trade_no);
+         active_short_trade_no = 0;
+         DB_SetMetaInt(DB_Key("active_short_trade_no"), active_short_trade_no);
 
          UI_TradesPanel_RebuildRows();
          Print("Deleted objects for trade ", active_short_trade_no, ": ", d);
@@ -1015,12 +1031,48 @@ int UI_DeleteTradeLinesByTradeNo(const int trade_no)
 
       if(match)
         {
-         if(ObjectDelete(0, name))
-            deleted++;
+       if(UI_Reg_DeleteOne(name))
+   deleted++;
         }
      }
 
    return deleted;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool UI_DeleteLineAndAllKnownTags(const string line_name)
+  {
+   bool ok = true;
+
+   ok = UI_DeleteObjectIfExists(line_name) && ok;
+   ok = UI_DeleteObjectIfExists(line_name + LINE_TAG_SUFFIX) && ok;
+
+// Legacy: LabelEntry*/LabelSL* mit gleichem Suffix (falls mal erzeugt)
+// Suffix aus line_name extrahieren (alles ab letztem "Entry_*" / "SL_*" bleibt gleich)
+// Einfacher: Kandidaten auf Basis der bekannten Prefixe:
+// Entry_Long_1_2  ->  LabelEntryLong_1_2
+   string suf = "";
+   int p = StringFind(line_name, "_", 0);
+// robust: nimm die letzten 2 "_<trade>_<pos>" Teile
+   string parts[];
+   int n = StringSplit(line_name, '_', parts);
+   if(n >= 3)
+      suf = "_" + parts[n-2] + "_" + parts[n-1];
+
+   if(suf != "")
+     {
+      if(StringFind(line_name, "Entry_Long_", 0) == 0)
+         ok = UI_DeleteObjectIfExists(LabelEntryLong  + suf) && ok;
+      if(StringFind(line_name, "SL_Long_", 0)    == 0)
+         ok = UI_DeleteObjectIfExists(LabelSLLong     + suf) && ok;
+      if(StringFind(line_name, "Entry_Short_",0) == 0)
+         ok = UI_DeleteObjectIfExists(LabelEntryShort + suf) && ok;
+      if(StringFind(line_name, "SL_Short_", 0)   == 0)
+         ok = UI_DeleteObjectIfExists(LabelSLShort    + suf) && ok;
+     }
+
+   return ok;
   }
 
 #endif // __TRADES_PANEL_MQH__
