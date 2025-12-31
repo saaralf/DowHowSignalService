@@ -544,7 +544,7 @@ void UI_TradesPanel_RebuildRows()
          continue;
 
       // Restore Entry/SL Lines (pro Position)
-      if(rows[i].was_sent == 1 && rows[i].pos_no >= 1 && rows[i].pos_no <= 4)
+      if(rows[i].was_sent == 1 && rows[i].pos_no >= 1 && rows[i].status != "CLOSED")
         {
          int trade_no = rows[i].trade_no;
          int pos_no = rows[i].pos_no;
@@ -816,7 +816,7 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
          bool ret = SendDiscordMessage(message);
 
          DB_UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period, "SHORT", active_short_trade_no, 0, "CLOSED_CANCEL", 0);
-         Cache_UpdateStatusLocal("LONG",  active_long_trade_no,  0, "CLOSED_CANCEL", 0);
+         Cache_UpdateStatusLocal("Short",  active_short_trade_no,  0, "CLOSED_CANCEL", 0);
 
 
 
@@ -1031,8 +1031,8 @@ int UI_DeleteTradeLinesByTradeNo(const int trade_no)
 
       if(match)
         {
-       if(UI_Reg_DeleteOne(name))
-   deleted++;
+         if(UI_Reg_DeleteOne(name))
+            deleted++;
         }
      }
 
