@@ -89,7 +89,7 @@ int UI_Reg_DeleteAll()
          if(ObjectDelete(0, name))
            {
             deleted++;
-            Print("Delete Objekt: "+name);
+           
            }
         }
      }

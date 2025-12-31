@@ -740,17 +740,17 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
 // Header-Buttons
    if(sparam == TP_BTN_ACTIVE_LONG)
      {
-      Print("Active LONG clicked");
+     
       return true;
      }
    if(sparam == TP_BTN_ACTIVE_SHORT)
      {
-      Print("Active SHORT clicked");
+     
       return true;
      }
    if(sparam == TP_BTN_CANCEL_LONG)
      {
-      Print("Cancel LONG clicked");
+     
 
       if(is_long_trade)
         {
@@ -791,7 +791,7 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
          DB_SetMetaInt(DB_Key("active_long_trade_no"), active_long_trade_no);
 
          UI_TradesPanel_RebuildRows();
-         Print("Deleted objects for trade ", active_long_trade_no, ": ", d);
+        
          // optional: Panels refresh
          UI_UpdateNextTradePosUI();
 
@@ -802,7 +802,7 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
      }
    if(sparam == TP_BTN_CANCEL_SHORT)
      {
-      Print("Cancel SHORT clicked");
+   
       if(is_sell_trade)
         {
          DB_PositionRow r;
@@ -837,7 +837,7 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
          DB_SetMetaInt(DB_Key("active_short_trade_no"), active_short_trade_no);
 
          UI_TradesPanel_RebuildRows();
-         Print("Deleted objects for trade ", active_short_trade_no, ": ", d);
+        
 
          UI_UpdateNextTradePosUI();
 
@@ -911,12 +911,12 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
 // Row Buttons
    if(StringFind(sparam, TP_ROW_LONG_PREFIX, 0) == 0)
      {
-      Print("Row LONG clicked: ", sparam);
+     
       return true;
      }
    if(StringFind(sparam, TP_ROW_SHORT_PREFIX, 0) == 0)
      {
-      Print("Row SHORT clicked: ", sparam);
+      
       return true;
      }
 

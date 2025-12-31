@@ -5,61 +5,23 @@
 //+------------------------------------------------------------------+
 #include "db_state.mqh"
 #include <Trade/Trade.mqh>
-
+#include "config.mqh"
+CConfig g_Config;
 // Strategy Parameters
 input group "===== Discord Settings ====="
-input string DiscordBotName = "DowHow Trading Signalservice";    // Name of the bot in Discord
 input color MessageColor = clrBlue;                 // Color for Discord messages
 
-// webhooks Markus
-input string Webhook_System = "https://discordapp.com/api/webhooks/1328803943068860416/O7dsN4wcNk-vSA9sQQx1ZFzZUAhx8NsPe4JFPxQ4MuQtiOx1BWepkXqSz00ZkCrqiDHw";  // Discord Channel
-input string Webhook_AUDUSD = "https://discordapp.com/api/webhooks/1450622346661462259/OgfubC7T87mutfRTVwD0MNbwaPDA05rUC86mgA1KfpHXqPMcyWTFRrbhXj8ALDvUsLRh";
-input string Webhook_EURUSD = "https://discordapp.com/api/webhooks/1450620878558724166/b0l7BJt8RVPA7shPc1dMFEDKe_UFLjyE2cV77mwxIkvRTaEnwtWsomSTiluWM6UeEMAQ";
-input string Webhook_GPBUSD = "https://discordapp.com/api/webhooks/1450621149154246667/2qkM0Eq_Ic8frSyuMJXOB_VqwklR5S0rZKnb6oxFIszis4KAdDbnuK2p5mtz5Qq60chi";
-input string Webhook_USDJPY = "https://discordapp.com/api/webhooks/1450621290716069928/8ZAnAbMwx5vU6_H3SmszphfNZnq1kFhUMcdbLCgQok81FWvr2vVp1iBgE_mDDodeaMCS";
-input string Webhook_USDCHF = "https://discordapp.com/api/webhooks/1450621580551127142/HwBW4ySbMaUu3BF6PGRBX1-mSGFRjzAB6CSZjuvPffbvFla04ativeVCWqQUWK7EsDd8";
-input string Webhook_USDCAD = "https://discordapp.com/api/webhooks/1450621496765452451/LyofoHfsnJ-EPoiN-R9idXBrKt3qRCvKdWKq1r_SE9DdmZpevQjPjCvgu66khcQ9NKeL";
-input string Webhook_NZDUSD = "https://discordapp.com/api/webhooks/1450621799787401346/zLu5SEDVqHXRqaDgrGQ-aKR1Ixh3V6SH-P3AF4DmkyoBqe-oMAMa-PjNLF1XxPsPL09D";
-input string Webhook_Nasdaq = "https://discordapp.com/api/webhooks/1450621910730670180/6zb7Vbpcv2U1uxvW6wkjw2H0G4nFUdfB9_Davjb1RE1qgYwXQznAo5CUFzTx10Umlgrm";
-input string Webhook_Gold = "https://discordapp.com/api/webhooks/1450621987985686639/ioVRX8Kbn1d1dUWQFLtczHNh8bjAIBeO2A5lNkuS7G130N64CobTNeWXHUY0I5ligA6n";
-input string Webhook_WTI = "https://discordapp.com/api/webhooks/1450622078901289192/n90YprBYG2LDbYWUMyIFdf6XvA0vRnndlqTjG_mqmi3n8o40urBeDaYIqwKafag0_pRy";
-input string Webhook_EURJPY = "https://discordapp.com/api/webhooks/1450622149797740666/P1agMvI1lthidesmNoiiWC8lbcHMy-nt5XHdQyDTbCg-B5B2sGm4RkwTUVQf8DrlLFA8";
-input string Webhook_EURNZD = "https://discordapp.com/api/webhooks/1450622242663694587/4o-Zz7bkyAoMu6DAFFybPkvfHE3UQmstwU7VcDgd8FcqXPH3boCOxjLH0U9jmHOqW_sk";
+
+
+CJAVal g_config;
+
+
+
+// Neue Variablen
+string Webhook_System=g_Config.GetWebhook("system");
+
 
 // Wenn der Broker seltsame Namen für die Symbole hat, dann muss dieser in den Eigenschaften angegeben werden
-input group "======= Symbolnamen ======="
-input string SYMBOL_NAME_EURUSD = "EURUSD";
-input string SYMBOL_NAME_AUDUSD ="AUDUSD";
-input string SYMBOL_NAME_GPBUSD ="GPBUSD";
-input string SYMBOL_NAME_USDCAD ="USDCAD";
-input string SYMBOL_NAME_USDCHF ="USDCHF";
-input string SYMBOL_NAME_USDJPY ="USDJPY";
-input string SYMBOL_NAME_NZDUSD ="NZDUSD";
-input string  SYMBOL_NAME_EURJPY ="EURJPY";
-input string  SYMBOL_NAME_EURNZD ="EURNZD";
-input string  SYMBOL_NAME_XAUUSD ="XAUUSD";
-input string  SYMBOL_NAME_WTI ="WTI";
-input string SYMBOL_NAME_NASDAQ ="SYMBOL_NAME_NASDAQ";
-input string SYMBOL_NAME_0001 ="";
-input string SYMBOL_NAME_0002 ="";
-input string SYMBOL_NAME_0003 ="";
-input string SYMBOL_NAME_0004 ="";
-input string SYMBOL_NAME_0005 ="";
-input string SYMBOL_NAME_0006 ="";
-input string SYMBOL_NAME_0007 ="";
-input string SYMBOL_NAME_0008 ="";
-input string SYMBOL_NAME_0009 ="";
-input string SYMBOL_NAME_0010 ="";
-input string SYMBOL_NAME_0011 ="";
-input string SYMBOL_NAME_0012 ="";
-input string SYMBOL_NAME_0013 ="";
-input string SYMBOL_NAME_0014 ="";
-input string SYMBOL_NAME_0015 ="";
-input string SYMBOL_NAME_0016 ="";
-input string SYMBOL_NAME_0017 ="";
-input string SYMBOL_NAME_0018 ="";
-input string SYMBOL_NAME_0019 ="";
-input string SYMBOL_NAME_0020 ="";
 
 
 
@@ -77,15 +39,18 @@ string discord_webhook_test = "https://discord.com/api/webhooks/1328803943068860
 //+------------------------------------------------------------------+
 bool checkDiscord()
   {
-   Print("Initialization step 1: Checking WebRequest permissions...");
+
+   CLogger::Add(LOG_LEVEL_INFO, "Initialization step 1: Checking WebRequest permissions...");
+
    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
      {
-      Print("Error: WebRequest is not allowed. Please allow in Tool -> Options -> Expert Advisors");
+      CLogger::Add(LOG_LEVEL_WARNING, "Error: WebRequest is not allowed. Please allow in Tool -> Options -> Expert Advisors");
       return false;
      }
-   Print("TerminalInfoInteger ok!");
 
-   Print("Initialization step 2: Testing Discord connection...");
+   CLogger::Add(LOG_LEVEL_INFO, "TerminalInfoInteger ok!");
+
+   CLogger::Add(LOG_LEVEL_INFO, "Initialization step 2: Testing Discord connection...");
 
 // Simple test message
    ResetLastError();
@@ -108,52 +73,31 @@ bool checkDiscord()
    if(res == -1)
      {
       int error = GetLastError();
-      Print("WebRequest failed. Error code: ", error);
-      Print("Make sure these URLs are allowed:");
-      Print("https://discord.com/*");
-      Print("https://discordapp.com/*");
+      CLogger::Add(LOG_LEVEL_WARNING, "WebRequest failed. Error code: "+ error+"\n Make sure these URLs are allowed:\n");
+      CLogger::Add(LOG_LEVEL_WARNING, "https://discord.com/*");
+      CLogger::Add(LOG_LEVEL_WARNING, "https://discordapp.com/*");
+
       return false;
      }
 
-   Print("Initialization step 3: Set Webhook");
+      CLogger::Add(LOG_LEVEL_INFO, "Initialization step 3: Set Webhook");
    if(get_discord_webhook()==discord_webhook_test)
      {
-      Print("Please set Webhooks: ");
+      
+      CLogger::Add(LOG_LEVEL_WARNING, "Please set Webhooks: ");
       return false;
      }
    else
      {
-      Print("Use Webhook: "+get_discord_webhook());
+     
+        CLogger::Add(LOG_LEVEL_INFO, "Use Webhook: "+get_discord_webhook());
      }
 
    isWebRequestEnabled = true;
-   Print("Initialization step 4: All checks passed!");
-   Print("Successfully connected to Discord!");
-
-   test_message = "{\"content\":\"DowHow Signal Dienst AS3 System für "+_Symbol+" mit Webhook "+get_discord_webhook() +"\"}";
-   headers = "Content-Type: application/json\r\n";
-
-   ArrayResize(data, StringToCharArray(test_message, data, 0, WHOLE_ARRAY, CP_UTF8) - 1);
-
-   res = WebRequest(
-            "POST",
-            discord_webhook_test,
-            headers,
-            5000,
-            data,
-            result,
-            headers
-         );
-
-   if(res == -1)
-     {
-      int error = GetLastError();
-      Print("WebRequest failed. Error code: ", error);
-      Print("Make sure these URLs are allowed:");
-      Print("https://discord.com/*");
-      Print("https://discordapp.com/*");
-      return false;
-     }
+   
+        CLogger::Add(LOG_LEVEL_INFO, "Initialization step 4: All checks passed!");
+        CLogger::Add(LOG_LEVEL_INFO, "Successfully connected to Discord!");
+  
    return true;
   }
 
@@ -189,7 +133,7 @@ string FormatTradeMessage(const DB_PositionRow &row)
    message += "**Symbol:** " + row.symbol + " " + row.tf + "\n";
    message += ":arrow_right: **Entry:** " + DoubleToString(row.entry, _Digits) + " (" + row.sabio_entry + ")\n\n";
    message += ":orange_circle: **SL:** " + DoubleToString(row.sl, _Digits) + " (" + row.sabio_sl + ")\n";
-   
+
 
    return message;
   }
@@ -202,7 +146,7 @@ bool SendDiscordMessageTest(string message, bool isError = false)
   {
 
    string discord_webhook_save = discord_webhook;
-    discord_webhook =discord_webhook_test;
+   discord_webhook =discord_webhook_test;
 
    return SendDiscordMessage(message,  false);
 
@@ -236,7 +180,8 @@ bool SendDiscordMessage(string message, bool isError = false)
   {
    if(!isWebRequestEnabled)
      {
-      Print("Not isWebRequestEnabled");
+      
+        CLogger::SetLogFileName("Not isWebRequestEnabled");
       return false;
      }
 
@@ -296,10 +241,12 @@ bool SendDiscordMessage(string message, bool isError = false)
          error = "Unknown Error";
      }
 
-   Print("Discord Error: ", error, " (", res, ")");
-   Print("Message: ", message);
-   Print("Last MT5 Error: ", GetLastError());
-
+  CLogger::SetLogFileName("Discord Error: "+ error+ " ("+ res+ ")");
+      
+  CLogger::SetLogFileName("Message: "+ message);
+      
+  CLogger::SetLogFileName("Last MT5 Error: "+GetLastError());
+      
    return false;
   }
 
@@ -336,7 +283,7 @@ string FormatUpdateTradeMessage(const DB_PositionRow &row)
    message += StringFormat("**Attention:** %s %s Trade %d Pos %d - SL -> %s (Sabio: %s) | TP -> %s (Sabio: %s)\n",
                            row.symbol, row.tf, row.trade_no, row.pos_no,
                            DoubleToString(row.sl, _Digits), row.sabio_sl);
-                          
+
    return message;
   }
 
@@ -346,37 +293,20 @@ string FormatUpdateTradeMessage(const DB_PositionRow &row)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 string get_discord_webhook()
   {
 
-   if(_Symbol == SYMBOL_NAME_EURUSD)
-      return Webhook_EURUSD;
 
-   if(_Symbol == SYMBOL_NAME_AUDUSD)
-      return Webhook_AUDUSD;
-   if(_Symbol == SYMBOL_NAME_USDCAD)
-      return Webhook_USDCAD;
-   if(_Symbol == SYMBOL_NAME_USDCHF)
-      return Webhook_USDCHF;
-   if(_Symbol == SYMBOL_NAME_USDJPY)
-      return Webhook_USDJPY;
-   if(_Symbol == SYMBOL_NAME_EURJPY)
-      return Webhook_EURJPY;
-   if(_Symbol == SYMBOL_NAME_EURNZD)
-      return Webhook_EURNZD;
-   if(_Symbol == SYMBOL_NAME_XAUUSD)
-      return Webhook_Gold;
-   if(_Symbol == SYMBOL_NAME_WTI)
-      return Webhook_WTI;
-   if(_Symbol == SYMBOL_NAME_NASDAQ)
-      return Webhook_Nasdaq;
-   if(_Symbol == SYMBOL_NAME_GPBUSD)
-      return Webhook_GPBUSD;
-   if(_Symbol == SYMBOL_NAME_NZDUSD)
-      return Webhook_NZDUSD;
-   return Webhook_System;
+   string webhookUrl = g_Config.GetWebhook(_Symbol);
+   return webhookUrl;
 
   }
+
+
 
 
 
@@ -471,21 +401,26 @@ void SendScreenShot(string symbol,int _period, int ScreenWidth = 1912, int Scree
         }
       else
         {
-         Print("ChartScreenShot Error: ",(string)GetLastError());
+        
+  CLogger::SetLogFileName("ChartScreenShot Error: "+(string)GetLastError());
+         
          Sleep(50);
          continue;
         }
       res=FileOpen(filename,FILE_READ|FILE_WRITE|FILE_BIN);
       if(res<0)
         {
-         Print("File Open Error: "+filename+", Attempt: ",x);
+  CLogger::SetLogFileName("File Open Error: "+filename+", Attempt: "+x);
+
          Sleep(100);
          continue;
         }
       if(FileSize(res)==0)
         {
          FileClose(res);
-         Print("FileSize Error, Attempt: ",x);
+  CLogger::SetLogFileName("FileSize Error, Attempt: "+x);
+
+
          Sleep(100);
          continue;
         }
@@ -494,7 +429,9 @@ void SendScreenShot(string symbol,int _period, int ScreenWidth = 1912, int Scree
    if(FileReadArray(res,file)!=FileSize(res))
      {
       FileClose(res);
-      Print("File Read Error: "+filename);
+      
+  CLogger::SetLogFileName("File Read Error: "+filename);
+    
       return;
      }
    FileClose(res);
@@ -513,10 +450,13 @@ void SendScreenShot(string symbol,int _period, int ScreenWidth = 1912, int Scree
       ResetLastError();
       res=WebRequest("POST", get_discord_webhook(),str,5000,data,data,str);
       if(res==NULL)
-         Print("Server response: ",CharArrayToString(data));
+   CLogger::SetLogFileName("Server response: "+CharArrayToString(data));
+ 
       if(res<0)
         {
-         Print("Error: ",GetLastError());
+   CLogger::SetLogFileName("Error: "+GetLastError());
+ 
+        
         }
       else
         {
@@ -538,10 +478,13 @@ string FormatLineMoveMessage(const DB_PositionRow &row,
                              const string kind,
                              const double old_price,
                              const double new_price)
-{
+  {
    string what = kind;
-   if(kind == "entry") what = "Entry";
-   else if(kind == "sl") what = "SL";
+   if(kind == "entry")
+      what = "Entry";
+   else
+      if(kind == "sl")
+         what = "SL";
 
    string icon = (row.direction == "LONG") ? ":chart_with_upwards_trend:" : ":chart_with_downwards_trend:";
 
@@ -559,4 +502,6 @@ string FormatLineMoveMessage(const DB_PositionRow &row,
 
    message += "(Linie & Tag aktualisiert)\n";
    return message;
-}
+  }
+
+//+------------------------------------------------------------------+

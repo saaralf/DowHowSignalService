@@ -35,7 +35,8 @@ int getChartHeightInPixels(const long chartID = 0, const int subwindow = 0)
    if(!ChartGetInteger(chartID, CHART_HEIGHT_IN_PIXELS, 0, result))
      {
       //--- Schreiben die Fehlermeldung in den Log "Experten"
-      Print(__FUNCTION__ + ", Error Code = ", GetLastError());
+
+      CLogger::Add(LOG_LEVEL_INFO, "__FUNCTION__ Error Code = "+ GetLastError());
      }
 //--- Geben den Wert der Eigenschaft zurück
    return ((int)result);
@@ -55,7 +56,9 @@ int getChartWidthInPixels(const long chart_ID = 0)
    if(!ChartGetInteger(chart_ID, CHART_WIDTH_IN_PIXELS, 0, result))
      {
       //--- Schreiben die Fehlermeldung in den Log "Experten"
-      Print(__FUNCTION__ + ", Error Code = ", GetLastError());
+
+      CLogger::Add(LOG_LEVEL_INFO, "__FUNCTION__ Error Code = "+ GetLastError());
+
      }
 //--- Geben den Wert der Eigenschaft zurück
    return ((int)result);
@@ -92,31 +95,20 @@ bool UI_ParseTradePosFromName(const string name, string &direction, int &trade_n
          kind="sl";
         }
       else
-         if(StringFind(name, "TP_Long_") == 0)
+
+         if(StringFind(name, "Entry_Short_") == 0)
            {
-            direction="LONG";
-            kind="tp";
+            direction="SHORT";
+            kind="entry";
            }
          else
-            if(StringFind(name, "Entry_Short_") == 0)
+            if(StringFind(name, "SL_Short_") == 0)
               {
                direction="SHORT";
-               kind="entry";
+               kind="sl";
               }
             else
-               if(StringFind(name, "SL_Short_") == 0)
-                 {
-                  direction="SHORT";
-                  kind="sl";
-                 }
-               else
-                  if(StringFind(name, "TP_Short_") == 0)
-                    {
-                     direction="SHORT";
-                     kind="tp";
-                    }
-                  else
-                     return false;
+               return false;
 
    string parts[];
    int n = StringSplit(name, '_', parts);
@@ -274,10 +266,13 @@ bool CreateEntryAndSLLines(string objName, datetime time1, double price1, color 
 // neu erstellen
    if(!ObjectCreate(0, objName, OBJ_HLINE, 0, time1, price1))
      {
-      Print(__FUNCTION__, ": Failed to create ", objName, " err=", GetLastError());
-      return false;
+     
+      CLogger::Add(LOG_LEVEL_INFO, "__FUNCTION__ : Failed to create "+ objName+ " err="+ GetLastError());
+          return false;
      }
+   
    UI_Reg_Add(objName); // Speichere Object im Array zum späteren löschen
+   
    ObjectSetDouble(0, objName, OBJPROP_PRICE, price1);
    ObjectSetInteger(0, objName, OBJPROP_COLOR, clr);
    ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_DASH);
@@ -305,9 +300,11 @@ void CreateLabelsTPcolor_SLLines(string LABEL_NAME, string text, double price2, 
      {
       if(!ObjectCreate(0, LABEL_NAME, OBJ_TEXT, 0, TimeCurrent(), price2))
         {
-         Print(__FUNCTION__, ": Failed to create ", LABEL_NAME, " Error Code: ", GetLastError());
+      CLogger::Add(LOG_LEVEL_INFO, "__FUNCTION__ : Failed to create "+ LABEL_NAME+ " Error Code: "+ GetLastError());
+   
          return; // raus bei Fehler
         }
+   
       UI_Reg_Add(LABEL_NAME); // Speichere Object im Array zum späteren löschen
       // Grund-Layout nur beim ersten Erzeugen
       ObjectSetInteger(0, LABEL_NAME, OBJPROP_COLOR, clr1);
@@ -432,7 +429,9 @@ bool createButton(string objName, string text, int xD, int yD, int xS, int yS, c
    ResetLastError();
    if(!ObjectCreate(0, objName, OBJ_BUTTON, 0, 0, TimeCurrent()))
      {
-      Print(__FUNCTION__, ": Failed to create Btn: Error Code: ", GetLastError());
+    CLogger::Add(LOG_LEVEL_INFO, "create failed for "+ objName+ " err="+ GetLastError());
+     
+ 
       return (false);
      }
    UI_Reg_Add(objName); // Speichere Object im Array zum späteren löschen
@@ -465,7 +464,8 @@ bool createHL(string objName, datetime time1, double price1, color clr)
    ResetLastError();
    if(!ObjectCreate(0, objName, OBJ_HLINE, 0, time1, price1))
      {
-      Print(__FUNCTION__, ": Failed to create HL: Error Code: ", GetLastError());
+       CLogger::Add(LOG_LEVEL_INFO, "create failed for "+ objName+ " err="+ GetLastError());
+   
       return (false);
      }
    UI_Reg_Add(objName); // Speichere Object im Array zum späteren löschen

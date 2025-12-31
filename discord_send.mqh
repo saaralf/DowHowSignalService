@@ -117,7 +117,8 @@ void DiscordSend()
 
    if(!discord_ok)
      {
-      Print("Discord Fehler (Draft bleibt in DB, PosNo bleibt wiederverwendbar).");
+       CLogger::Add(LOG_LEVEL_INFO, "Discord Fehler (Draft bleibt in DB, PosNo bleibt wiederverwendbar)");
+   
       RollbackDraftRow(row);
       return;
      }
