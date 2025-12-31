@@ -13,6 +13,12 @@
 //+------------------------------------------------------------------+
 void DiscordSend()
   {
+
+   static bool busy=false;
+   if(busy)
+      return;
+   busy=true;
+
 // --- TradeNr aus Eingabefeld (TRNB)
    string tradenummer_string = "";
    ObjectGetString(0, TRNB, OBJPROP_TEXT, 0, tradenummer_string);
@@ -67,18 +73,19 @@ void DiscordSend()
 
    bool starting_new_trade = (active_trade_no <= 0);
 
-// --- PosNo bestimmen (nur bestätigte Positionen zählen; Draft zählt NICHT)
+// 1) gleichzeitig aktive Positionen zählen (nicht CLOSED)
+   int active_cnt = DB_CountActivePositions(_Symbol, (ENUM_TIMEFRAMES)_Period, direction, trade_no);
+   if(active_cnt >= DB_MAX_POS_PER_SIDE)
+     {
+      MessageBox("Maximale gleichzeitige Positionen erreicht (max 4).", NULL, MB_OK);
+      return;
+     }
+
+// 2) nächste Positionsnummer vergeben (darf 5,6,7... sein)
    int pos_no = DB_GetNextPosNo(_Symbol, _Period, direction, trade_no);
    if(pos_no < 1)
       pos_no = 1;
-   int pos_no_count = DB_GetPosNoCount(_Symbol, _Period, direction, trade_no);
-   if(pos_no_count < 1)
-      pos_no_count = 1;
-   if(pos_no_count > DB_MAX_POS_PER_SIDE)
-     {
-      MessageBox("Maximale Pyramide erreicht (Pos4).", NULL, MB_OK);
-      return;
-     }
+
 
 // --- Draft in DB schreiben
    DB_PositionRow row;
@@ -125,12 +132,14 @@ void DiscordSend()
    row.is_pending = 1;
    row.updated_at = TimeCurrent();
    DB_UpsertPosition(row);
+   Cache_UpsertLocal(row);
 
    if(isLong)
      {
       // Info-Label sicht- und farbig machen
       showActive_long(true);
       showCancel_long(true);
+
       update_Text(TP_BTN_ACTIVE_LONG, "ACTIVE POSITION");
       UI_TradesPanel_RebuildRows();
      }
@@ -169,27 +178,6 @@ void DiscordSend()
         }
      }
 
-// --- Linien pro PosNo zeichnen
-   string suf = "_" +IntegerToString(trade_no)+"_"+ IntegerToString(pos_no);
-
-   if(isLong)
-     {
-
-      CreateEntryAndSLLines(SL_Long + suf, TimeCurrent(), SL_Price, Tradecolor_SLLineLong);
-      CreateEntryAndSLLines(Entry_Long + suf, TimeCurrent(), Entry_Price, TradeEntryLineLong);
-     }
-   else
-     {
-
-      CreateEntryAndSLLines(SL_Short + suf, TimeCurrent(), SL_Price, Tradecolor_SLLineShort);
-      CreateEntryAndSLLines(Entry_Short + suf, TimeCurrent(), Entry_Price, TradeEntryLineShort);
-     }
-
-   UI_SetLineMeta(SL_Long + suf, trade_no, pos_no, "LONG", "SL");
-   UI_SetLineMeta(Entry_Long + suf, trade_no, pos_no, "LONG", "ENTRY");
-
-   UI_CreateOrUpdateLineTag(SL_Long + suf);
-   UI_CreateOrUpdateLineTag(Entry_Long + suf);
 
 // --- TRNB sinnvoll setzen:
 // wenn Richtung weiterläuft -> gleiche TradeNo anzeigen
@@ -205,6 +193,8 @@ void DiscordSend()
 
 // --- Panels/Übersicht aktualisieren
    UI_UpdateNextTradePosUI();
+
+   busy=false;
 
   }
 
