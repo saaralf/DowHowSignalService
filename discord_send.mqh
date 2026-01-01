@@ -82,7 +82,7 @@ void DiscordSend()
      }
 
 // 2) nächste Positionsnummer vergeben (darf 5,6,7... sein)
-   int pos_no = DB_GetNextPosNo(_Symbol, _Period, direction, trade_no);
+   int pos_no = g_DB.GetNextPosNo(_Symbol, _Period, direction, trade_no);
    if(pos_no < 1)
       pos_no = 1;
 

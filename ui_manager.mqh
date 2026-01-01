@@ -59,10 +59,10 @@ public:
         }
       // Position panel at top (0..1 relative coordinates) with fixed height
       double topHeight = 60;
-      ObjectSetDouble(chartId, bgName, OBJPROP_XSIZE, width);
-      ObjectSetDouble(chartId, bgName, OBJPROP_YSIZE, topHeight);
+      ObjectSetInteger(chartId, bgName, OBJPROP_XSIZE, width);
+      ObjectSetInteger(chartId, bgName, OBJPROP_YSIZE, topHeight);
       ObjectSetInteger(chartId, bgName, OBJPROP_COLOR, clrDimGray);
-      ObjectSetInteger(chartId, bgName, OBJPROP_BORDERCOLOR, clrGray);
+    
       ObjectSetInteger(chartId, bgName, OBJPROP_BACK, true);
 
       // Create BUY button

@@ -126,7 +126,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
             // old aus DB holen (falls vorhanden), sonst erstes Drag-Price als Fallback
             g_tp_drag_old = 0.0;
             DB_PositionRow row;
-            if(DB_GetPosition(_Symbol, (ENUM_TIMEFRAMES)_Period, direction, trade_no, pos_no, row))
+            if(g_DB.GetPosition(_Symbol, (ENUM_TIMEFRAMES)_Period, direction, trade_no, pos_no, row))
                g_tp_drag_old = (kind == "entry") ? row.entry : row.sl;
             if(g_tp_drag_old <= 0.0)
                g_tp_drag_old = cur_price;
@@ -431,7 +431,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
 bool UI_TradeHasAnyPendingPosition(const string direction, const int trade_no)
   {
    DB_PositionRow rows[];
-   int n = DB_LoadPositions(_Symbol, _Period, rows);
+   int n = g_DB.LoadPositions(_Symbol, _Period, rows);
 
    for(int i = 0; i < n; i++)
      {
@@ -504,7 +504,7 @@ void UI_CloseOnePositionAndNotify(const string action,
    SendDiscordMessage(message);
 
 // 2) DB
-   DB_UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period,
+   g_DB.UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period,
                            direction, trade_no, pos_no,
                            new_status, 0);
 // Cache synchron halten, sonst bleibt die Position im Cache "offen"

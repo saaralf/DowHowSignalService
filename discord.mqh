@@ -99,7 +99,6 @@ bool checkDiscord()
   
    return true;
   }
-*/
 //+------------------------------------------------------------------+
 //| Function to escape JSON string                                     |
 //+------------------------------------------------------------------+
@@ -113,6 +112,7 @@ string EscapeJSON(string text)
    StringReplace(escaped, "\t", "\\t");
    return escaped;
   }
+
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -150,7 +150,7 @@ bool SendDiscordMessageTest(string message, bool isError = false)
    return SendDiscordMessage(message,  false);
 
   }
-
+*/
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -171,7 +171,7 @@ string getPeriodText()
 
 
   }
-
+/*
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -248,7 +248,7 @@ bool SendDiscordMessage(string message, bool isError = false)
       
    return false;
   }
-
+*/
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -364,7 +364,7 @@ string FormatTradeMessageRow(const DB_PositionRow &row, const string order_type 
    return msg;
   }
 
-
+/*
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -466,6 +466,7 @@ void SendScreenShot(string symbol,int _period, int ScreenWidth = 1912, int Scree
    Sleep(5);
    return;
   }
+  */
 //+------------------------------------------------------------------+
 
 

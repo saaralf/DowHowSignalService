@@ -529,8 +529,8 @@ void UI_TradesPanel_RebuildRows()
 
 // 3) DB laden
    DB_PositionRow rows[];
-   int n = DB_LoadPositions(_Symbol, (ENUM_TIMEFRAMES)_Period, rows);
-
+   //int n = DB_LoadPositions(_Symbol, (ENUM_TIMEFRAMES)_Period, rows);
+ int n = g_DB.LoadPositions(_Symbol, (ENUM_TIMEFRAMES)_Period, rows);
 // 3.1) In LONG/SHORT Arrays filtern (und Lines restoren)
    DB_PositionRow longRows[];
    DB_PositionRow shortRows[];
@@ -763,10 +763,10 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
          r.pos_no = 0;
 
          string message = FormatCancelTradeMessage(r);
-         bool ret = SendDiscordMessage(message);
+         bool ret =  SendDiscordMessage(message);
 
          // 2) DB: Trade sauber "geschlossen" markieren, damit OnInit ihn NICHT wieder aktiviert
-         DB_UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period, "LONG", active_long_trade_no, 0, "CLOSED_CANCEL", 0);
+         g_DB.UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period, "LONG", active_long_trade_no, 0, "CLOSED_CANCEL", 0);
          Cache_UpdateStatusLocal("LONG",  active_long_trade_no,  0, "CLOSED_CANCEL", 0);
 
          // 3) Broker-Pending löschen (falls vorhanden)
@@ -815,7 +815,7 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
          string message = FormatCancelTradeMessage(r);
          bool ret = SendDiscordMessage(message);
 
-         DB_UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period, "SHORT", active_short_trade_no, 0, "CLOSED_CANCEL", 0);
+         g_DB.UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period, "SHORT", active_short_trade_no, 0, "CLOSED_CANCEL", 0);
          Cache_UpdateStatusLocal("Short",  active_short_trade_no,  0, "CLOSED_CANCEL", 0);
 
 

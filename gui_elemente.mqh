@@ -171,7 +171,7 @@ void DB_SaveLinePrices()
       if(kind == "entry" || kind == "sl")
         {
          DB_PositionRow row;
-         if(DB_GetPosition(_Symbol, (ENUM_TIMEFRAMES)Period(), direction, trade_no, pos_no, row))
+         if(g_DB.GetPosition(_Symbol, (ENUM_TIMEFRAMES)Period(), direction, trade_no, pos_no, row))
            {
             if(kind == "entry")
                row.entry = price;
@@ -227,7 +227,7 @@ void DB_SaveOneLinePrice(const string name)
    if(kind == "entry" || kind == "sl")
      {
       DB_PositionRow row;
-      if(DB_GetPosition(_Symbol, (ENUM_TIMEFRAMES)Period(), direction, trade_no, pos_no, row))
+      if(g_DB.GetPosition(_Symbol, (ENUM_TIMEFRAMES)Period(), direction, trade_no, pos_no, row))
         {
          if(kind == "entry")
             row.entry = price;
