@@ -4,6 +4,7 @@
 
 #include "db_state.mqh" // DB_LoadPositions(), DB_PositionRow
 
+#include "discord_client.mqh" // DB_LoadPositions(), DB_PositionRow
 // ---- Object names
 #define TP_BG "TP_BG"
 
@@ -763,7 +764,7 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
          r.pos_no = 0;
 
          string message = FormatCancelTradeMessage(r);
-         bool ret =  SendDiscordMessage(message);
+         bool ret =    g_Discord.SendMessage(_Symbol,message);
 
          // 2) DB: Trade sauber "geschlossen" markieren, damit OnInit ihn NICHT wieder aktiviert
          g_DB.UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period, "LONG", active_long_trade_no, 0, "CLOSED_CANCEL", 0);
@@ -813,7 +814,7 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
          r.pos_no = 0;
 
          string message = FormatCancelTradeMessage(r);
-         bool ret = SendDiscordMessage(message);
+         bool ret = g_Discord.SendMessage(_Symbol,message);
 
          g_DB.UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period, "SHORT", active_short_trade_no, 0, "CLOSED_CANCEL", 0);
          Cache_UpdateStatusLocal("Short",  active_short_trade_no,  0, "CLOSED_CANCEL", 0);

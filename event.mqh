@@ -64,7 +64,7 @@ void TP_FinalizeLineMove()
       else
          msg += StringFormat("**%s:** %s\n", what, DoubleToString(new_price, _Digits));
       msg += "(Linie verschoben, Tag nachgezogen)\n";
-      SendDiscordMessage(msg);
+      g_Discord.SendMessage(_Symbol,msg);
      }
 
 // Reset
@@ -501,7 +501,7 @@ void UI_CloseOnePositionAndNotify(const string action,
       new_status = "CLOSED_SL";
      }
 
-   SendDiscordMessage(message);
+   g_Discord.SendMessage(_Symbol,message);
 
 // 2) DB
    g_DB.UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period,

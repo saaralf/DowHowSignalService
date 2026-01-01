@@ -111,9 +111,9 @@ void DiscordSend()
      }
 
 // --- Discord senden
-   string message = FormatTradeMessage(row);
+   string message = g_Discord.FormatTradeMessage(row);
 
-   bool discord_ok = SendDiscordMessage(message);
+   bool discord_ok = g_Discord.SendMessage(_Symbol,message);
 
    if(!discord_ok)
      {
@@ -124,7 +124,7 @@ void DiscordSend()
      }
 
 // Screenshot optional
-   SendScreenShot(_Symbol, _Period, getChartWidthInPixels(), getChartHeightInPixels());
+   g_Discord.SendScreenShot(_Symbol, _Period, getChartWidthInPixels(), getChartHeightInPixels());
 
 // --- Commit: Position bestätigt
 

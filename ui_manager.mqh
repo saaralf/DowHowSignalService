@@ -1,3 +1,5 @@
+#ifndef __UI_MANAGER_MQH__
+#define __UI_MANAGER_MQH__
 // ui_manager.mqh
 //
 // This header defines the CUIManager class used to encapsulate all user
@@ -142,3 +144,6 @@ public:
    // persistent objects on the chart will be added here. Keep each
    // operation encapsulated to maintain readability.
   };
+  
+  
+  #endif
