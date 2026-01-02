@@ -391,12 +391,15 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
          //            MessageBoxSound = PlaySound(C:\Program Files\IC Markets (SC) Demo 51680033\Sounds\Alert2.wav);
          if(result == IDYES)
            {
-            DiscordSend();
+             DiscordSend();
            }
         }
       else
         {
-         DiscordSend();
+           DiscordSend();
+            
+        
+        
         }
       return;
      }
@@ -508,8 +511,8 @@ void UI_CloseOnePositionAndNotify(const string action,
 
 // 2) DB
    g_DB.UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period,
-                           direction, trade_no, pos_no,
-                           new_status, 0);
+                             direction, trade_no, pos_no,
+                             new_status, 0);
 // Cache synchron halten, sonst bleibt die Position im Cache "offen"
    if(!Cache_UpdateStatusLocal(direction, trade_no, pos_no, new_status, 0))
      {
