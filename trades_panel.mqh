@@ -1,8 +1,7 @@
 ﻿//======================== trades_panel.mqh ========================
 #ifndef __TRADES_PANEL_MQH__
 #define __TRADES_PANEL_MQH__
-
-#include "db_state.mqh" // DB_LoadPositions(), DB_PositionRow
+#include "db_service.mqh"
 
 #include "discord_client.mqh" // DB_LoadPositions(), DB_PositionRow
 // ---- Object names
@@ -763,7 +762,7 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
          r.trade_no = active_long_trade_no;
          r.pos_no = 0;
 
-         string message = FormatCancelTradeMessage(r);
+         string message = g_Discord.FormatCancelTradeMessage(r);
          bool ret =    g_Discord.SendMessage(_Symbol,message);
 
          // 2) DB: Trade sauber "geschlossen" markieren, damit OnInit ihn NICHT wieder aktiviert
@@ -789,7 +788,7 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
          int d = UI_DeleteTradeLinesByTradeNo(active_long_trade_no);
          // WICHTIG: aktive Tradenummer löschen, sonst "reanimiert" OnInit das wieder
          active_long_trade_no = 0;
-         DB_SetMetaInt(DB_Key("active_long_trade_no"), active_long_trade_no);
+         g_DB.SetMetaInt(g_DB.Key("active_long_trade_no"), active_long_trade_no);
 
          UI_TradesPanel_RebuildRows();
         
@@ -813,7 +812,7 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
          r.trade_no = active_short_trade_no;
          r.pos_no = 0;
 
-         string message = FormatCancelTradeMessage(r);
+         string message = g_Discord.FormatCancelTradeMessage(r);
          bool ret = g_Discord.SendMessage(_Symbol,message);
 
          g_DB.UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period, "SHORT", active_short_trade_no, 0, "CLOSED_CANCEL", 0);
@@ -835,7 +834,7 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
 
          int d = UI_DeleteTradeLinesByTradeNo(active_short_trade_no);
          active_short_trade_no = 0;
-         DB_SetMetaInt(DB_Key("active_short_trade_no"), active_short_trade_no);
+         g_DB.SetMetaInt(g_DB.Key("active_short_trade_no"), active_short_trade_no);
 
          UI_TradesPanel_RebuildRows();
         

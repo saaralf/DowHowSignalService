@@ -7,6 +7,7 @@
 #ifndef __DISCORD_SEND__
 #define __DISCORD_SEND__
 
+#include "trades_panel.mqh"
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -74,7 +75,7 @@ void DiscordSend()
    bool starting_new_trade = (active_trade_no <= 0);
 
 // 1) gleichzeitig aktive Positionen zählen (nicht CLOSED)
-   int active_cnt = DB_CountActivePositions(_Symbol, (ENUM_TIMEFRAMES)_Period, direction, trade_no);
+   int active_cnt = g_DB.CountActivePositions(_Symbol, (ENUM_TIMEFRAMES)_Period, direction, trade_no);
    if(active_cnt >= DB_MAX_POS_PER_SIDE)
      {
       MessageBox("Maximale gleichzeitige Positionen erreicht (max 4).", NULL, MB_OK);
@@ -90,7 +91,7 @@ void DiscordSend()
 // --- Draft in DB schreiben
    DB_PositionRow row;
    row.symbol = _Symbol;
-   row.tf = TF_ToString((ENUM_TIMEFRAMES)_Period);
+   row.tf = g_DB.TFToString((ENUM_TIMEFRAMES)_Period);
    row.direction = direction;
    row.trade_no = trade_no;
    row.pos_no = pos_no;
@@ -104,7 +105,7 @@ void DiscordSend()
    row.is_pending = 1;
    row.updated_at = TimeCurrent();
 
-   if(!DB_UpsertPosition(row))
+   if(!g_DB.UpsertPosition(row))
      {
       MessageBox("DB Fehler: Position konnte nicht gespeichert werden.", NULL, MB_OK);
       return;
@@ -132,7 +133,7 @@ void DiscordSend()
    row.was_sent = 1;
    row.is_pending = 1;
    row.updated_at = TimeCurrent();
-   DB_UpsertPosition(row);
+   g_DB.UpsertPosition(row);
    Cache_UpsertLocal(row);
 
    if(isLong)
@@ -158,7 +159,7 @@ void DiscordSend()
    if(starting_new_trade && pos_no == 1 && trade_no > last_trade_nummer)
      {
       last_trade_nummer = trade_no;
-      DB_SetMetaInt(DB_Key("last_trade_no"), last_trade_nummer);
+      g_DB.SetMetaInt(g_DB.Key("last_trade_no"), last_trade_nummer);
      }
 // aktive TradeNo der Richtung nur beim Start (Pos1) setzen
    if(starting_new_trade && pos_no == 1)
@@ -167,14 +168,14 @@ void DiscordSend()
         {
          active_long_trade_no = trade_no;
          is_long_trade = true;
-         DB_SetMetaInt(DB_Key("active_long_trade_no"), active_long_trade_no);
+         g_DB.SetMetaInt(g_DB.Key("active_long_trade_no"), active_long_trade_no);
          UI_TradesPanel_RebuildRows();
         }
       else
         {
          active_short_trade_no = trade_no;
          is_sell_trade = true;
-         DB_SetMetaInt(DB_Key("active_short_trade_no"), active_short_trade_no);
+         g_DB.SetMetaInt(g_DB.Key("active_short_trade_no"), active_short_trade_no);
          UI_TradesPanel_RebuildRows();
         }
      }

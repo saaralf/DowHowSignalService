@@ -6,6 +6,9 @@
 #ifndef __EVENTHANDLER__
 #define __EVENTHANDLER__
 
+
+#include "discord_client.mqh"
+
 // ------------------------------------------------------------------
 // TradePos-Drag Tracking (damit Discord nur 1x pro Drag gesendet wird)
 // Hinweis: Bei manchen MT5-Objekten kommt CHARTEVENT_OBJECT_CHANGE nicht
@@ -43,7 +46,7 @@ void TP_FinalizeLineMove()
    ChartRedraw(0);
 
 // DB: persistieren (erst nach dem old/new Vergleich)
-   DB_SaveLinePrices();
+   g_TradeMgr.SaveLinePrices();
 
 // Discord: nur melden, wenn sich der Preis wirklich geändert hat
    const double pt = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
@@ -176,7 +179,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
          if(UI_IsTradePosLine(sparam))
             UI_CreateOrUpdateLineTag(sparam);
 
-         DB_SaveLinePrices();
+         g_TradeMgr.SaveLinePrices();
          return;
         }
      }
@@ -365,7 +368,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
          movingState_R5 = false;
          ChartSetInteger(0, CHART_MOUSE_SCROLL, true);
          if(wasMoving)
-            DB_SaveLinePrices();
+            g_TradeMgr.SaveLinePrices();
         }
       prevMouseState = MouseState;
      }
@@ -492,12 +495,12 @@ void UI_CloseOnePositionAndNotify(const string action,
 
    if(action == "CANCEL")
      {
-      message    = FormatCancelTradeMessage(r);
+      message    = g_Discord.FormatCancelTradeMessage(r);
       new_status = "CLOSED_CANCEL";
      }
    else // "SL"
      {
-      message    = FormatSLMessage(r);
+      message    = g_Discord.FormatSLMessage(r);
       new_status = "CLOSED_SL";
      }
 
@@ -543,7 +546,7 @@ void UI_CloseOnePositionAndNotify(const string action,
          if(active_long_trade_no == trade_no)
            {
             active_long_trade_no = 0;
-            DB_SetMetaInt(DB_Key("active_long_trade_no"), 0);
+            g_DB.SetMetaInt(g_DB.Key("active_long_trade_no"), 0);
            }
 
          is_long_trade     = false;
@@ -560,7 +563,7 @@ void UI_CloseOnePositionAndNotify(const string action,
          if(active_short_trade_no == trade_no)
            {
             active_short_trade_no = 0;
-            DB_SetMetaInt(DB_Key("active_short_trade_no"), 0);
+            g_DB.SetMetaInt(g_DB.Key("active_short_trade_no"), 0);
            }
 
          is_sell_trade         = false;
