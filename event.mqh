@@ -8,7 +8,7 @@
 
 
 #include "discord_client.mqh"
-
+#include "trade_manager.mqh"
 // ------------------------------------------------------------------
 // TradePos-Drag Tracking (damit Discord nur 1x pro Drag gesendet wird)
 // Hinweis: Bei manchen MT5-Objekten kommt CHARTEVENT_OBJECT_CHANGE nicht
@@ -391,15 +391,15 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
          //            MessageBoxSound = PlaySound(C:\Program Files\IC Markets (SC) Demo 51680033\Sounds\Alert2.wav);
          if(result == IDYES)
            {
-             DiscordSend();
+            DiscordSend();
            }
         }
       else
         {
-           DiscordSend();
-            
-        
-        
+         DiscordSend();
+
+
+
         }
       return;
      }
@@ -471,57 +471,26 @@ void UI_CloseOnePositionAndNotify(const string action,
                                   const int trade_no,
                                   const int pos_no)
   {
+// 1) Business-Teil (Discord + DB + Cache + Remaining-Check) -> TradeManager
+   bool has_pending = true;
+   string err = "";
 
-   Cache_Ensure();  // lädt g_cache_rows einmalig (falls noch nicht ready)
+   CTradeManager::EPosAction act =
+      (action == "CANCEL" ? CTradeManager::POS_CANCEL : CTradeManager::POS_HIT_SL);
 
-   DB_PositionRow r;
-   int idx = Cache_FindIdx(direction, trade_no, pos_no);
+   if(!g_TradeMgr.HandlePositionAction(_Symbol, (ENUM_TIMEFRAMES)_Period,
+                                       direction, trade_no, pos_no,
+                                       act, has_pending, err))
 
-   if(idx >= 0)
-     {
-      // vollständige Row inkl. entry/sl/sabio/status/...
-      r = g_cache_rows[idx];
-     }
-   else
-     {
-      // Fallback (sollte selten passieren, ist aber robust)
-      r.symbol    = _Symbol;
-      r.tf        = TF_ToString((ENUM_TIMEFRAMES)_Period);
-      r.direction = direction;
-      r.trade_no  = trade_no;
-      r.pos_no    = pos_no;
-     }
+      if(!g_TradeMgr.HandlePositionAction(_Symbol, (ENUM_TIMEFRAMES)_Period,
+                                          direction, trade_no, pos_no,
+                                          act, has_pending, err))
+        {
+         CLogger::Add(LOG_LEVEL_WARNING, "HandlePositionAction failed: " + err);
+         return;
+        }
 
-
-   string message = "";
-   string new_status = "CLOSED";
-
-   if(action == "CANCEL")
-     {
-      message    = g_Discord.FormatCancelTradeMessage(r);
-      new_status = "CLOSED_CANCEL";
-     }
-   else // "SL"
-     {
-      message    = g_Discord.FormatSLMessage(r);
-      new_status = "CLOSED_SL";
-     }
-
-   g_Discord.SendMessage(_Symbol,message);
-
-// 2) DB
-   g_DB.UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period,
-                             direction, trade_no, pos_no,
-                             new_status, 0);
-// Cache synchron halten, sonst bleibt die Position im Cache "offen"
-   if(!Cache_UpdateStatusLocal(direction, trade_no, pos_no, new_status, 0))
-     {
-      // wenn aus irgendeinem Grund nicht im Cache: minimal einfügen
-      r.status     = new_status;
-      r.is_pending = 0;
-      r.updated_at = TimeCurrent();
-      Cache_UpsertLocal(r);
-     }
+// 2) UI-Linien/Tags dieser Position entfernen (wie bisher)
    string suf_tp = "_" + IntegerToString(trade_no) + "_" + IntegerToString(pos_no);
 
    if(direction == "LONG")
@@ -535,14 +504,11 @@ void UI_CloseOnePositionAndNotify(const string action,
       UI_DeleteLineAndAllKnownTags(SL_Short    + suf_tp);
      }
 
-// 3) Linien + Tags dieser Position entfernen (robust, einheitlich)
    UI_DeleteTradePosLines(trade_no, pos_no);
-
-// zusätzlich: falls Altlasten/Orphans existieren, räumt UpdateAllLineTags sauber auf
    UI_UpdateAllLineTags();
 
-// 4) Falls das die letzte pending Position des Trades war -> Runtime + Meta zurücksetzen
-   if(!UI_TradeHasAnyPendingPosition(direction, trade_no))
+// 3) Falls letzte pending Position -> Runtime + Meta zurücksetzen
+   if(!has_pending)
      {
       if(direction == "LONG")
         {
@@ -581,9 +547,8 @@ void UI_CloseOnePositionAndNotify(const string action,
         }
      }
 
-// 5) UI Refresh
+// 4) UI Refresh
    UI_UpdateNextTradePosUI();
-
    ChartRedraw(0);
   }
 
