@@ -3,8 +3,7 @@
 #define __TRADES_PANEL_MQH__
 #include "db_service.mqh"
 
-#include "discord_client.mqh" // DB_LoadPositions(), DB_PositionRow
-// ---- Object names
+#include "discord_client.mqh" 
 #define TP_BG "TP_BG"
 
 #define TP_LBL_LONG "TP_LBL_LONG"
@@ -357,131 +356,6 @@ bool UI_DeleteTradePosLines(const int trade_no, const int pos_no)
    return ok;
   }
 
-// 4) je ein Button pro Trade/Pos pro Seite (LONG links / SHORT rechts)
-// + Header-Buttons (Active/Cancel) werden hier ebenfalls neu gesetzt/positioniert
-/*void UI_TradesPanel_RebuildRows()
-{
-   // 0) Safety: Header-Controls sicherstellen (falls aus irgendeinem Grund weg)
-   int col_w = (TP_W - 2*(TP_PAD - TP_GAP-10-20-10-TP_GAP)) / 2;
-   col_w=BTN_BREITE;
-   int xL    = TP_X + TP_PAD;
-   int xR    = xL + col_w + TP_GAP+BTN_C_W+TP_GAP+BTN_SL_W+TP_GAP;
-
-   // BG + Labels + Header-Buttons (neu setzen/positionieren)
-   TP_CreateRectBG(TP_BG, TP_X, TP_Y, TP_W, TP_H);
-
-   int y1 = TP_Y + TP_PAD;
-   TP_CreateLabel(TP_LBL_LONG,  xL, y1, col_w, TP_HDR_H, "LONG");
-   TP_CreateLabel(TP_LBL_SHORT, xR, y1, col_w, TP_HDR_H, "SHORT");
-
-   int y2 = y1 + TP_HDR_H + 6;
-   TP_CreateButton(TP_BTN_ACTIVE_LONG,  xL, y2, col_w, TP_BTN_H, "Active Trade", 9);
-   TP_CreateButton(TP_BTN_ACTIVE_SHORT, xR, y2, col_w, TP_BTN_H, "Active Trade", 9);
-
-   int y3 = y2 + TP_BTN_H + 6;
-   TP_CreateButton(TP_BTN_CANCEL_LONG,  xL, y3, col_w, TP_BTN_H, "Cancel Trade", 9);
-   TP_CreateButton(TP_BTN_CANCEL_SHORT, xR, y3, col_w, TP_BTN_H, "Cancel Trade", 9);
-
-   // 1) alte Rows löschen
-   TP_DeleteByPrefix(TP_ROW_LONG_PREFIX);
-   TP_DeleteByPrefix(TP_ROW_SHORT_PREFIX);
-
-   // 2) Listbereich berechnen
-   int yTop    = y3 + TP_BTN_H + 10;      // nach Cancel-Zeile
-   int yBottom = TP_Y + TP_H - TP_PAD;
-
-   int maxRows = (yBottom - yTop) / TP_ROW_H;
-   if(maxRows < 1) maxRows = 1;
-
-   // 3) DB laden & Rows bauen
-   DB_PositionRow rows[];
-   int n = DB_LoadPositions(_Symbol, (ENUM_TIMEFRAMES)_Period, rows);
-
-   int idxL=0, idxR=0;
-   int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
-
-   for(int i=0; i<n; i++)
-   {
-      if(StringFind(rows[i].status,"CLOSED",0)==0)
-         continue;
-
-     // ---- Restore Entry/SL Lines für diese Position
-if(rows[i].was_sent == 1 && rows[i].pos_no >= 1 && rows[i].pos_no <= 4)
-{
-   int trade_no = rows[i].trade_no;
-   int pos_no   = rows[i].pos_no;
-
-   string suf = "_" + IntegerToString(trade_no) + "_" + IntegerToString(pos_no);
-
-   double entry_draw = UI_DrawPriceOrMid(rows[i].entry, 0);
-   double sl_draw    = UI_DrawPriceOrMid(rows[i].sl,    0);
-
-   if(rows[i].direction == "LONG")
-   {
-      CreateEntryAndSLLines(Entry_Long + suf, TimeCurrent(), entry_draw, TradeEntryLineLong);
-      CreateEntryAndSLLines(SL_Long    + suf, TimeCurrent(), sl_draw,    Tradecolor_SLLineLong);
-   }
-   else if(rows[i].direction == "SHORT")
-   {
-      CreateEntryAndSLLines(Entry_Short + suf, TimeCurrent(), entry_draw, TradeEntryLineShort);
-      CreateEntryAndSLLines(SL_Short    + suf, TimeCurrent(), sl_draw,    Tradecolor_SLLineShort);
-   }
-}
-
-
-
-      string txt_tr = StringFormat("Tradenummer: T%d ",
-                                rows[i].trade_no);
-
-      string txt = StringFormat("P%d  %s  E:%s SL:%s",
-                                 rows[i].pos_no, rows[i].status,
-                                DoubleToString(rows[i].entry, digits),
-                                DoubleToString(rows[i].sl, digits));
-
-
-      if(rows[i].direction == "LONG")
-      {
-         if(idxL >= maxRows) continue;
-         string name_tr = StringFormat("%s%d", TP_ROW_LONG_TR_PREFIX, rows[i].trade_no);
-         TP_CreateButton(name_tr, xL, yTop + idxL*TP_ROW_H, col_w, TP_ROW_H, txt_tr, 8);
-         idxL++;
-         string name = StringFormat("%s%d_%d", TP_ROW_LONG_PREFIX, rows[i].trade_no, rows[i].pos_no);
-         TP_CreateButton(name, xL, yTop + idxL*TP_ROW_H, col_w, TP_ROW_H, txt, 8);
-
-         string name_c = StringFormat("%s%d_%d", TP_ROW_LONG_Cancel_PREFIX, rows[i].trade_no, rows[i].pos_no);
-         TP_CreateButton(name_c, xL+col_w +10, yTop + idxL*TP_ROW_H, 20, TP_ROW_H, "C", 8);
-         string name_s = StringFormat("%s%d_%d", TP_ROW_LONG_hitSL_PREFIX, rows[i].trade_no, rows[i].pos_no);
-         TP_CreateButton(name_s, xL+col_w +10+20+10, yTop + idxL*TP_ROW_H, 20, TP_ROW_H, "S", 8);
-
-         idxL++;
-         showActive_long(true);
-         showCancel_long(true);
-
-      }
-      else if(rows[i].direction == "SHORT")
-      {
-         if(idxR >= maxRows) continue;
-              string name_tr = StringFormat("%s%d", TP_ROW_SHORT_TR_PREFIX, rows[i].trade_no);
-         TP_CreateButton(name_tr, xR, yTop + idxR*TP_ROW_H, col_w, TP_ROW_H, txt_tr, 8);
-         idxR++;
-         string name = StringFormat("%s%d_%d", TP_ROW_SHORT_PREFIX, rows[i].trade_no, rows[i].pos_no);
-         TP_CreateButton(name, xR, yTop + idxR*TP_ROW_H, col_w, TP_ROW_H, txt, 8);
-
-         string name_c = StringFormat("%s%d_%d", TP_ROW_SHORT_Cancel_PREFIX, rows[i].trade_no, rows[i].pos_no);
-         TP_CreateButton(name_c, xR+col_w +10, yTop + idxR*TP_ROW_H, 20, TP_ROW_H, "C", 8);
-         string name_s = StringFormat("%s%d_%d", TP_ROW_SHORT_hitSL_PREFIX, rows[i].trade_no, rows[i].pos_no);
-         TP_CreateButton(name_s, xR+col_w +10+20+10, yTop + idxR*TP_ROW_H, 20, TP_ROW_H, "S", 8);
-
-         idxR++;
-         showActive_short(true);
-         showCancel_short(true);
-      }
-   }
-
-   ChartRedraw(0);
-}
-*/
-
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -529,7 +403,7 @@ void UI_TradesPanel_RebuildRows()
 
 // 3) DB laden
    DB_PositionRow rows[];
-   //int n = DB_LoadPositions(_Symbol, (ENUM_TIMEFRAMES)_Period, rows);
+
  int n = g_DB.LoadPositions(_Symbol, (ENUM_TIMEFRAMES)_Period, rows);
 // 3.1) In LONG/SHORT Arrays filtern (und Lines restoren)
    DB_PositionRow longRows[];
@@ -559,7 +433,7 @@ void UI_TradesPanel_RebuildRows()
             UI_CreateOrUpdateLineTag(Entry_Long + suf);
             CreateEntryAndSLLines(SL_Long + suf, TimeCurrent(), sl_draw, Tradecolor_SLLineLong);
             UI_CreateOrUpdateLineTag(SL_Long + suf);
-            DB_SaveTradeLines(suf);
+            g_TradeMgr.SaveTradeLines(suf);
            }
          else
             if(rows[i].direction == "SHORT")
@@ -568,7 +442,7 @@ void UI_TradesPanel_RebuildRows()
                UI_CreateOrUpdateLineTag(Entry_Short + suf);
                CreateEntryAndSLLines(SL_Short + suf, TimeCurrent(), sl_draw, Tradecolor_SLLineShort);
                UI_CreateOrUpdateLineTag(SL_Short + suf);
-               DB_SaveTradeLines(suf);
+               g_TradeMgr.SaveTradeLines(suf);
               }
         }
 
