@@ -481,14 +481,10 @@ void UI_CloseOnePositionAndNotify(const string action,
    if(!g_TradeMgr.HandlePositionAction(_Symbol, (ENUM_TIMEFRAMES)_Period,
                                        direction, trade_no, pos_no,
                                        act, has_pending, err))
-
-      if(!g_TradeMgr.HandlePositionAction(_Symbol, (ENUM_TIMEFRAMES)_Period,
-                                          direction, trade_no, pos_no,
-                                          act, has_pending, err))
-        {
-         CLogger::Add(LOG_LEVEL_WARNING, "HandlePositionAction failed: " + err);
-         return;
-        }
+     {
+      CLogger::Add(LOG_LEVEL_WARNING, "HandlePositionAction failed: " + err);
+      return;
+     }
 
 // 2) UI-Linien/Tags dieser Position entfernen (wie bisher)
    string suf_tp = "_" + IntegerToString(trade_no) + "_" + IntegerToString(pos_no);
