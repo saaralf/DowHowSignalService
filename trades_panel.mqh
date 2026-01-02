@@ -622,6 +622,20 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
      
       return true;
      }
+     
+     if(sparam == TP_BTN_CANCEL_LONG)
+  {
+   UI_CancelActiveTrade("LONG");
+   return true;
+  }
+
+if(sparam == TP_BTN_CANCEL_SHORT)
+  {
+   UI_CancelActiveTrade("SHORT");
+   return true;
+  }
+  
+  /*
    if(sparam == TP_BTN_CANCEL_LONG)
      {
      
@@ -720,7 +734,7 @@ bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double 
 
       return true;
      }
-
+*/
 // LONG Cancel (C)
    if(StringFind(sparam, TP_ROW_LONG_Cancel_PREFIX, 0) == 0)
      {

@@ -550,4 +550,77 @@ void UI_CloseOnePositionAndNotify(const string action,
 
 
 
+//+------------------------------------------------------------------+
+//| Cancel active trade (header cancel buttons)                       |
+//+------------------------------------------------------------------+
+bool UI_CancelActiveTrade(const string direction)
+  {
+   const bool isLong = (direction == "LONG");
+   int trade_no = (isLong ? active_long_trade_no : active_short_trade_no);
+
+   if(trade_no <= 0)
+     {
+      CLogger::Add(LOG_LEVEL_INFO, "UI_CancelActiveTrade: kein aktiver Trade für " + direction);
+      return false;
+     }
+
+   string err = "";
+   if(!g_TradeMgr.CancelTrade(_Symbol, (ENUM_TIMEFRAMES)_Period, direction, trade_no, err))
+     {
+      CLogger::Add(LOG_LEVEL_WARNING, "UI_CancelActiveTrade: CancelTrade failed: " + err);
+      return false;
+     }
+
+   // Linien/Tags entfernen
+   UI_DeleteTradeLinesByTradeNo(trade_no);
+   UI_UpdateAllLineTags();
+
+   // Runtime + Meta zurücksetzen (damit OnInit NICHT reaktiviert)
+   if(isLong)
+     {
+      if(active_long_trade_no == trade_no)
+        {
+         active_long_trade_no = 0;
+         g_DB.SetMetaInt(g_DB.Key("active_long_trade_no"), 0);
+        }
+      is_long_trade     = false;
+      HitEntryPriceLong = false;
+
+      showActive_long(false);
+      showCancel_long(false);
+
+      if(ObjectFind(0, "ActiveLongTrade") >= 0)
+        {
+         ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_COLOR, clrNONE);
+         ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_BGCOLOR, clrNONE);
+        }
+     }
+   else
+     {
+      if(active_short_trade_no == trade_no)
+        {
+         active_short_trade_no = 0;
+         g_DB.SetMetaInt(g_DB.Key("active_short_trade_no"), 0);
+        }
+
+      is_sell_trade         = false;
+      is_sell_trade_pending = false;
+      HitEntryPriceShort    = false;
+
+      showActive_short(false);
+      showCancel_short(false);
+
+      if(ObjectFind(0, "ActiveShortTrade") >= 0)
+        {
+         ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_COLOR, clrNONE);
+         ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_BGCOLOR, clrNONE);
+        }
+     }
+
+   UI_UpdateNextTradePosUI();
+   UI_TradesPanel_RebuildRows();
+   ChartRedraw(0);
+   return true;
+  }
+
 #endif // __EVENTHANDLER__
