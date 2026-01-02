@@ -46,7 +46,7 @@ void TP_FinalizeLineMove()
    ChartRedraw(0);
 
 // DB: persistieren (erst nach dem old/new Vergleich)
-   g_TradeMgr.SaveLinePrices();
+   g_TradeMgr.SaveLinePrices(_Symbol,(ENUM_TIMEFRAMES)_Period);
 
 // Discord: nur melden, wenn sich der Preis wirklich geändert hat
    const double pt = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
@@ -179,7 +179,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
          if(UI_IsTradePosLine(sparam))
             UI_CreateOrUpdateLineTag(sparam);
 
-         g_TradeMgr.SaveLinePrices();
+         g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
          return;
         }
      }
@@ -261,7 +261,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
          datetime dt_TP = 0;
          double price_TP = 0;
 
-         double lots = calcLots(Entry_Price - SL_Price);
+         double lots = g_TradeMgr.calcLots(_Symbol,_Period,Entry_Price - SL_Price);
          lots = NormalizeDouble(lots, 2);
          //Schreibe aktuelle Zahlen in den Button
          update_Text(EntryButton, "Buy Stop @ " + Get_Price_s(PR_HL) + " | Lot: " + DoubleToString(lots, 2));
@@ -283,7 +283,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
          //Also wir wollen dann einen Short oder LONG Trade machen
          if((Get_Price_d(SL_HL)) > (Get_Price_d(PR_HL)))
            {
-            double lots = calcLots(SL_Price - Entry_Price);
+            double lots = g_TradeMgr.calcLots(_Symbol,_Period,SL_Price - Entry_Price);
             lots = NormalizeDouble(lots, 2);
             ui_direction_is_long = false;
             update_Text(EntryButton, "Sell Stop @ " + Get_Price_s(PR_HL) + " | Lot: " + DoubleToString(lots, 2));
@@ -340,7 +340,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
 
          if((Get_Price_d(SL_HL)) > (Get_Price_d(PR_HL)))
            {
-            double lots = calcLots(SL_Price - Entry_Price);
+            double lots = g_TradeMgr.calcLots(_Symbol,_Period,SL_Price - Entry_Price);
             lots = NormalizeDouble(lots, 2);
 
             update_Text(EntryButton, "Sell Stop @ " + Get_Price_s(PR_HL) + " | Lot: " + DoubleToString(lots, 2));
@@ -350,7 +350,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
            }
          else
            {
-            double lots = calcLots(Entry_Price - SL_Price);
+            double lots = g_TradeMgr.calcLots(_Symbol,_Period,Entry_Price - SL_Price);
 
             update_Text(EntryButton, "Buy Stop @ " + Get_Price_s(PR_HL) + " | Lot: " + DoubleToString(lots, 2));
             update_Text(SLButton, "SL: " + DoubleToString(((Get_Price_d(PR_HL) - Get_Price_d(SL_HL)) / _Point), 0) + " Points | " + Get_Price_s(SL_HL));
@@ -368,7 +368,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
          movingState_R5 = false;
          ChartSetInteger(0, CHART_MOUSE_SCROLL, true);
          if(wasMoving)
-            g_TradeMgr.SaveLinePrices();
+            g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
         }
       prevMouseState = MouseState;
      }
