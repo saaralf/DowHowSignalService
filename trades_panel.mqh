@@ -605,9 +605,83 @@ void SortRowsByTradePos(DB_PositionRow &arr[], const int cnt)
      }
   }
 
-// ================= Optional: Click handling (Rows + Header Buttons) =================
+
+  
+  
+  // ================= Optional: Click handling (Rows + Header Buttons) =================
 bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
-  {
+{
+   if(id != CHARTEVENT_OBJECT_CLICK)
+      return false;
+
+   // Header-Buttons (bereits vorhanden)
+   if(sparam == TP_BTN_CANCEL_LONG)
+   {
+      UI_CancelActiveTrade("LONG");
+      return true;
+   }
+   if(sparam == TP_BTN_CANCEL_SHORT)
+   {
+      UI_CancelActiveTrade("SHORT");
+      return true;
+   }
+
+   // ---------------- Row Buttons: LONG ----------------
+   if(StringFind(sparam, TP_ROW_LONG_Cancel_PREFIX, 0) == 0)
+   {
+      int trade_no = 0, pos_no = 0;
+      if(UI_ParseTradePosFromButtonName(sparam, TP_ROW_LONG_Cancel_PREFIX, trade_no, pos_no))
+      {
+         // CANCEL: Discord + DB + Cache + UI-Linien/Tags via zentrale Funktion
+         UI_CloseOnePositionAndNotify("CANCEL", "LONG", trade_no, pos_no);
+         UI_TradesPanel_RebuildRows();
+         ChartRedraw(0);
+      }
+      return true;
+   }
+
+   if(StringFind(sparam, TP_ROW_LONG_hitSL_PREFIX, 0) == 0)
+   {
+      int trade_no = 0, pos_no = 0;
+      if(UI_ParseTradePosFromButtonName(sparam, TP_ROW_LONG_hitSL_PREFIX, trade_no, pos_no))
+      {
+         // SL: Discord + DB + Cache + UI-Linien/Tags via zentrale Funktion
+         UI_CloseOnePositionAndNotify("HIT_SL", "LONG", trade_no, pos_no);
+         UI_TradesPanel_RebuildRows();
+         ChartRedraw(0);
+      }
+      return true;
+   }
+
+   // ---------------- Row Buttons: SHORT ----------------
+   if(StringFind(sparam, TP_ROW_SHORT_Cancel_PREFIX, 0) == 0)
+   {
+      int trade_no = 0, pos_no = 0;
+      if(UI_ParseTradePosFromButtonName(sparam, TP_ROW_SHORT_Cancel_PREFIX, trade_no, pos_no))
+      {
+         UI_CloseOnePositionAndNotify("CANCEL", "SHORT", trade_no, pos_no);
+         UI_TradesPanel_RebuildRows();
+         ChartRedraw(0);
+      }
+      return true;
+   }
+
+   if(StringFind(sparam, TP_ROW_SHORT_hitSL_PREFIX, 0) == 0)
+   {
+      int trade_no = 0, pos_no = 0;
+      if(UI_ParseTradePosFromButtonName(sparam, TP_ROW_SHORT_hitSL_PREFIX, trade_no, pos_no))
+      {
+         UI_CloseOnePositionAndNotify("HIT_SL", "SHORT", trade_no, pos_no);
+         UI_TradesPanel_RebuildRows();
+         ChartRedraw(0);
+      }
+      return true;
+   }
+
+
+
+  
+  
    if(id != CHARTEVENT_OBJECT_CLICK)
       return false;
 
@@ -635,166 +709,6 @@ if(sparam == TP_BTN_CANCEL_SHORT)
    return true;
   }
   
-  /*
-   if(sparam == TP_BTN_CANCEL_LONG)
-     {
-     
-
-      if(is_long_trade)
-        {
-         // 1) Discord nur EINMAL senden
-         DB_PositionRow r;
-         r.symbol = _Symbol;
-         r.tf = TF_ToString((ENUM_TIMEFRAMES)_Period);
-         r.direction = "LONG";
-         r.trade_no = active_long_trade_no;
-         r.pos_no = 0;
-
-         string message = g_Discord.FormatCancelTradeMessage(r);
-         bool ret =    g_Discord.SendMessage(_Symbol,message);
-
-         // 2) DB: Trade sauber "geschlossen" markieren, damit OnInit ihn NICHT wieder aktiviert
-         g_DB.UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period, "LONG", active_long_trade_no, 0, "CLOSED_CANCEL", 0);
-         Cache_UpdateStatusLocal("LONG",  active_long_trade_no,  0, "CLOSED_CANCEL", 0);
-
-         // 3) Broker-Pending löschen (falls vorhanden)
-
-
-         // 4) Runtime-State komplett zurücksetzen
-         is_long_trade = false;
-         HitEntryPriceLong = false;
-
-
-         // UI cleanup
-         ObjectSetInteger(0, TP_BTN_ACTIVE_LONG, OBJPROP_COLOR, clrNONE);
-         ObjectSetInteger(0, TP_BTN_ACTIVE_LONG, OBJPROP_BGCOLOR, clrNONE);
-         ObjectSetInteger(0, TP_BTN_ACTIVE_LONG, OBJPROP_BORDER_COLOR, clrNONE);
-         ObjectSetInteger(0, TP_BTN_CANCEL_LONG, OBJPROP_COLOR, clrNONE);
-         ObjectSetInteger(0, TP_BTN_CANCEL_LONG, OBJPROP_BGCOLOR, clrNONE);
-         ObjectSetInteger(0, TP_BTN_CANCEL_LONG, OBJPROP_BORDER_COLOR, clrNONE);
-         DeleteLinesandLabelsLong();
-         int d = UI_DeleteTradeLinesByTradeNo(active_long_trade_no);
-         // WICHTIG: aktive Tradenummer löschen, sonst "reanimiert" OnInit das wieder
-         active_long_trade_no = 0;
-         g_DB.SetMetaInt(g_DB.Key("active_long_trade_no"), active_long_trade_no);
-
-         UI_TradesPanel_RebuildRows();
-        
-         // optional: Panels refresh
-         UI_UpdateNextTradePosUI();
-
-         UI_TradesPanel_RebuildRows();
-        }
-
-      return true;
-     }
-   if(sparam == TP_BTN_CANCEL_SHORT)
-     {
-   
-      if(is_sell_trade)
-        {
-         DB_PositionRow r;
-         r.symbol = _Symbol;
-         r.tf = TF_ToString((ENUM_TIMEFRAMES)_Period);
-         r.direction = "SHORT";
-         r.trade_no = active_short_trade_no;
-         r.pos_no = 0;
-
-         string message = g_Discord.FormatCancelTradeMessage(r);
-         bool ret = g_Discord.SendMessage(_Symbol,message);
-
-         g_DB.UpdatePositionStatus(_Symbol, (ENUM_TIMEFRAMES)_Period, "SHORT", active_short_trade_no, 0, "CLOSED_CANCEL", 0);
-         Cache_UpdateStatusLocal("Short",  active_short_trade_no,  0, "CLOSED_CANCEL", 0);
-
-
-
-         is_sell_trade = false;
-         is_sell_trade_pending = false;
-         HitEntryPriceShort = false;
-
-
-         ObjectSetInteger(0, TP_BTN_ACTIVE_SHORT, OBJPROP_COLOR, clrNONE);
-         ObjectSetInteger(0, TP_BTN_ACTIVE_SHORT, OBJPROP_BGCOLOR, clrNONE);
-         ObjectSetInteger(0, TP_BTN_ACTIVE_SHORT, OBJPROP_BORDER_COLOR, clrNONE);
-         ObjectSetInteger(0, TP_BTN_CANCEL_SHORT, OBJPROP_COLOR, clrNONE);
-         ObjectSetInteger(0, TP_BTN_CANCEL_SHORT, OBJPROP_BGCOLOR, clrNONE);
-         ObjectSetInteger(0, TP_BTN_CANCEL_SHORT, OBJPROP_BORDER_COLOR, clrNONE);
-
-         int d = UI_DeleteTradeLinesByTradeNo(active_short_trade_no);
-         active_short_trade_no = 0;
-         g_DB.SetMetaInt(g_DB.Key("active_short_trade_no"), active_short_trade_no);
-
-         UI_TradesPanel_RebuildRows();
-        
-
-         UI_UpdateNextTradePosUI();
-
-         UI_TradesPanel_RebuildRows();
-        }
-
-      return true;
-     }
-*/
-// LONG Cancel (C)
-   if(StringFind(sparam, TP_ROW_LONG_Cancel_PREFIX, 0) == 0)
-     {
-      int trade_no, pos_no;
-      if(UI_ParseTradePosFromButtonName(sparam, TP_ROW_LONG_Cancel_PREFIX, trade_no, pos_no))
-        {
-         // optional: Button-State zurücksetzen
-         if(ObjectFind(0, sparam) >= 0)
-            ObjectSetInteger(0, sparam, OBJPROP_STATE, 0);
-
-         UI_CloseOnePositionAndNotify("CANCEL", "LONG", trade_no, pos_no);
-        }
-      UI_TradesPanel_RebuildRows();
-      return true;
-     }
-
-// LONG SL erreicht (S)
-   if(StringFind(sparam, TP_ROW_LONG_hitSL_PREFIX, 0) == 0)
-     {
-      int trade_no, pos_no;
-      if(UI_ParseTradePosFromButtonName(sparam, TP_ROW_LONG_hitSL_PREFIX, trade_no, pos_no))
-        {
-         if(ObjectFind(0, sparam) >= 0)
-            ObjectSetInteger(0, sparam, OBJPROP_STATE, 0);
-
-         UI_CloseOnePositionAndNotify("SL", "LONG", trade_no, pos_no);
-         UI_TradesPanel_RebuildRows();
-        }
-      return true;
-     }
-
-// SHORT Cancel (C)
-   if(StringFind(sparam, TP_ROW_SHORT_Cancel_PREFIX, 0) == 0)
-     {
-      int trade_no, pos_no;
-      if(UI_ParseTradePosFromButtonName(sparam, TP_ROW_SHORT_Cancel_PREFIX, trade_no, pos_no))
-        {
-         if(ObjectFind(0, sparam) >= 0)
-            ObjectSetInteger(0, sparam, OBJPROP_STATE, 0);
-
-         UI_CloseOnePositionAndNotify("CANCEL", "SHORT", trade_no, pos_no);
-        }
-      UI_TradesPanel_RebuildRows();
-      return true;
-     }
-
-// SHORT SL erreicht (S)
-   if(StringFind(sparam, TP_ROW_SHORT_hitSL_PREFIX, 0) == 0)
-     {
-      int trade_no, pos_no;
-      if(UI_ParseTradePosFromButtonName(sparam, TP_ROW_SHORT_hitSL_PREFIX, trade_no, pos_no))
-        {
-         if(ObjectFind(0, sparam) >= 0)
-            ObjectSetInteger(0, sparam, OBJPROP_STATE, 0);
-
-         UI_CloseOnePositionAndNotify("SL", "SHORT", trade_no, pos_no);
-        }
-      UI_TradesPanel_RebuildRows();
-      return true;
-     }
 
 // Row Buttons
    if(StringFind(sparam, TP_ROW_LONG_PREFIX, 0) == 0)

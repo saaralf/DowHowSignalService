@@ -173,15 +173,21 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
          return;
         }
 
-      // Basislinien (PR_HL/SL_HL) und andere Trade-Linien: nur speichern/Tag
-      if(sparam == PR_HL || sparam == SL_HL || UI_IsTradePosLine(sparam))
-        {
-         if(UI_IsTradePosLine(sparam))
-            UI_CreateOrUpdateLineTag(sparam);
+    // Basislinien: UI + Texte synchronisieren + speichern
+if(sparam == PR_HL || sparam == SL_HL)
+{
+   UI_OnBaseLinesChanged(true);
+   return;
+}
 
-         g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
-         return;
-        }
+// Trade-Linien: wie gehabt
+if(UI_IsTradePosLine(sparam))
+{
+   UI_CreateOrUpdateLineTag(sparam);
+   g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
+   return;
+}
+
      }
 
 
@@ -622,5 +628,150 @@ bool UI_CancelActiveTrade(const string direction)
    ChartRedraw(0);
    return true;
   }
+/**
+ * Beschreibung: Liest Entry- und SL-Preis sicher aus den Basis-HLines (PR_HL/SL_HL).
+ * Parameter:    out_entry - Rückgabe Entry-Preis
+ *               out_sl    - Rückgabe SL-Preis
+ * Rückgabewert: true, wenn beide Linien existieren und Preise > 0 sind
+ * Hinweise:     Nutzt ObjectFind/ObjectGetDouble mit Fehler-Logs.
+ * Fehlerfälle:  Linien fehlen oder Preis<=0 -> false (Print im Log)
+ */
+bool UI_GetBaseEntrySL(double &out_entry, double &out_sl)
+{
+   out_entry = 0.0;
+   out_sl    = 0.0;
+
+   if(ObjectFind(0, PR_HL) < 0 || ObjectFind(0, SL_HL) < 0)
+   {
+      Print(__FUNCTION__, ": PR_HL/SL_HL not found");
+      return false;
+   }
+
+   ResetLastError();
+   out_entry = ObjectGetDouble(0, PR_HL, OBJPROP_PRICE);
+   int err1  = GetLastError();
+
+   ResetLastError();
+   out_sl    = ObjectGetDouble(0, SL_HL, OBJPROP_PRICE);
+   int err2  = GetLastError();
+
+   if(err1 != 0 || err2 != 0)
+      Print(__FUNCTION__, ": ObjectGetDouble error entry=", err1, " sl=", err2);
+
+   if(out_entry <= 0.0 || out_sl <= 0.0)
+      return false;
+
+   return true;
+}
+/**
+ * Beschreibung: Aktualisiert Direction/Lot/Texts (EntryButton, SLButton) anhand der Basislinien-Preise (PR_HL/SL_HL).
+ * Parameter:    opt_direction_object_name - OPTIONAL: Name eines Labels/Buttons, das nur "BUY" oder "SELL" anzeigen soll.
+ * Rückgabewert: void
+ * Hinweise:     Wenn du KEIN separates Direction-Objekt hast, lass den Parameter leer ("").
+ *              Direction wird dann nur im EntryButton-Text sichtbar.
+ * Fehlerfälle:  Fehlende Objekte werden übersprungen; bei fehlenden Linien wird abgebrochen.
+ */
+void UI_UpdateBaseSignalTexts(const string opt_direction_object_name = "")
+{
+   double entry = 0.0, sl = 0.0;
+   if(!UI_GetBaseEntrySL(entry, sl))
+      return;
+
+   // Direction: SL über Entry => SHORT, sonst LONG
+   ui_direction_is_long = (sl < entry);
+
+   // Distanz robust positiv (für Lots/Risk)
+   const double dist = MathAbs(entry - sl);
+
+   // Lots: nutzt deine bestehende Logik im TradeManager (keine Heavy-Operation)
+   double lots = g_TradeMgr.calcLots(_Symbol, (ENUM_TIMEFRAMES)_Period, dist);
+   lots = NormalizeDouble(lots, 2);
+
+   // Entry-Button Text: zeigt Direction + Preis + Lot
+   string entry_txt = (ui_direction_is_long ? "Buy Stop @ " : "Sell Stop @ ");
+   entry_txt += DoubleToString(entry, _Digits) + " | Lot: " + DoubleToString(lots, 2);
+
+   // SL-Button Text: zeigt SL-Preis + Distanz in Points
+   string sl_txt = "SL: " + DoubleToString(dist / _Point, 0) + " Points | " + DoubleToString(sl, _Digits);
+
+   // UI aktualisieren (nur wenn Objekt existiert)
+   if(ObjectFind(0, EntryButton) >= 0) update_Text(EntryButton, entry_txt);
+   if(ObjectFind(0, SLButton)    >= 0) update_Text(SLButton,    sl_txt);
+
+   // OPTIONAL: Falls du irgendwo ein Direction-Label/Button hast, kannst du es hiermit updaten.
+   // Beispiel: UI_UpdateBaseSignalTexts("DIR_LABEL");
+   if(opt_direction_object_name != "" && ObjectFind(0, opt_direction_object_name) >= 0)
+      update_Text(opt_direction_object_name, (ui_direction_is_long ? "BUY" : "SELL"));
+}
+
+
+/**
+ * Beschreibung: Synchronisiert die Y-Position von EntryButton/SLButton (und Sabio-Edits) zu den Basis-HLines.
+ * Parameter:    none
+ * Rückgabewert: void
+ * Hinweise:     Nutzt ChartTimePriceToXY; bei Fehlschlag werden nur Texte aktualisiert.
+ * Fehlerfälle:  ChartTimePriceToXY=false -> Print im Log
+ */
+void UI_SyncBaseButtonsToLines()
+{
+   double entry = 0.0, sl = 0.0;
+   if(!UI_GetBaseEntrySL(entry, sl))
+      return;
+
+   datetime t = iTime(_Symbol, (ENUM_TIMEFRAMES)_Period, 0);
+
+   int x = 0, y = 0;
+
+   // EntryButton -> auf PR_HL
+   if(ObjectFind(0, EntryButton) >= 0)
+   {
+      int ysize = (int)ObjectGetInteger(0, EntryButton, OBJPROP_YSIZE);
+      if(ChartTimePriceToXY(0, 0, t, entry, x, y))
+      {
+         ObjectSetInteger(0, EntryButton, OBJPROP_YDISTANCE, y - ysize);
+         if(ObjectFind(0, SabioEntry) >= 0)
+            ObjectSetInteger(0, SabioEntry, OBJPROP_YDISTANCE, (y - ysize) + 30);
+      }
+      else
+      {
+         Print(__FUNCTION__, ": ChartTimePriceToXY failed for Entry");
+      }
+   }
+
+   // SLButton -> auf SL_HL
+   if(ObjectFind(0, SLButton) >= 0)
+   {
+      int ysize = (int)ObjectGetInteger(0, SLButton, OBJPROP_YSIZE);
+      if(ChartTimePriceToXY(0, 0, t, sl, x, y))
+      {
+         ObjectSetInteger(0, SLButton, OBJPROP_YDISTANCE, y - ysize);
+         if(ObjectFind(0, SabioSL) >= 0)
+            ObjectSetInteger(0, SabioSL, OBJPROP_YDISTANCE, (y - ysize) + 30);
+      }
+      else
+      {
+         Print(__FUNCTION__, ": ChartTimePriceToXY failed for SL");
+      }
+   }
+}
+
+/**
+ * Beschreibung: Zentraler Handler für Basis-Linienänderungen (Line-Drag oder Change-Event).
+ * Parameter:    do_save - wenn true: LinePrices in DB persistieren
+ * Rückgabewert: void
+ * Hinweise:     Ruft Sync + Text-Update; optional SaveLinePrices.
+ * Fehlerfälle:  Keine (nur Logs).
+ */
+void UI_OnBaseLinesChanged(const bool do_save)
+{
+   UI_SyncBaseButtonsToLines();
+UI_UpdateBaseSignalTexts(); // ohne Direction-Objekt
+
+
+   if(do_save)
+      g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
+
+   ChartRedraw(0);
+}
 
 #endif // __EVENTHANDLER__
