@@ -343,28 +343,71 @@ bool createButton(string objName, string text, int xD, int yD, int xS, int yS, c
    return (true);
   }
 
-//+------------------------------------------------------------------+
-//| Create Preislinien Trading Buttton                                                                 |
-//+------------------------------------------------------------------+
+/**
+ * Beschreibung: Erzeugt oder aktualisiert eine Basis-HLine (z.B. PR_HL / SL_HL) zuverlässig.
+ * Parameter:    objName - Objektname der Linie
+ *               time1   - Referenzzeit (für OBJ_HLINE nicht relevant, wird nur bei Create mitgegeben)
+ *               price1  - Preis der Linie
+ *               clr     - Linienfarbe
+ * Rückgabewert: true bei Erfolg, sonst false
+ * Hinweise:     Setzt explizit Selectable/Zorder/Width, damit die Linie sicher anklickbar/dragbar ist.
+ * Fehlerfälle:  ObjectCreate/ObjectSet* schlägt fehl -> Log via CLogger + GetLastError()
+ */
 bool createHL(string objName, datetime time1, double price1, color clr)
   {
    ResetLastError();
+
+   // Wenn Objekt existiert: updaten statt neu erzeugen (wichtig bei Reload)
+   if(ObjectFind(0, objName) >= 0)
+     {
+      UI_Reg_Add(objName); // sicherstellen, dass Cleanup es später findet
+
+      // Preis/Farbe aktualisieren
+      ObjectSetDouble(0, objName, OBJPROP_PRICE, price1);
+      ObjectSetInteger(0, objName, OBJPROP_COLOR, clr);
+
+      // Bedienbarkeit & Sichtbarkeit
+      ObjectSetInteger(0, objName, OBJPROP_SELECTABLE, true);
+      ObjectSetInteger(0, objName, OBJPROP_SELECTED, false);
+      ObjectSetInteger(0, objName, OBJPROP_HIDDEN, false);
+      ObjectSetInteger(0, objName, OBJPROP_BACK, false);
+
+      // "Trefferfläche" & Ebenen
+      ObjectSetInteger(0, objName, OBJPROP_WIDTH, 2);
+      ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_SOLID);
+      ObjectSetInteger(0, objName, OBJPROP_ZORDER, 10);
+
+      return true;
+     }
+
+   // Neu erzeugen
    if(!ObjectCreate(0, objName, OBJ_HLINE, 0, time1, price1))
      {
-       CLogger::Add(LOG_LEVEL_INFO, "create failed for "+ objName+ " err="+ GetLastError());
-   
-      return (false);
+      CLogger::Add(LOG_LEVEL_INFO, __FUNCTION__ + ": create failed for " + objName +
+                   " err=" + IntegerToString(GetLastError()));
+      return false;
      }
-   UI_Reg_Add(objName); // Speichere Object im Array zum späteren löschen
-   ObjectSetInteger(0, objName, OBJPROP_TIME, time1);
+
+   UI_Reg_Add(objName); // fürs Deinit-Cleanup
+
+   // Initiale Properties
    ObjectSetDouble(0, objName, OBJPROP_PRICE, price1);
    ObjectSetInteger(0, objName, OBJPROP_COLOR, clr);
    ObjectSetInteger(0, objName, OBJPROP_BACK, false);
    ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_SOLID);
 
+   // KRITISCH: sonst ist SL_HL oft nicht greifbar
+   ObjectSetInteger(0, objName, OBJPROP_SELECTABLE, true);
+   ObjectSetInteger(0, objName, OBJPROP_SELECTED, false);
+   ObjectSetInteger(0, objName, OBJPROP_HIDDEN, false);
+
+   ObjectSetInteger(0, objName, OBJPROP_WIDTH, 2);
+   ObjectSetInteger(0, objName, OBJPROP_ZORDER, 10);
+
    ChartRedraw(0);
-   return (true);
+   return true;
   }
+
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+

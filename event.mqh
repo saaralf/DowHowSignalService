@@ -15,6 +15,36 @@
 // zuverlässig. Darum finalisieren wir zusätzlich beim MouseUp.
 // ------------------------------------------------------------------
 static bool   g_tp_drag_active   = false;
+// ------------------------------------------------------------------
+// Basis-Linien-Drag Tracking (PR_HL / SL_HL)
+// Ziel: UI live synchronisieren, Speichern nur 1x beim Loslassen.
+// ------------------------------------------------------------------
+static bool   g_base_drag_active  = false;
+static string g_base_drag_name    = "";
+static uint   g_base_drag_last_ms = 0;
+
+/**
+ * Beschreibung: MouseUp-Fallback für Basislinien. Falls MT5 kein OBJECT_CHANGE feuert,
+ *               finalisieren wir beim Loslassen: UI sync + SaveLinePrices.
+ * Parameter:    MouseState - 0 bedeutet MouseUp (Loslassen)
+ * Rückgabewert: void
+ * Hinweise:     Wird in CHARTEVENT_MOUSE_MOVE aufgerufen.
+ * Fehlerfälle:  keine (nur Logs in den Unterfunktionen)
+ */
+void BaseLines_FinalizeDragIfNeeded(const int MouseState)
+  {
+   if(MouseState != 0)
+      return;
+   if(!g_base_drag_active)
+      return;
+
+   g_base_drag_active  = false;
+   g_base_drag_name    = "";
+   g_base_drag_last_ms = 0;
+
+   UI_OnBaseLinesChanged(true); // speichern + redraw
+  }
+
 static string g_tp_drag_name     = "";
 static string g_tp_drag_dir      = "";   // "LONG" / "SHORT"
 static string g_tp_drag_kind     = "";   // "entry" / "sl"
@@ -154,7 +184,17 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
 
          return; // TradePos-Drag fertig behandelt
         }
+      // --- Basislinien (PR_HL / SL_HL): UI live nachziehen
+      if(sparam == PR_HL || sparam == SL_HL)
+        {
+         g_base_drag_active  = true;
+         g_base_drag_name    = sparam;
+         g_base_drag_last_ms = GetTickCount();
 
+         // live: Buttons/Edits/Text nachziehen, aber NICHT speichern
+         UI_OnBaseLinesChanged(false);
+         return;
+        }
       // sonstige Trade-Linien (z.B. TP): nur Tag live
       if(UI_IsTradePosLine(sparam))
         {
@@ -173,20 +213,26 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
          return;
         }
 
-    // Basislinien: UI + Texte synchronisieren + speichern
-if(sparam == PR_HL || sparam == SL_HL)
-{
-   UI_OnBaseLinesChanged(true);
-   return;
-}
+      // Basislinien: UI + Texte synchronisieren + speichern
+      // Basislinien: final synchronisieren + speichern
+      if(sparam == PR_HL || sparam == SL_HL)
+        {
+         g_base_drag_active  = false;
+         g_base_drag_name    = "";
+         g_base_drag_last_ms = 0;
 
-// Trade-Linien: wie gehabt
-if(UI_IsTradePosLine(sparam))
-{
-   UI_CreateOrUpdateLineTag(sparam);
-   g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
-   return;
-}
+         UI_OnBaseLinesChanged(true);
+         return;
+        }
+
+
+      // Trade-Linien: wie gehabt
+      if(UI_IsTradePosLine(sparam))
+        {
+         UI_CreateOrUpdateLineTag(sparam);
+         g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
+         return;
+        }
 
      }
 
@@ -211,6 +257,8 @@ if(UI_IsTradePosLine(sparam))
       // senden wir Discord + speichern beim MouseUp (state==0).
       if(MouseState == 0 && g_tp_drag_active)
          TP_FinalizeLineMove();
+      // MouseUp-Fallback für Basislinien (falls OBJECT_CHANGE ausbleibt)
+      BaseLines_FinalizeDragIfNeeded(MouseState);
 
       int XD_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_XDISTANCE);
       int YD_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_YDISTANCE);
@@ -264,41 +312,13 @@ if(UI_IsTradePosLine(sparam))
          ObjectSetInteger(0, SL_HL, OBJPROP_TIME, dt_SL);
          ObjectSetDouble(0, SL_HL, OBJPROP_PRICE, price_SL);
 
+         // 1 Quelle der Wahrheit: Text/Lot/Direction aus PR_HL & SL_HL ableiten
+         UI_UpdateBaseSignalTexts();
+
+
          datetime dt_TP = 0;
          double price_TP = 0;
-
-         double lots = g_TradeMgr.calcLots(_Symbol,_Period,Entry_Price - SL_Price);
-         lots = NormalizeDouble(lots, 2);
-         //Schreibe aktuelle Zahlen in den Button
-         update_Text(EntryButton, "Buy Stop @ " + Get_Price_s(PR_HL) + " | Lot: " + DoubleToString(lots, 2));
-         update_Text(SLButton, "SL: " + DoubleToString(((Get_Price_d(PR_HL) - Get_Price_d(SL_HL)) / _Point), 0) + " Points | " + Get_Price_s(SL_HL));
-         // auch in den SabioEdits
-         if(SabioPrices)
-           {
-            update_Text(SabioEntry, "SABIO Entry: " + Get_Price_s(PR_HL));
-            update_Text(SabioSL, "SABIO SL: " + Get_Price_s(SL_HL));
-           }
-
-         else
-           {
-            update_Text(SabioEntry, "SABIO ENTRY: ");
-            update_Text(SabioSL, "SABIO SL: ");
-           }
-
-         //prüfe ob wir eine Richtungswechsel haben. SL geht über Entry oder zurück
-         //Also wir wollen dann einen Short oder LONG Trade machen
-         if((Get_Price_d(SL_HL)) > (Get_Price_d(PR_HL)))
-           {
-            double lots = g_TradeMgr.calcLots(_Symbol,_Period,SL_Price - Entry_Price);
-            lots = NormalizeDouble(lots, 2);
-            ui_direction_is_long = false;
-            update_Text(EntryButton, "Sell Stop @ " + Get_Price_s(PR_HL) + " | Lot: " + DoubleToString(lots, 2));
-            update_Text(SLButton, "SL: " + DoubleToString(((Get_Price_d(SL_HL) - Get_Price_d(PR_HL)) / _Point), 0) + " Points | " + Get_Price_s(SL_HL));
-           }
-         else
-           {
-            ui_direction_is_long = true;
-           }
+      
 
          ChartRedraw(0);
         }
@@ -329,41 +349,9 @@ if(UI_IsTradePosLine(sparam))
 
          ObjectSetInteger(0, SL_HL, OBJPROP_TIME, dt_SL1);
          ObjectSetDouble(0, SL_HL, OBJPROP_PRICE, price_SL1);
-
-         if(SabioPrices)
-           {
-            update_Text(SabioEntry, "SABIO Entry: " + Get_Price_s(PR_HL));
-
-            update_Text(SabioSL, "SABIO SL: " + Get_Price_s(SL_HL));
-           }
-
-         else
-           {
-            update_Text(SabioEntry, "SABIO ENTRY: ");
-
-            update_Text(SabioSL, "SABIO SL: ");
-           }
-
-         if((Get_Price_d(SL_HL)) > (Get_Price_d(PR_HL)))
-           {
-            double lots = g_TradeMgr.calcLots(_Symbol,_Period,SL_Price - Entry_Price);
-            lots = NormalizeDouble(lots, 2);
-
-            update_Text(EntryButton, "Sell Stop @ " + Get_Price_s(PR_HL) + " | Lot: " + DoubleToString(lots, 2));
-            update_Text(SLButton, "SL: " + DoubleToString(((Get_Price_d(SL_HL) - Get_Price_d(PR_HL)) / _Point), 0) + " Points | " + Get_Price_s(SL_HL));
-
-            ui_direction_is_long = 0;
-           }
-         else
-           {
-            double lots = g_TradeMgr.calcLots(_Symbol,_Period,Entry_Price - SL_Price);
-
-            update_Text(EntryButton, "Buy Stop @ " + Get_Price_s(PR_HL) + " | Lot: " + DoubleToString(lots, 2));
-            update_Text(SLButton, "SL: " + DoubleToString(((Get_Price_d(PR_HL) - Get_Price_d(SL_HL)) / _Point), 0) + " Points | " + Get_Price_s(SL_HL));
-
-            ui_direction_is_long = 1;
-           }
-
+         // 1 Quelle der Wahrheit: Text/Lot/Direction aus PR_HL & SL_HL ableiten
+         UI_UpdateBaseSignalTexts();
+        
          ChartRedraw(0);
         }
 
@@ -577,11 +565,11 @@ bool UI_CancelActiveTrade(const string direction)
       return false;
      }
 
-   // Linien/Tags entfernen
+// Linien/Tags entfernen
    UI_DeleteTradeLinesByTradeNo(trade_no);
    UI_UpdateAllLineTags();
 
-   // Runtime + Meta zurücksetzen (damit OnInit NICHT reaktiviert)
+// Runtime + Meta zurücksetzen (damit OnInit NICHT reaktiviert)
    if(isLong)
      {
       if(active_long_trade_no == trade_no)
@@ -637,15 +625,15 @@ bool UI_CancelActiveTrade(const string direction)
  * Fehlerfälle:  Linien fehlen oder Preis<=0 -> false (Print im Log)
  */
 bool UI_GetBaseEntrySL(double &out_entry, double &out_sl)
-{
+  {
    out_entry = 0.0;
    out_sl    = 0.0;
 
    if(ObjectFind(0, PR_HL) < 0 || ObjectFind(0, SL_HL) < 0)
-   {
+     {
       Print(__FUNCTION__, ": PR_HL/SL_HL not found");
       return false;
-   }
+     }
 
    ResetLastError();
    out_entry = ObjectGetDouble(0, PR_HL, OBJPROP_PRICE);
@@ -662,116 +650,170 @@ bool UI_GetBaseEntrySL(double &out_entry, double &out_sl)
       return false;
 
    return true;
-}
-/**
- * Beschreibung: Aktualisiert Direction/Lot/Texts (EntryButton, SLButton) anhand der Basislinien-Preise (PR_HL/SL_HL).
+  }/**
+ * Beschreibung: Aktualisiert Direction/Lot/Texts (EntryButton, SLButton, SabioEntry, SabioSL)
+ *              anhand der Basislinien-Preise (PR_HL/SL_HL) als 1 Quelle der Wahrheit.
  * Parameter:    opt_direction_object_name - OPTIONAL: Name eines Labels/Buttons, das nur "BUY" oder "SELL" anzeigen soll.
  * Rückgabewert: void
- * Hinweise:     Wenn du KEIN separates Direction-Objekt hast, lass den Parameter leer ("").
- *              Direction wird dann nur im EntryButton-Text sichtbar.
- * Fehlerfälle:  Fehlende Objekte werden übersprungen; bei fehlenden Linien wird abgebrochen.
+ * Hinweise:     Sabio-Texts werden hier zentral gepflegt, damit MouseMove keine Sonderlogik mehr braucht.
+ * Fehlerfälle:  Fehlende Objekte werden übersprungen; bei fehlenden Linien wird abgebrochen (Print im Log).
  */
 void UI_UpdateBaseSignalTexts(const string opt_direction_object_name = "")
-{
+  {
    double entry = 0.0, sl = 0.0;
    if(!UI_GetBaseEntrySL(entry, sl))
       return;
 
-   // Direction: SL über Entry => SHORT, sonst LONG
+// Direction: SL über Entry => SHORT, sonst LONG
    ui_direction_is_long = (sl < entry);
 
-   // Distanz robust positiv (für Lots/Risk)
+// Distanz robust positiv (für Lots/Risk)
    const double dist = MathAbs(entry - sl);
 
-   // Lots: nutzt deine bestehende Logik im TradeManager (keine Heavy-Operation)
+// Lots: nutzt deine bestehende Logik im TradeManager (keine Heavy-Operation)
    double lots = g_TradeMgr.calcLots(_Symbol, (ENUM_TIMEFRAMES)_Period, dist);
    lots = NormalizeDouble(lots, 2);
 
-   // Entry-Button Text: zeigt Direction + Preis + Lot
+// Entry-Button Text: zeigt Direction + Preis + Lot
    string entry_txt = (ui_direction_is_long ? "Buy Stop @ " : "Sell Stop @ ");
    entry_txt += DoubleToString(entry, _Digits) + " | Lot: " + DoubleToString(lots, 2);
 
-   // SL-Button Text: zeigt SL-Preis + Distanz in Points
+// SL-Button Text: zeigt SL-Preis + Distanz in Points
    string sl_txt = "SL: " + DoubleToString(dist / _Point, 0) + " Points | " + DoubleToString(sl, _Digits);
 
-   // UI aktualisieren (nur wenn Objekt existiert)
-   if(ObjectFind(0, EntryButton) >= 0) update_Text(EntryButton, entry_txt);
-   if(ObjectFind(0, SLButton)    >= 0) update_Text(SLButton,    sl_txt);
+// UI aktualisieren (nur wenn Objekt existiert)
+   if(ObjectFind(0, EntryButton) >= 0)
+      update_Text(EntryButton, entry_txt);
+   if(ObjectFind(0, SLButton)    >= 0)
+      update_Text(SLButton,    sl_txt);
 
-   // OPTIONAL: Falls du irgendwo ein Direction-Label/Button hast, kannst du es hiermit updaten.
-   // Beispiel: UI_UpdateBaseSignalTexts("DIR_LABEL");
+// Sabio-Texts zentral pflegen (damit MouseMove nicht doppelt rechnet)
+   if(ObjectFind(0, SabioEntry) >= 0)
+     {
+      if(SabioPrices)
+         update_Text(SabioEntry, "SABIO Entry: " + DoubleToString(entry, _Digits));
+      else
+         update_Text(SabioEntry, "SABIO ENTRY: ");
+     }
+
+   if(ObjectFind(0, SabioSL) >= 0)
+     {
+      if(SabioPrices)
+         update_Text(SabioSL, "SABIO SL: " + DoubleToString(sl, _Digits));
+      else
+         update_Text(SabioSL, "SABIO SL: ");
+     }
+
+// OPTIONAL: Falls du irgendwo ein Direction-Label/Button hast
    if(opt_direction_object_name != "" && ObjectFind(0, opt_direction_object_name) >= 0)
       update_Text(opt_direction_object_name, (ui_direction_is_long ? "BUY" : "SELL"));
-}
+  }
 
 
 /**
- * Beschreibung: Synchronisiert die Y-Position von EntryButton/SLButton (und Sabio-Edits) zu den Basis-HLines.
+ * Beschreibung: Synchronisiert die Y-Position der Basis-UI (Entry/SL Buttons + Send/TRNB/POSNB + Sabio-Edits)
+ *               zu den Basis-HLines PR_HL und SL_HL.
  * Parameter:    none
  * Rückgabewert: void
- * Hinweise:     Nutzt ChartTimePriceToXY; bei Fehlschlag werden nur Texte aktualisiert.
+ * Hinweise:     Nur Y wird angepasst; X bleibt wie vom Layout vorgegeben.
  * Fehlerfälle:  ChartTimePriceToXY=false -> Print im Log
  */
 void UI_SyncBaseButtonsToLines()
-{
+  {
    double entry = 0.0, sl = 0.0;
    if(!UI_GetBaseEntrySL(entry, sl))
       return;
 
+// Wir nehmen die aktuelle Bar-Zeit als X-Anker (rechts sichtbar).
    datetime t = iTime(_Symbol, (ENUM_TIMEFRAMES)_Period, 0);
 
    int x = 0, y = 0;
 
-   // EntryButton -> auf PR_HL
+// -------------------------
+// ENTRY-GRUPPE (PR_HL)
+// EntryButton, SENDTRADEBTN, TRNB, POSNB, SabioEntry
+// -------------------------
    if(ObjectFind(0, EntryButton) >= 0)
-   {
-      int ysize = (int)ObjectGetInteger(0, EntryButton, OBJPROP_YSIZE);
-      if(ChartTimePriceToXY(0, 0, t, entry, x, y))
-      {
-         ObjectSetInteger(0, EntryButton, OBJPROP_YDISTANCE, y - ysize);
-         if(ObjectFind(0, SabioEntry) >= 0)
-            ObjectSetInteger(0, SabioEntry, OBJPROP_YDISTANCE, (y - ysize) + 30);
-      }
-      else
-      {
-         Print(__FUNCTION__, ": ChartTimePriceToXY failed for Entry");
-      }
-   }
+     {
+      int ysize_entry_btn = (int)ObjectGetInteger(0, EntryButton, OBJPROP_YSIZE);
 
-   // SLButton -> auf SL_HL
-   if(ObjectFind(0, SLButton) >= 0)
-   {
-      int ysize = (int)ObjectGetInteger(0, SLButton, OBJPROP_YSIZE);
-      if(ChartTimePriceToXY(0, 0, t, sl, x, y))
-      {
-         ObjectSetInteger(0, SLButton, OBJPROP_YDISTANCE, y - ysize);
-         if(ObjectFind(0, SabioSL) >= 0)
-            ObjectSetInteger(0, SabioSL, OBJPROP_YDISTANCE, (y - ysize) + 30);
-      }
+      if(ChartTimePriceToXY(0, 0, t, entry, x, y))
+        {
+         const int baseY = y - ysize_entry_btn;
+
+         ObjectSetInteger(0, EntryButton,  OBJPROP_YDISTANCE, baseY);
+
+         // SendButton sitzt links neben EntryButton auf gleicher Höhe
+         if(ObjectFind(0, SENDTRADEBTN) >= 0)
+            ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_YDISTANCE, baseY);
+
+         // TRNB/POSNB + SabioEntry sind 30px unter EntryButton
+         if(ObjectFind(0, TRNB) >= 0)
+            ObjectSetInteger(0, TRNB, OBJPROP_YDISTANCE, baseY + 30);
+
+         if(ObjectFind(0, POSNB) >= 0)
+            ObjectSetInteger(0, POSNB, OBJPROP_YDISTANCE, baseY + 30);
+
+         if(ObjectFind(0, SabioEntry) >= 0)
+            ObjectSetInteger(0, SabioEntry, OBJPROP_YDISTANCE, baseY + 30);
+        }
       else
-      {
+        {
+         Print(__FUNCTION__, ": ChartTimePriceToXY failed for Entry");
+        }
+     }
+
+// -------------------------
+// SL-GRUPPE (SL_HL)
+// SLButton + SabioSL
+// -------------------------
+   if(ObjectFind(0, SLButton) >= 0)
+     {
+      int ysize_sl_btn = (int)ObjectGetInteger(0, SLButton, OBJPROP_YSIZE);
+
+      if(ChartTimePriceToXY(0, 0, t, sl, x, y))
+        {
+         const int baseY = y - ysize_sl_btn;
+
+         ObjectSetInteger(0, SLButton, OBJPROP_YDISTANCE, baseY);
+
+         if(ObjectFind(0, SabioSL) >= 0)
+            ObjectSetInteger(0, SabioSL, OBJPROP_YDISTANCE, baseY + 30);
+        }
+      else
+        {
          Print(__FUNCTION__, ": ChartTimePriceToXY failed for SL");
-      }
-   }
-}
+        }
+     }
+  }
+
 
 /**
  * Beschreibung: Zentraler Handler für Basis-Linienänderungen (Line-Drag oder Change-Event).
- * Parameter:    do_save - wenn true: LinePrices in DB persistieren
+ * Parameter:    do_save - wenn true: LinePrices in DB persistieren (nur beim Finalize)
  * Rückgabewert: void
- * Hinweise:     Ruft Sync + Text-Update; optional SaveLinePrices.
+ * Hinweise:     Throttled Redraw, damit Drag flüssig bleibt.
  * Fehlerfälle:  Keine (nur Logs).
  */
 void UI_OnBaseLinesChanged(const bool do_save)
-{
+  {
    UI_SyncBaseButtonsToLines();
-UI_UpdateBaseSignalTexts(); // ohne Direction-Objekt
-
+   UI_UpdateBaseSignalTexts(); // Direction steckt im EntryButton-Text
 
    if(do_save)
+     {
       g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
+      Print(__FUNCTION__, ": finalized + saved base line prices");
+     }
 
-   ChartRedraw(0);
-}
+// Redraw throttlen: Drag kann sonst ruckeln
+   static uint last_redraw_ms = 0;
+   uint now = GetTickCount();
+   if(do_save || (now - last_redraw_ms > 50))
+     {
+      ChartRedraw(0);
+      last_redraw_ms = now;
+     }
+  }
 
 #endif // __EVENTHANDLER__
