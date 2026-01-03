@@ -22,14 +22,165 @@ static bool   g_tp_drag_active   = false;
 static bool   g_base_drag_active  = false;
 static string g_base_drag_name    = "";
 static uint   g_base_drag_last_ms = 0;
+// --- Drag-State (nur für Basis-Buttons Entry/SL) ---
+static bool   g_base_btn_drag_active   = false;
+static string g_base_btn_drag_btn_name = "";
+static string g_base_btn_drag_line_name= "";
+static int    g_base_btn_drag_offset_y = 0;   // Cursor-Offset innerhalb des Buttons (top->cursor)
+static int    g_base_btn_drag_btn_ysize = 0;  // Button-Höhe (für bottom-y -> price)
+static bool   g_base_btn_prev_left_down = false;
+// --- OPTIONAL: Gekoppelter Drag (Abstand Entry<->SL bleibt konstant) ---
+
+// Letzte bekannte Maus-Y aus CHARTEVENT_MOUSE_MOVE (Fallback für Objekt-Drag)
+static int g_last_mouse_y = -1;
+
+
+
+// ------------------------------------------------------------------
+// BaseLine-Kopplung / Reentrancy-Guard
+// ------------------------------------------------------------------
+static bool   g_base_sync_guard   = false;  // schützt vor Rekursion wenn wir SL_HL programmgesteuert setzen
+static bool   g_base_lock_distance = true;  // "PR_HL zieht SL_HL mit" aktiv
+static double g_base_lock_delta    = 0.0;   // SL - Entry (Preisdelta)
+// Mouse-Y Tracking für Live-UI während Linien-Drag (verhindert "Springen" bei SL_HL)
+static int    g_base_drag_mouse_y = -1;
+
+
+/**
+ * Beschreibung: Startet/trackt einen Basislinien-Drag und friert bei PR_HL den Abstand (Delta) ein.
+ * Parameter:    dragged_line - PR_HL oder SL_HL (die Linie, die der Nutzer gerade zieht)
+ * Rückgabewert: void
+ * Hinweise:     Delta wird nur bei PR_HL-Drag eingefroren, damit SL beim PR-Drag konstant folgt.
+ * Fehlerfälle:  Wenn Linien fehlen, bleibt Delta unverändert (Logs über UI_GetHLinePriceSafe).
+ */
+void BaseLines_BeginDragIfNeeded(const string dragged_line)
+  {
+// Wenn wir gerade programmgesteuert syncen: nichts umstellen
+   if(g_base_sync_guard)
+      return;
+
+// Drag-Start erkennen (neuer Drag oder anderer Linienname)
+   if(!g_base_drag_active || g_base_drag_name != dragged_line)
+     {
+      g_base_drag_active  = true;
+      g_base_drag_name    = dragged_line;
+      g_base_drag_last_ms = GetTickCount();
+
+      // Nur wenn PR_HL gezogen wird: Delta "einfrieren"
+      if(g_base_lock_distance && dragged_line == PR_HL)
+        {
+         double entry=0.0, sl=0.0;
+         if(UI_GetHLinePriceSafe(PR_HL, entry) && UI_GetHLinePriceSafe(SL_HL, sl))
+            g_base_lock_delta = (sl - entry); // SL - Entry
+        }
+      return;
+     }
+
+// laufender Drag
+   g_base_drag_last_ms = GetTickCount();
+  }
+
+/**
+ * Beschreibung: Wendet die gewünschte Linien-Drag-Regel an:
+ *               - PR_HL-Drag: SL_HL folgt mit konstantem Delta
+ *               - SL_HL-Drag: PR_HL bleibt stehen, Delta wird aktualisiert (SL - Entry)
+ * Parameter:    dragged_line - PR_HL oder SL_HL (die vom Nutzer gezogene Linie)
+ *               is_finalize  - true wenn Drag beendet (MouseUp/OBJECT_CHANGE), false für live
+ * Rückgabewert: bool - true wenn angewendet/ok, false bei fehlenden Objekten/Fehlern
+ * Hinweise:     Nutzt g_base_sync_guard gegen Rekursion durch ObjectSetDouble auf SL_HL.
+ * Fehlerfälle:  UI_SetHLinePriceSafe/UI_GetHLinePriceSafe loggen GetLastError.
+ */
+bool BaseLines_ApplyCoupling(const string dragged_line, const bool is_finalize)
+  {
+   if(!g_base_lock_distance)
+      return true;
+
+   if(g_base_sync_guard)
+      return true;
+
+   if(dragged_line != PR_HL && dragged_line != SL_HL)
+      return true;
+
+// Linien müssen existieren
+   if(ObjectFind(0, PR_HL) < 0 || ObjectFind(0, SL_HL) < 0)
+      return false;
+
+// Reentrancy-Guard aktivieren
+   g_base_sync_guard = true;
+
+   double entry = 0.0, sl = 0.0;
+   if(!UI_GetHLinePriceSafe(PR_HL, entry) || !UI_GetHLinePriceSafe(SL_HL, sl))
+     {
+      g_base_sync_guard = false;
+      return false;
+     }
+
+// Snapping auf Tick (sauberes Verhalten bei Gold/Indices etc.)
+   entry = UI_NormalizeToTick(entry);
+   sl    = UI_NormalizeToTick(sl);
+
+   if(dragged_line == PR_HL)
+     {
+      // PR_HL wird gezogen -> SL_HL soll folgen (Delta konstant)
+
+
+      // Optional: PR_HL auf gesnappten Wert zurücksetzen (sauber)
+      UI_SetHLinePriceSafe(PR_HL, entry);
+
+      double sl_new = UI_NormalizeToTick(entry + g_base_lock_delta);
+      UI_SetHLinePriceSafe(SL_HL, sl_new);
+      // Delta bleibt unverändert
+     }
+   else // dragged_line == SL_HL
+     {
+      // SL_HL wird gezogen -> PR_HL bleibt stehen, SL setzt neuen Abstand
+      UI_SetHLinePriceSafe(SL_HL, sl);
+
+      // Delta wird durch SL-Drag bestimmt
+      g_base_lock_delta = (sl - entry);
+     }
+
+   g_base_sync_guard = false;
+   return true;
+  }
+/**
+ * Beschreibung: Liefert eine robuste Mouse-Y Pixelposition (für Live-UI beim Linien-Drag).
+ * Parameter:    dparam - Event dparam (bei OBJECT_DRAG oft MouseY; sonst ggf. 0/unsinnig)
+ * Rückgabewert: int - MouseY in Pixeln (0..ChartHeight-1)
+ * Hinweise:     Falls dparam unplausibel ist, wird die letzte MouseMove-Y (g_last_mouse_y) genutzt.
+ * Fehlerfälle:  Keine harten Fehler; wenn keine MouseMove-Y bekannt ist, wird geclamped.
+ */
+int UI_GetMouseYPxSafe(const double dparam)
+  {
+   const int h = UI_GetChartHeightPx();
+
+// dparam versuchen (bei OBJECT_DRAG i.d.R. MouseY)
+   int my = (int)MathRound(dparam);
+
+// Wenn dparam Quatsch ist -> Fallback auf letzte MouseMove-Y
+   if(h > 0 && (my < 0 || my > (h - 1)))
+     {
+      if(g_last_mouse_y >= 0)
+         my = g_last_mouse_y;
+     }
+
+// Clamp
+   if(my < 0)
+      my = 0;
+   if(h > 0 && my > (h - 1))
+      my = h - 1;
+
+   return my;
+  }
+
 
 /**
  * Beschreibung: MouseUp-Fallback für Basislinien. Falls MT5 kein OBJECT_CHANGE feuert,
- *               finalisieren wir beim Loslassen: UI sync + SaveLinePrices.
+ *               finalisieren wir beim Loslassen: Kopplung anwenden + UI sync + SaveLinePrices.
  * Parameter:    MouseState - 0 bedeutet MouseUp (Loslassen)
  * Rückgabewert: void
  * Hinweise:     Wird in CHARTEVENT_MOUSE_MOVE aufgerufen.
- * Fehlerfälle:  keine (nur Logs in den Unterfunktionen)
+ * Fehlerfälle:  BaseLines_ApplyCoupling/UI_OnBaseLinesChanged loggen intern.
  */
 void BaseLines_FinalizeDragIfNeeded(const int MouseState)
   {
@@ -38,11 +189,18 @@ void BaseLines_FinalizeDragIfNeeded(const int MouseState)
    if(!g_base_drag_active)
       return;
 
+// Final 1x die gewünschte Kopplung anwenden (wichtig wenn OBJECT_CHANGE ausbleibt)
+   if(g_base_drag_name == PR_HL || g_base_drag_name == SL_HL)
+      BaseLines_ApplyCoupling(g_base_drag_name, true);
+
+// Reset Drag-State
    g_base_drag_active  = false;
    g_base_drag_name    = "";
    g_base_drag_last_ms = 0;
+   g_base_drag_mouse_y = -1;
 
-   UI_OnBaseLinesChanged(true); // speichern + redraw
+// Speichern + final redraw
+   UI_OnBaseLinesChanged(true);
   }
 
 static string g_tp_drag_name     = "";
@@ -112,6 +270,52 @@ void TP_FinalizeLineMove()
    g_tp_drag_last_ms  = 0;
   }
 
+/**
+ * Beschreibung: Live-Fallback für Basislinien-Drag, falls CHARTEVENT_OBJECT_DRAG nicht zuverlässig feuert.
+ * Parameter:    left_down - true wenn linke Maustaste gedrückt ist
+ * Rückgabewert: void
+ * Hinweise:     Erkennt Drag über "Linie ist selected + LMB down".
+ * Fehlerfälle:  Keine harten Fehler; UI_Get/Set loggt intern.
+ */
+void BaseLines_LiveSyncFallback(const bool left_down)
+  {
+   if(!left_down)
+      return;
+
+// Wenn gerade Button-Drag läuft, nicht dazwischen funken
+   if(g_base_btn_drag_active)
+      return;
+
+// Welche Basislinie ist gerade selektiert? (MT5 setzt das i.d.R. beim Drag)
+   bool pr_sel = (ObjectFind(0, PR_HL) >= 0 && ObjectGetInteger(0, PR_HL, OBJPROP_SELECTED) != 0);
+   bool sl_sel = (ObjectFind(0, SL_HL) >= 0 && ObjectGetInteger(0, SL_HL, OBJPROP_SELECTED) != 0);
+
+   if(pr_sel)
+     {
+      // Drag PR_HL -> SL muss folgen
+      g_base_drag_active = true;
+      g_base_drag_name   = PR_HL;
+      // MouseY auch im Fallback pflegen
+      g_base_drag_mouse_y = (g_last_mouse_y >= 0 ? g_last_mouse_y : 0);
+
+      BaseLines_ApplyCoupling(PR_HL, false);
+      UI_OnBaseLinesChanged(false);
+      return;
+     }
+
+   if(sl_sel)
+     {
+      // Drag SL_HL -> Entry bleibt stehen, Delta wird neu
+      g_base_drag_active = true;
+      g_base_drag_name   = SL_HL;
+      // MouseY auch im Fallback pflegen
+      g_base_drag_mouse_y = UI_GetMouseYPxSafe(0.0); // dparam nicht vorhanden -> Chart-MouseY
+
+      BaseLines_ApplyCoupling(SL_HL, false);
+      UI_OnBaseLinesChanged(false);
+      return;
+     }
+  }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -124,7 +328,8 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
    CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
 
-
+// NEU: Delta im Idle aktuell halten
+   BaseLines_UpdateDeltaIfIdle();
 
    if(UI_TradesPanel_OnChartEvent(id, lparam, dparam, sparam))
       return;
@@ -187,14 +392,23 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
       // --- Basislinien (PR_HL / SL_HL): UI live nachziehen
       if(sparam == PR_HL || sparam == SL_HL)
         {
-         g_base_drag_active  = true;
-         g_base_drag_name    = sparam;
-         g_base_drag_last_ms = GetTickCount();
+         // Live-MouseY merken, damit Buttons sofort mitlaufen (auch wenn ChartTimePriceToXY spinnt)
+         g_base_drag_mouse_y = UI_GetMouseYPxSafe(dparam);
+         // Programmgesteuerte Änderungen (z.B. SL folgt) ignorieren, sonst Rekursion/Flackern
+         if(g_base_sync_guard)
+            return;
 
-         // live: Buttons/Edits/Text nachziehen, aber NICHT speichern
+         BaseLines_BeginDragIfNeeded(sparam);
+
+         // Live die gewünschte Kopplung anwenden:
+         // PR_HL-Drag -> SL folgt; SL_HL-Drag -> Entry bleibt, Delta wird neu
+         BaseLines_ApplyCoupling(sparam, false);
+
+         // UI live nachziehen (Buttons/Edits/Texte), aber NICHT speichern
          UI_OnBaseLinesChanged(false);
          return;
         }
+
       // sonstige Trade-Linien (z.B. TP): nur Tag live
       if(UI_IsTradePosLine(sparam))
         {
@@ -213,14 +427,21 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
          return;
         }
 
-      // Basislinien: UI + Texte synchronisieren + speichern
-      // Basislinien: final synchronisieren + speichern
       if(sparam == PR_HL || sparam == SL_HL)
         {
+         // Programmgesteuerte CHANGE-Events ignorieren
+         if(g_base_sync_guard)
+            return;
+
+         // Final: Kopplung + Delta sauber setzen
+         BaseLines_ApplyCoupling(sparam, true);
+
          g_base_drag_active  = false;
          g_base_drag_name    = "";
          g_base_drag_last_ms = 0;
+         g_base_drag_mouse_y = -1;
 
+         // Final speichern
          UI_OnBaseLinesChanged(true);
          return;
         }
@@ -242,130 +463,156 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
    Entry_Price = Get_Price_d(PR_HL);
    SL_Price = Get_Price_d(SL_HL);
 
-
-
-
    if(id == CHARTEVENT_MOUSE_MOVE)
      {
-
       int MouseD_X = (int)lparam;
       int MouseD_Y = (int)dparam;
+      g_last_mouse_y = MouseD_Y; // NEU: Fallback für Linien-Drag / OBJECT_DRAG
 
       int MouseState = (int)StringToInteger(sparam);
 
-      // Fallback-Finalize: Wenn MT5 kein CHARTEVENT_OBJECT_CHANGE feuert,
-      // senden wir Discord + speichern beim MouseUp (state==0).
+      // bestehend: TradePos-Fallback finalize
       if(MouseState == 0 && g_tp_drag_active)
          TP_FinalizeLineMove();
-      // MouseUp-Fallback für Basislinien (falls OBJECT_CHANGE ausbleibt)
+
+      // bestehend: BaseLines MouseUp-Fallback (für Linien-Drag)
       BaseLines_FinalizeDragIfNeeded(MouseState);
 
-      int XD_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_XDISTANCE);
-      int YD_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_YDISTANCE);
-      int XS_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_XSIZE);
-      int YS_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_YSIZE);
-
-      int XD_R5 = (int)ObjectGetInteger(0, SLButton, OBJPROP_XDISTANCE);
-      int YD_R5 = (int)ObjectGetInteger(0, SLButton, OBJPROP_YDISTANCE);
-      int XS_R5 = (int)ObjectGetInteger(0, SLButton, OBJPROP_XSIZE);
-      int YS_R5 = (int)ObjectGetInteger(0, SLButton, OBJPROP_YSIZE);
-
-      if(prevMouseState == 0 && MouseState == 1)  // 1 = true: clicked left mouse btn
-        {
-
-         mlbDownX3 = MouseD_X;
-         mlbDownY3 = MouseD_Y;
-         mlbDownXD_R3 = XD_EntryButton;
-         mlbDownYD_R3 = YD_EntryButton;
-
-         mlbDownX5 = MouseD_X;
-         mlbDownY5 = MouseD_Y;
-         mlbDownXD_R5 = XD_R5;
-         mlbDownYD_R5 = YD_R5;
-
-         if(MouseD_X >= XD_EntryButton && MouseD_X <= XD_EntryButton + XS_EntryButton &&
-            MouseD_Y >= YD_EntryButton && MouseD_Y <= YD_EntryButton + YS_EntryButton)
-           {
-            movingState_R3 = true;
-           }
-
-         if(MouseD_X >= XD_R5 && MouseD_X <= XD_R5 + XS_R5 &&
-            MouseD_Y >= YD_R5 && MouseD_Y <= YD_R5 + YS_R5)
-           {
-            movingState_R5 = true;
-           }
-        }
-
-      if(movingState_R5)
-        {
-         ChartSetInteger(0, CHART_MOUSE_SCROLL, false);
-         //move SLButton und SabioSL
-         ObjectSetInteger(0, SLButton, OBJPROP_YDISTANCE, mlbDownYD_R5 + MouseD_Y - mlbDownY5);
-         ObjectSetInteger(0, SabioSL, OBJPROP_YDISTANCE, mlbDownYD_R5 + MouseD_Y + 30 - mlbDownY5);
-
-         datetime dt_SL = 0;
-         double price_SL = 0;
-         int window = 0;
-
-         ChartXYToTimePrice(0, XD_R5, YD_R5 + YS_R5, window, dt_SL, price_SL);
-         //Move SL HL LInie
-         ObjectSetInteger(0, SL_HL, OBJPROP_TIME, dt_SL);
-         ObjectSetDouble(0, SL_HL, OBJPROP_PRICE, price_SL);
-
-         // 1 Quelle der Wahrheit: Text/Lot/Direction aus PR_HL & SL_HL ableiten
-         UI_UpdateBaseSignalTexts();
-
-
-         datetime dt_TP = 0;
-         double price_TP = 0;
-      
-
-         ChartRedraw(0);
-        }
-
-      if(movingState_R3)
-        {
-         ChartSetInteger(0, CHART_MOUSE_SCROLL, false);
-         ObjectSetInteger(0, EntryButton, OBJPROP_YDISTANCE, mlbDownYD_R3 + MouseD_Y - mlbDownY3);
-
-         ObjectSetInteger(0, SLButton, OBJPROP_YDISTANCE, mlbDownYD_R5 + MouseD_Y - mlbDownY5);
-         ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_YDISTANCE, mlbDownYD_R3 + MouseD_Y - mlbDownY3);
-         ObjectSetInteger(0, TRNB, OBJPROP_YDISTANCE, (mlbDownYD_R3 + MouseD_Y - mlbDownY3) + 30);
-         ObjectSetInteger(0, POSNB, OBJPROP_YDISTANCE, (mlbDownYD_R3 + MouseD_Y - mlbDownY3) + 30);
-
-         ObjectSetInteger(0, SabioEntry, OBJPROP_YDISTANCE, mlbDownYD_R3 + MouseD_Y + 30 - mlbDownY5);
-         ObjectSetInteger(0, SabioSL, OBJPROP_YDISTANCE, mlbDownYD_R5 + MouseD_Y + 30 - mlbDownY5);
-
-         datetime dt_PRC = 0, dt_SL1 = 0, dt_TP1 = 0;
-         double price_PRC = 0, price_SL1 = 0, price_TP1 = 0;
-         int window = 0;
-
-         ChartXYToTimePrice(0, XD_EntryButton, YD_EntryButton + YS_EntryButton, window, dt_PRC, price_PRC);
-
-         ChartXYToTimePrice(0, XD_R5, YD_R5 + YS_R5, window, dt_SL1, price_SL1);
-
-         ObjectSetInteger(0, PR_HL, OBJPROP_TIME, dt_PRC);
-         ObjectSetDouble(0, PR_HL, OBJPROP_PRICE, price_PRC);
-
-         ObjectSetInteger(0, SL_HL, OBJPROP_TIME, dt_SL1);
-         ObjectSetDouble(0, SL_HL, OBJPROP_PRICE, price_SL1);
-         // 1 Quelle der Wahrheit: Text/Lot/Direction aus PR_HL & SL_HL ableiten
-         UI_UpdateBaseSignalTexts();
-        
-         ChartRedraw(0);
-        }
-
-      if(MouseState == 0)
-        {
-         bool wasMoving = (movingState_R3 || movingState_R5);
-         movingState_R3 = false;
-         movingState_R5 = false;
-         ChartSetInteger(0, CHART_MOUSE_SCROLL, true);
-         if(wasMoving)
-            g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
-        }
-      prevMouseState = MouseState;
+      // NEU: Button-Drag Controller (EntryButton/SLButton)
+      if(BaseButtons_OnMouseMove(MouseD_X, MouseD_Y, MouseState))
+         return;
+      // 2) NEU: Linien-Drag live synchronisieren (auch ohne OBJECT_DRAG)
+      const bool left_down = ((MouseState & 1) != 0);
+      BaseLines_LiveSyncFallback(left_down);
+      // nichts weiter im MouseMove nötig
+      return;
      }
+
+   /*
+
+      if(id == CHARTEVENT_MOUSE_MOVE)
+        {
+
+         int MouseD_X = (int)lparam;
+         int MouseD_Y = (int)dparam;
+
+         int MouseState = (int)StringToInteger(sparam);
+
+         // Fallback-Finalize: Wenn MT5 kein CHARTEVENT_OBJECT_CHANGE feuert,
+         // senden wir Discord + speichern beim MouseUp (state==0).
+         if(MouseState == 0 && g_tp_drag_active)
+            TP_FinalizeLineMove();
+         // MouseUp-Fallback für Basislinien (falls OBJECT_CHANGE ausbleibt)
+         BaseLines_FinalizeDragIfNeeded(MouseState);
+
+         int XD_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_XDISTANCE);
+         int YD_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_YDISTANCE);
+         int XS_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_XSIZE);
+         int YS_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_YSIZE);
+
+         int XD_R5 = (int)ObjectGetInteger(0, SLButton, OBJPROP_XDISTANCE);
+         int YD_R5 = (int)ObjectGetInteger(0, SLButton, OBJPROP_YDISTANCE);
+         int XS_R5 = (int)ObjectGetInteger(0, SLButton, OBJPROP_XSIZE);
+         int YS_R5 = (int)ObjectGetInteger(0, SLButton, OBJPROP_YSIZE);
+
+         if(prevMouseState == 0 && MouseState == 1)  // 1 = true: clicked left mouse btn
+           {
+
+            mlbDownX3 = MouseD_X;
+            mlbDownY3 = MouseD_Y;
+            mlbDownXD_R3 = XD_EntryButton;
+            mlbDownYD_R3 = YD_EntryButton;
+
+            mlbDownX5 = MouseD_X;
+            mlbDownY5 = MouseD_Y;
+            mlbDownXD_R5 = XD_R5;
+            mlbDownYD_R5 = YD_R5;
+
+            if(MouseD_X >= XD_EntryButton && MouseD_X <= XD_EntryButton + XS_EntryButton &&
+               MouseD_Y >= YD_EntryButton && MouseD_Y <= YD_EntryButton + YS_EntryButton)
+              {
+               movingState_R3 = true;
+              }
+
+            if(MouseD_X >= XD_R5 && MouseD_X <= XD_R5 + XS_R5 &&
+               MouseD_Y >= YD_R5 && MouseD_Y <= YD_R5 + YS_R5)
+              {
+               movingState_R5 = true;
+              }
+           }
+
+         if(movingState_R5)
+           {
+            ChartSetInteger(0, CHART_MOUSE_SCROLL, false);
+            //move SLButton und SabioSL
+            ObjectSetInteger(0, SLButton, OBJPROP_YDISTANCE, mlbDownYD_R5 + MouseD_Y - mlbDownY5);
+            ObjectSetInteger(0, SabioSL, OBJPROP_YDISTANCE, mlbDownYD_R5 + MouseD_Y + 30 - mlbDownY5);
+
+            datetime dt_SL = 0;
+            double price_SL = 0;
+            int window = 0;
+
+            ChartXYToTimePrice(0, XD_R5, YD_R5 + YS_R5, window, dt_SL, price_SL);
+            //Move SL HL LInie
+            ObjectSetInteger(0, SL_HL, OBJPROP_TIME, dt_SL);
+            ObjectSetDouble(0, SL_HL, OBJPROP_PRICE, price_SL);
+
+            // 1 Quelle der Wahrheit: Text/Lot/Direction aus PR_HL & SL_HL ableiten
+            UI_UpdateBaseSignalTexts();
+
+
+            datetime dt_TP = 0;
+            double price_TP = 0;
+
+
+            ChartRedraw(0);
+           }
+
+         if(movingState_R3)
+           {
+            ChartSetInteger(0, CHART_MOUSE_SCROLL, false);
+            ObjectSetInteger(0, EntryButton, OBJPROP_YDISTANCE, mlbDownYD_R3 + MouseD_Y - mlbDownY3);
+
+            ObjectSetInteger(0, SLButton, OBJPROP_YDISTANCE, mlbDownYD_R5 + MouseD_Y - mlbDownY5);
+            ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_YDISTANCE, mlbDownYD_R3 + MouseD_Y - mlbDownY3);
+            ObjectSetInteger(0, TRNB, OBJPROP_YDISTANCE, (mlbDownYD_R3 + MouseD_Y - mlbDownY3) + 30);
+            ObjectSetInteger(0, POSNB, OBJPROP_YDISTANCE, (mlbDownYD_R3 + MouseD_Y - mlbDownY3) + 30);
+
+            ObjectSetInteger(0, SabioEntry, OBJPROP_YDISTANCE, mlbDownYD_R3 + MouseD_Y + 30 - mlbDownY5);
+            ObjectSetInteger(0, SabioSL, OBJPROP_YDISTANCE, mlbDownYD_R5 + MouseD_Y + 30 - mlbDownY5);
+
+            datetime dt_PRC = 0, dt_SL1 = 0, dt_TP1 = 0;
+            double price_PRC = 0, price_SL1 = 0, price_TP1 = 0;
+            int window = 0;
+
+            ChartXYToTimePrice(0, XD_EntryButton, YD_EntryButton + YS_EntryButton, window, dt_PRC, price_PRC);
+
+            ChartXYToTimePrice(0, XD_R5, YD_R5 + YS_R5, window, dt_SL1, price_SL1);
+
+            ObjectSetInteger(0, PR_HL, OBJPROP_TIME, dt_PRC);
+            ObjectSetDouble(0, PR_HL, OBJPROP_PRICE, price_PRC);
+
+            ObjectSetInteger(0, SL_HL, OBJPROP_TIME, dt_SL1);
+            ObjectSetDouble(0, SL_HL, OBJPROP_PRICE, price_SL1);
+            // 1 Quelle der Wahrheit: Text/Lot/Direction aus PR_HL & SL_HL ableiten
+            UI_UpdateBaseSignalTexts();
+
+            ChartRedraw(0);
+           }
+
+         if(MouseState == 0)
+           {
+            bool wasMoving = (movingState_R3 || movingState_R5);
+            movingState_R3 = false;
+            movingState_R5 = false;
+            ChartSetInteger(0, CHART_MOUSE_SCROLL, true);
+            if(wasMoving)
+               g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
+           }
+         prevMouseState = MouseState;
+        }
+
+       */
    if(id == CHARTEVENT_CHART_CHANGE)
      {
       return;
@@ -455,6 +702,31 @@ bool UI_TradeHasAnyPendingPosition(const string direction, const int trade_no)
       return true;
      }
    return false;
+  }
+/**
+ * Beschreibung: Hält den Basis-Abstand (Delta = SL - Entry) aktuell, solange kein Drag läuft.
+ * Parameter:    none
+ * Rückgabewert: void
+ * Hinweise:     Wird nur im Idle aktualisiert (kein Linien-Drag, kein Button-Drag).
+ * Fehlerfälle:  UI_GetHLinePriceSafe loggt intern bei fehlenden Linien.
+ */
+void BaseLines_UpdateDeltaIfIdle()
+  {
+   if(!g_base_lock_distance)
+      return;
+
+// Während Drag niemals Delta "nachführen" (sonst geht das feste Delta verloren)
+   if(g_base_drag_active || g_base_btn_drag_active)
+      return;
+
+   double entry = 0.0, sl = 0.0;
+   if(!UI_GetHLinePriceSafe(PR_HL, entry) || !UI_GetHLinePriceSafe(SL_HL, sl))
+      return;
+
+   entry = UI_NormalizeToTick(entry);
+   sl    = UI_NormalizeToTick(sl);
+
+   g_base_lock_delta = (sl - entry);
   }
 
 //+------------------------------------------------------------------+
@@ -771,20 +1043,50 @@ void UI_SyncBaseButtonsToLines()
      {
       int ysize_sl_btn = (int)ObjectGetInteger(0, SLButton, OBJPROP_YSIZE);
 
-      if(ChartTimePriceToXY(0, 0, t, sl, x, y))
-        {
-         const int baseY = y - ysize_sl_btn;
+      bool did_set = false;
 
+      // 1) Wenn gerade SL_HL gezogen wird: UI direkt aus MouseY setzen (kein Springen)
+      if(g_base_drag_active && g_base_drag_name == SL_HL && g_base_drag_mouse_y >= 0)
+        {
+         const int baseY = g_base_drag_mouse_y - ysize_sl_btn;
          ObjectSetInteger(0, SLButton, OBJPROP_YDISTANCE, baseY);
 
          if(ObjectFind(0, SabioSL) >= 0)
             ObjectSetInteger(0, SabioSL, OBJPROP_YDISTANCE, baseY + 30);
+
+         did_set = true;
         }
-      else
+
+      // 2) Normalfall: aus Preis berechnen
+      if(!did_set)
         {
-         Print(__FUNCTION__, ": ChartTimePriceToXY failed for SL");
+         if(ChartTimePriceToXY(0, 0, t, sl, x, y))
+           {
+            const int baseY = y - ysize_sl_btn;
+            ObjectSetInteger(0, SLButton, OBJPROP_YDISTANCE, baseY);
+
+            if(ObjectFind(0, SabioSL) >= 0)
+               ObjectSetInteger(0, SabioSL, OBJPROP_YDISTANCE, baseY + 30);
+           }
+         else
+           {
+            // 3) Fallback: falls ChartTimePriceToXY während Drag fehlschlägt
+            if(g_base_drag_mouse_y >= 0)
+              {
+               const int baseY = g_base_drag_mouse_y - ysize_sl_btn;
+               ObjectSetInteger(0, SLButton, OBJPROP_YDISTANCE, baseY);
+
+               if(ObjectFind(0, SabioSL) >= 0)
+                  ObjectSetInteger(0, SabioSL, OBJPROP_YDISTANCE, baseY + 30);
+              }
+            else
+              {
+               Print(__FUNCTION__, ": ChartTimePriceToXY failed for SL");
+              }
+           }
         }
      }
+
   }
 
 
@@ -814,6 +1116,333 @@ void UI_OnBaseLinesChanged(const bool do_save)
       ChartRedraw(0);
       last_redraw_ms = now;
      }
+  }
+
+
+
+// ------------------------------------------------------------------
+// Neuer Basis-Drag-Ansatz (Entry/SL): Linie ist 1 Quelle der Wahrheit
+// - Button-Drag setzt nur den Preis der zugehörigen HLine
+// - UI (Buttons/Edits) folgt zentral über UI_OnBaseLinesChanged()
+// ------------------------------------------------------------------
+
+/**
+ * Beschreibung: Liefert die Chart-Höhe in Pixeln robust (0 bei Fehler).
+ * Parameter:    none
+ * Rückgabewert: int - Höhe in Pixeln (0 bei Fehler)
+ * Hinweise:     Wird für Clamp bei Drag verwendet.
+ * Fehlerfälle:  ChartGetInteger schlägt fehl -> Print + GetLastError
+ */
+int UI_GetChartHeightPx()
+  {
+   long h = 0;
+   ResetLastError();
+   if(!ChartGetInteger(0, CHART_HEIGHT_IN_PIXELS, 0, h))
+     {
+      Print(__FUNCTION__, ": ChartGetInteger(CHART_HEIGHT_IN_PIXELS) failed err=", GetLastError());
+      return 0;
+     }
+   return (int)h;
+  }
+
+/**
+ * Beschreibung: Normalisiert einen Preis auf TickSize und Digits (sauberes Snapping).
+ * Parameter:    price_raw - Rohpreis (z.B. aus ChartXYToTimePrice)
+ * Rückgabewert: double - auf Tick gerundeter Preis
+ * Hinweise:     SYMBOL_TRADE_TICK_SIZE wird bevorzugt, sonst _Point.
+ * Fehlerfälle:  keine (Fallback auf _Point)
+ */
+double UI_NormalizeToTick(const double price_raw)
+  {
+   double tick = 0.0;
+   if(!SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE, tick) || tick <= 0.0)
+      tick = _Point;
+
+   double snapped = MathRound(price_raw / tick) * tick;
+   return NormalizeDouble(snapped, _Digits);
+  }
+
+/**
+ * Beschreibung: Prüft, ob ein Mouse-Punkt innerhalb eines OBJ_BUTTON-Rechtecks liegt.
+ * Parameter:    obj_name - Objektname (Button)
+ *               mx,my    - Mauskoordinaten (Pixel)
+ *               out_xd   - Rückgabe XDISTANCE
+ *               out_yd   - Rückgabe YDISTANCE
+ *               out_xs   - Rückgabe XSIZE
+ *               out_ys   - Rückgabe YSIZE
+ * Rückgabewert: true, wenn innerhalb; sonst false
+ * Hinweise:     Liest Button-Props direkt aus dem Objektmodell.
+ * Fehlerfälle:  Objekt fehlt -> false (kein Print, um Logs nicht zu fluten)
+ */
+bool UI_PointInButtonRect(const string obj_name,
+                          const int mx, const int my,
+                          int &out_xd, int &out_yd, int &out_xs, int &out_ys)
+  {
+   if(ObjectFind(0, obj_name) < 0)
+      return false;
+
+   out_xd = (int)ObjectGetInteger(0, obj_name, OBJPROP_XDISTANCE);
+   out_yd = (int)ObjectGetInteger(0, obj_name, OBJPROP_YDISTANCE);
+   out_xs = (int)ObjectGetInteger(0, obj_name, OBJPROP_XSIZE);
+   out_ys = (int)ObjectGetInteger(0, obj_name, OBJPROP_YSIZE);
+
+   return (mx >= out_xd && mx <= (out_xd + out_xs) &&
+           my >= out_yd && my <= (out_yd + out_ys));
+  }
+
+/**
+ * Beschreibung: Setzt den Preis einer HLine robust (mit Fehlerlog).
+ * Parameter:    line_name - Objektname (z.B. PR_HL / SL_HL)
+ *               price     - Zielpreis (bereits normalisiert)
+ * Rückgabewert: true bei Erfolg, sonst false
+ * Hinweise:     Für OBJ_HLINE reicht OBJPROP_PRICE.
+ * Fehlerfälle:  Linie fehlt oder ObjectSetDouble scheitert -> Print + GetLastError
+ */
+bool UI_SetHLinePriceSafe(const string line_name, const double price)
+  {
+   if(ObjectFind(0, line_name) < 0)
+     {
+      Print(__FUNCTION__, ": line not found: ", line_name);
+      return false;
+     }
+
+   ResetLastError();
+   if(!ObjectSetDouble(0, line_name, OBJPROP_PRICE, price))
+     {
+      Print(__FUNCTION__, ": ObjectSetDouble failed for ", line_name, " err=", GetLastError());
+      return false;
+     }
+   return true;
+  }
+
+
+/**
+ * Beschreibung: Liest den Preis einer HLine robust.
+ * Parameter:    line_name - Objektname (PR_HL/SL_HL)
+ *               out_price - Rückgabe Preis
+ * Rückgabewert: true bei Erfolg, sonst false
+ * Hinweise:     Erwartet OBJ_HLINE.
+ * Fehlerfälle:  Linie fehlt -> Print; ObjectGetDouble liefert 0/Fehler -> Print
+ */
+bool UI_GetHLinePriceSafe(const string line_name, double &out_price)
+  {
+   if(ObjectFind(0, line_name) < 0)
+     {
+      Print(__FUNCTION__, ": line not found: ", line_name);
+      return false;
+     }
+
+   ResetLastError();
+   out_price = ObjectGetDouble(0, line_name, OBJPROP_PRICE);
+   int err = GetLastError();
+   if(err != 0)
+     {
+      Print(__FUNCTION__, ": ObjectGetDouble failed for ", line_name, " err=", err);
+      return false;
+     }
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void BaseButtons_BeginDrag(const string btn_name,
+                           const string line_name,
+                           const int mouse_y,
+                           const int btn_top_y,
+                           const int btn_ys)
+  {
+   g_base_btn_drag_active    = true;
+   g_base_btn_drag_btn_name  = btn_name;
+   g_base_btn_drag_line_name = line_name;
+
+   g_base_btn_drag_offset_y  = mouse_y - btn_top_y;
+   g_base_btn_drag_btn_ysize = btn_ys;
+
+
+// --- Delta nur dann neu aus Linien berechnen, wenn wir Entry ziehen ---
+   if(g_base_lock_distance && line_name == PR_HL)
+     {
+      double entry=0.0, sl=0.0;
+      if(UI_GetHLinePriceSafe(PR_HL, entry) && UI_GetHLinePriceSafe(SL_HL, sl))
+         g_base_lock_delta = (sl - entry); // SL - Entry
+      else
+         g_base_lock_delta = 0.0;
+     }
+
+   ChartSetInteger(0, CHART_MOUSE_SCROLL, false);
+  }
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool BaseButtons_UpdateDrag(const int mouse_y)
+  {
+   if(!g_base_btn_drag_active)
+      return false;
+
+   if(ObjectFind(0, g_base_btn_drag_btn_name) < 0)
+      return false;
+
+   int xd = (int)ObjectGetInteger(0, g_base_btn_drag_btn_name, OBJPROP_XDISTANCE);
+   int xs = (int)ObjectGetInteger(0, g_base_btn_drag_btn_name, OBJPROP_XSIZE);
+   int x_center = xd + (xs / 2);
+
+   int chart_h = UI_GetChartHeightPx();
+   if(chart_h <= 0)
+      return false;
+
+   int desired_top    = mouse_y - g_base_btn_drag_offset_y;
+   int desired_bottom = desired_top + g_base_btn_drag_btn_ysize;
+
+   if(desired_bottom < 0)
+      desired_bottom = 0;
+   if(desired_bottom > chart_h - 1)
+      desired_bottom = chart_h - 1;
+
+   datetime t = 0;
+   double price = 0.0;
+   int window = 0;
+
+   ResetLastError();
+   if(!ChartXYToTimePrice(0, x_center, desired_bottom, window, t, price))
+     {
+      static uint last_log_ms = 0;
+      uint now = GetTickCount();
+      if(now - last_log_ms > 500)
+        {
+         Print(__FUNCTION__, ": ChartXYToTimePrice failed err=", GetLastError());
+         last_log_ms = now;
+        }
+      return false;
+     }
+
+   price = UI_NormalizeToTick(price);
+
+// --- NEU: Regeln exakt wie gewünscht ---
+// 1) Entry-Drag: SL läuft mit (Abstand bleibt konstant während des Drags)
+// 2) SL-Drag: Entry bleibt stehen, SL bewegt sich alleine und setzt neuen Abstand (Delta)
+//    -> Delta wird live aktualisiert (SL - Entry), damit der nächste Entry-Drag dieses Delta nutzt.
+
+   if(g_base_lock_distance)
+     {
+      // Aktuellen Entry-Preis immer sauber lesen (Entry soll ggf. stehen bleiben)
+      double entry_cur = 0.0;
+      if(!UI_GetHLinePriceSafe(PR_HL, entry_cur))
+         return false;
+
+      if(g_base_btn_drag_line_name == PR_HL)
+        {
+         // --- FALL 1: Entry wird gezogen -> SL folgt mit konstantem Delta ---
+         double entry_new = price;
+         double sl_new    = UI_NormalizeToTick(entry_new + g_base_lock_delta);
+
+         if(!UI_SetHLinePriceSafe(PR_HL, entry_new))
+            return false;
+         if(!UI_SetHLinePriceSafe(SL_HL, sl_new))
+            return false;
+
+         // Delta bleibt während Entry-Drag konstant (nicht neu setzen!)
+        }
+      else
+         if(g_base_btn_drag_line_name == SL_HL)
+           {
+            // --- FALL 2: SL wird gezogen -> Entry bleibt stehen ---
+            double sl_new = price;
+
+            if(!UI_SetHLinePriceSafe(SL_HL, sl_new))
+               return false;
+
+            // Neues Delta (Abstand) wird durch SL-Drag bestimmt
+            g_base_lock_delta = (sl_new - entry_cur);
+           }
+         else
+           {
+            // Fallback: unbekannte Linie -> nur diese Linie setzen
+            if(!UI_SetHLinePriceSafe(g_base_btn_drag_line_name, price))
+               return false;
+           }
+     }
+   else
+     {
+      // Ungekoppelt: nur die gezogene Linie
+      if(!UI_SetHLinePriceSafe(g_base_btn_drag_line_name, price))
+         return false;
+     }
+
+
+// Zentral: UI folgt Linien (Buttons/Edits + Texte/Lot/Direction)
+   UI_OnBaseLinesChanged(false);
+   return true;
+  }
+
+/**
+ * Beschreibung: Beendet den Button-Drag und speichert final 1x (DB/Discord abhängig von eurem Flow).
+ * Parameter:    none
+ * Rückgabewert: void
+ * Hinweise:     Schaltet Chart-Scroll wieder an und triggert UI_OnBaseLinesChanged(true).
+ * Fehlerfälle:  keine
+ */
+void BaseButtons_EndDrag()
+  {
+   if(!g_base_btn_drag_active)
+      return;
+
+   g_base_btn_drag_active = false;
+
+   ChartSetInteger(0, CHART_MOUSE_SCROLL, true);
+
+// Final: 1x speichern + final redraw
+   UI_OnBaseLinesChanged(true);
+
+   g_base_btn_drag_btn_name   = "";
+   g_base_btn_drag_line_name  = "";
+   g_base_btn_drag_offset_y   = 0;
+   g_base_btn_drag_btn_ysize  = 0;
+  }
+
+/**
+ * Beschreibung: MouseMove-Controller: Start/Update/End Drag für EntryButton & SLButton.
+ * Parameter:    mx,my      - Mauskoordinaten
+ *               mouseState - Bitmaske aus sparam (MK_LBUTTON etc.)
+ * Rückgabewert: true, wenn Controller das Event „konsumiert“ (drag aktiv), sonst false
+ * Hinweise:     Nutzt Bit-Prüfung (robust auch mit SHIFT/CTRL gedrückt).
+ * Fehlerfälle:  keine (Objekt fehlt => kein Drag)
+ */
+bool BaseButtons_OnMouseMove(const int mx, const int my, const int mouseState)
+  {
+   const bool left_down = ((mouseState & 1) != 0); // 1 == MK_LBUTTON
+
+// Start Drag nur bei Flanke: vorher nicht gedrückt, jetzt gedrückt
+   if(!g_base_btn_drag_active && !g_base_btn_prev_left_down && left_down)
+     {
+      int xd, yd, xs, ys;
+
+      // EntryButton hat Priorität, falls sich Bereiche überlappen (normal nicht)
+      if(UI_PointInButtonRect(EntryButton, mx, my, xd, yd, xs, ys))
+        {
+         BaseButtons_BeginDrag(EntryButton, PR_HL, my, yd, ys);
+        }
+      else
+         if(UI_PointInButtonRect(SLButton, mx, my, xd, yd, xs, ys))
+           {
+            BaseButtons_BeginDrag(SLButton, SL_HL, my, yd, ys);
+           }
+     }
+
+// Update / End
+   if(g_base_btn_drag_active)
+     {
+      if(left_down)
+         BaseButtons_UpdateDrag(my);
+      else
+         BaseButtons_EndDrag();
+
+      g_base_btn_prev_left_down = left_down;
+      return true; // Drag aktiv => wir konsumieren MouseMove
+     }
+
+   g_base_btn_prev_left_down = left_down;
+   return false;
   }
 
 #endif // __EVENTHANDLER__
