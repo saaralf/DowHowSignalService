@@ -9,6 +9,16 @@
 
 #include "discord_client.mqh"
 #include "trade_manager.mqh"
+
+
+// ------------------------------
+// UI Layout (Right Anchor)
+// ------------------------------
+input int InpBaseUI_RightMarginPx = 30;   // Abstand von rechts (EntryButton-Rechte Kante)
+input int InpBaseUI_RightShiftPx  = 0;    // optional: gesamtes Paket weiter nach links (+) / rechts (-)
+
+
+
 // ------------------------------------------------------------------
 // TradePos-Drag Tracking (damit Discord nur 1x pro Drag gesendet wird)
 // Hinweis: Bei manchen MT5-Objekten kommt CHARTEVENT_OBJECT_CHANGE nicht
@@ -35,6 +45,61 @@ static bool   g_base_btn_prev_left_down = false;
 static int g_last_mouse_y = -1;
 
 
+// ---------------------------------------------------------
+// Base UI Right Anchor (relativ zum EntryButton)
+// ---------------------------------------------------------
+static bool g_base_anchor_inited = false;
+static int  g_base_ref_x         = 0;   // EntryButton XDISTANCE (Baseline)
+static int  g_base_ref_w         = 0;   // EntryButton XSIZE (Baseline)
+
+static int  g_dx_slbtn   = 0;
+static int  g_dx_send    = 0;
+static int  g_dx_trnb    = 0;
+static int  g_dx_posnb   = 0;
+static int  g_dx_sabEnt  = 0;
+static int  g_dx_sabSL   = 0;
+
+/**
+ * Beschreibung: Merkt die aktuellen X-Offsets der Base-UI relativ zum EntryButton.
+ * Parameter:    force - true: immer neu erfassen (z.B. nach Rebuild), false: nur beim ersten Mal
+ * Rückgabewert: bool - true wenn EntryButton vorhanden und Baseline gespeichert
+ * Hinweise:     Wir ändern hier nichts, wir speichern nur Offsets (Layout bleibt erhalten).
+ * Fehlerfälle:  EntryButton fehlt -> false (kein Anchor möglich)
+ */
+bool BaseUI_CaptureAnchorBaseline(const bool force)
+{
+   if(g_base_anchor_inited && !force)
+      return true;
+
+   if(ObjectFind(0, EntryButton) < 0)
+      return false;
+
+   g_base_ref_x = (int)ObjectGetInteger(0, EntryButton, OBJPROP_XDISTANCE);
+   g_base_ref_w = (int)ObjectGetInteger(0, EntryButton, OBJPROP_XSIZE);
+   if(g_base_ref_w <= 0) g_base_ref_w = 200; // Fallback
+
+   // relative Offsets (obj_x - entry_x)
+   if(ObjectFind(0, SLButton) >= 0)
+      g_dx_slbtn = (int)ObjectGetInteger(0, SLButton, OBJPROP_XDISTANCE) - g_base_ref_x;
+
+   if(ObjectFind(0, SENDTRADEBTN) >= 0)
+      g_dx_send = (int)ObjectGetInteger(0, SENDTRADEBTN, OBJPROP_XDISTANCE) - g_base_ref_x;
+
+   if(ObjectFind(0, TRNB) >= 0)
+      g_dx_trnb = (int)ObjectGetInteger(0, TRNB, OBJPROP_XDISTANCE) - g_base_ref_x;
+
+   if(ObjectFind(0, POSNB) >= 0)
+      g_dx_posnb = (int)ObjectGetInteger(0, POSNB, OBJPROP_XDISTANCE) - g_base_ref_x;
+
+   if(ObjectFind(0, SabioEntry) >= 0)
+      g_dx_sabEnt = (int)ObjectGetInteger(0, SabioEntry, OBJPROP_XDISTANCE) - g_base_ref_x;
+
+   if(ObjectFind(0, SabioSL) >= 0)
+      g_dx_sabSL = (int)ObjectGetInteger(0, SabioSL, OBJPROP_XDISTANCE) - g_base_ref_x;
+
+   g_base_anchor_inited = true;
+   return true;
+}
 
 // ------------------------------------------------------------------
 // BaseLine-Kopplung / Reentrancy-Guard
@@ -44,6 +109,24 @@ static bool   g_base_lock_distance = true;  // "PR_HL zieht SL_HL mit" aktiv
 static double g_base_lock_delta    = 0.0;   // SL - Entry (Preisdelta)
 // Mouse-Y Tracking für Live-UI während Linien-Drag (verhindert "Springen" bei SL_HL)
 static int    g_base_drag_mouse_y = -1;
+/**
+ * Beschreibung: Liefert die aktuelle Chart-Breite in Pixeln.
+ * Parameter:    none
+ * Rückgabewert: int - Breite in Pixeln (0 bei Fehler)
+ * Hinweise:     Wird für Right-Anchoring verwendet.
+ * Fehlerfälle:  ChartGetInteger schlägt fehl -> Print + GetLastError
+ */
+int UI_GetChartWidthPx()
+{
+   long w = 0;
+   ResetLastError();
+   if(!ChartGetInteger(0, CHART_WIDTH_IN_PIXELS, 0, w))
+   {
+      Print(__FUNCTION__, ": ChartGetInteger(CHART_WIDTH_IN_PIXELS) failed err=", GetLastError());
+      return 0;
+   }
+   return (int)w;
+}
 
 
 /**
@@ -79,7 +162,102 @@ void BaseLines_BeginDragIfNeeded(const string dragged_line)
 // laufender Drag
    g_base_drag_last_ms = GetTickCount();
   }
+  
 
+/**
+ * Beschreibung: Verankert die Base-UI an der rechten Chartkante.
+ * Parameter:    none
+ * Rückgabewert: void
+ * Hinweise:     Nur X wird gesetzt. Y kommt weiter aus UI_SyncBaseButtonsToLines().
+ * Fehlerfälle:  Chartbreite 0 oder EntryButton fehlt -> keine Aktion
+ */
+void BaseUI_ApplyRightAnchor()
+{
+   if(!BaseUI_CaptureAnchorBaseline(false))
+      return;
+
+   int w = UI_GetChartWidthPx();
+   if(w <= 0)
+      return;
+
+   int entry_w = (ObjectFind(0, EntryButton) >= 0)
+                 ? (int)ObjectGetInteger(0, EntryButton, OBJPROP_XSIZE)
+                 : g_base_ref_w;
+
+   if(entry_w <= 0) entry_w = g_base_ref_w;
+
+   int new_entry_x = w - InpBaseUI_RightMarginPx - entry_w - InpBaseUI_RightShiftPx;
+   if(new_entry_x < 0) new_entry_x = 0;
+
+   UI_SetObjectXClamped(EntryButton,   new_entry_x, w);
+   UI_SetObjectXClamped(SLButton,      new_entry_x + g_dx_slbtn,  w);
+   UI_SetObjectXClamped(SENDTRADEBTN,  new_entry_x + g_dx_send,   w);
+   UI_SetObjectXClamped(TRNB,          new_entry_x + g_dx_trnb,   w);
+   UI_SetObjectXClamped(POSNB,         new_entry_x + g_dx_posnb,  w);
+   UI_SetObjectXClamped(SabioEntry,    new_entry_x + g_dx_sabEnt, w);
+   UI_SetObjectXClamped(SabioSL,       new_entry_x + g_dx_sabSL,  w);
+}
+
+/**
+ * Beschreibung: Setzt das X (XDISTANCE) eines Objekts sicher (clamp an Chartbreite).
+ * Parameter:    name   - Objektname
+ *               x_left - gewünschte X-Position (linke Kante) in Pixel
+ *               chart_w- Chartbreite in Pixel
+ * Rückgabewert: void
+ * Hinweise:     Erzwingt CORNER_LEFT_UPPER.
+ * Fehlerfälle:  Objekt fehlt -> silent return
+ */
+void UI_SetObjectXClamped(const string name, const int x_left, const int chart_w)
+{
+   if(ObjectFind(0, name) < 0)
+      return;
+
+   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+
+   int xs = (int)ObjectGetInteger(0, name, OBJPROP_XSIZE);
+   if(xs < 0) xs = 0;
+
+   int xx = x_left;
+   if(xx < 0) xx = 0;
+   if(chart_w > 0 && xs > 0 && xx > (chart_w - xs)) xx = (chart_w - xs);
+   if(xx < 0) xx = 0;
+
+   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, xx);
+}
+
+/**
+ * Beschreibung: Verankert die Base-UI an der rechten Chartkante.
+ * Parameter:    none
+ * Rückgabewert: void
+ * Hinweise:     Nur X wird gesetzt.
+ * Fehlerfälle:  s.o.
+ */
+ /*
+void BaseUI_ApplyRightAnchor()
+{
+   if(!BaseUI_CaptureAnchorBaseline(false))
+      return;
+
+   int w = UI_GetChartWidthPx();
+   if(w <= 0)
+      return;
+
+   int entry_w = (ObjectFind(0, EntryButton) >= 0) ? (int)ObjectGetInteger(0, EntryButton, OBJPROP_XSIZE) : g_base_ref_w;
+   if(entry_w <= 0) entry_w = g_base_ref_w;
+
+   int new_entry_x = w - InpBaseUI_RightMarginPx - entry_w - InpBaseUI_RightShiftPx;
+   if(new_entry_x < 0) new_entry_x = 0;
+
+   UI_SetObjectXClamped(EntryButton, new_entry_x, w);
+
+   UI_SetObjectXClamped(SLButton,     new_entry_x + g_dx_slbtn,  w);
+   UI_SetObjectXClamped(SENDTRADEBTN, new_entry_x + g_dx_send,   w);
+   UI_SetObjectXClamped(TRNB,         new_entry_x + g_dx_trnb,   w);
+   UI_SetObjectXClamped(POSNB,        new_entry_x + g_dx_posnb,  w);
+   UI_SetObjectXClamped(SabioEntry,   new_entry_x + g_dx_sabEnt, w);
+   UI_SetObjectXClamped(SabioSL,      new_entry_x + g_dx_sabSL,  w);
+}
+/*
 /**
  * Beschreibung: Wendet die gewünschte Linien-Drag-Regel an:
  *               - PR_HL-Drag: SL_HL folgt mit konstantem Delta
@@ -683,10 +861,14 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
         }
 
        */
-   if(id == CHARTEVENT_CHART_CHANGE)
-     {
-      return;
-     }
+  if(id == CHARTEVENT_CHART_CHANGE)
+{
+   // Bei Resize/Zoom: X rechts verankern + Y neu syncen (Skalierung ändert sich)
+   BaseUI_ApplyRightAnchor();
+   UI_OnBaseLinesChanged(false);   // nur UI, kein Save/Discord
+   return;
+}
+
 
 // Klick Button Send only
 //+------------------------------------------------------------------+
