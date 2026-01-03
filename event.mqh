@@ -269,53 +269,99 @@ void TP_FinalizeLineMove()
    g_tp_drag_last     = 0.0;
    g_tp_drag_last_ms  = 0;
   }
-
 /**
- * Beschreibung: Live-Fallback für Basislinien-Drag, falls CHARTEVENT_OBJECT_DRAG nicht zuverlässig feuert.
+ * Beschreibung: Live-Fallback für Basislinien-Drag (PR_HL/SL_HL), ohne Umschalten wenn beide selected sind.
  * Parameter:    left_down - true wenn linke Maustaste gedrückt ist
  * Rückgabewert: void
- * Hinweise:     Erkennt Drag über "Linie ist selected + LMB down".
- * Fehlerfälle:  Keine harten Fehler; UI_Get/Set loggt intern.
+ * Hinweise:     1) Wenn g_base_drag_active aktiv ist, wird NIE umgeschaltet (kein SL->PR "Hijack").
+ *               2) Wenn beide Linien selected sind, wird die Linie gewählt, die näher an der Maus-Y liegt.
+ *               3) Nur aktiv, wenn Maus nahe genug an der Linie ist (Threshold), sonst kein "Geister-Drag".
+ * Fehlerfälle:  ChartTimePriceToXY kann fehlschlagen -> dann wird nichts erzwungen (sicherer als Springen).
  */
 void BaseLines_LiveSyncFallback(const bool left_down)
-  {
+{
    if(!left_down)
       return;
 
-// Wenn gerade Button-Drag läuft, nicht dazwischen funken
+   // Button-Drag hat Vorrang
    if(g_base_btn_drag_active)
       return;
 
-// Welche Basislinie ist gerade selektiert? (MT5 setzt das i.d.R. beim Drag)
+   // Während programmgesteuertem Sync niemals eingreifen
+   if(g_base_sync_guard)
+      return;
+
+   // -------------------------------------------------------------
+   // 1) WICHTIG: Wenn Base-Drag bereits aktiv ist -> NICHT umschalten!
+   //    (genau das verursacht "SL springt auf Entry und zurück", wenn beide selected sind)
+   // -------------------------------------------------------------
+   if(g_base_drag_active && (g_base_drag_name == PR_HL || g_base_drag_name == SL_HL))
+   {
+      // MouseY pflegen (für SLButton-MouseY-Fallback in UI_SyncBaseButtonsToLines)
+      g_base_drag_mouse_y = (g_last_mouse_y >= 0 ? g_last_mouse_y : 0);
+
+      BaseLines_ApplyCoupling(g_base_drag_name, false);
+      UI_OnBaseLinesChanged(false);
+      return;
+   }
+
+   // -------------------------------------------------------------
+   // 2) Kein Base-Drag aktiv: Nur dann versuchen wir anhand selection zu starten
+   // -------------------------------------------------------------
    bool pr_sel = (ObjectFind(0, PR_HL) >= 0 && ObjectGetInteger(0, PR_HL, OBJPROP_SELECTED) != 0);
    bool sl_sel = (ObjectFind(0, SL_HL) >= 0 && ObjectGetInteger(0, SL_HL, OBJPROP_SELECTED) != 0);
 
-   if(pr_sel)
-     {
-      // Drag PR_HL -> SL muss folgen
-      g_base_drag_active = true;
-      g_base_drag_name   = PR_HL;
-      // MouseY auch im Fallback pflegen
-      g_base_drag_mouse_y = (g_last_mouse_y >= 0 ? g_last_mouse_y : 0);
-
-      BaseLines_ApplyCoupling(PR_HL, false);
-      UI_OnBaseLinesChanged(false);
+   if(!pr_sel && !sl_sel)
       return;
-     }
 
-   if(sl_sel)
-     {
-      // Drag SL_HL -> Entry bleibt stehen, Delta wird neu
-      g_base_drag_active = true;
-      g_base_drag_name   = SL_HL;
-      // MouseY auch im Fallback pflegen
-      g_base_drag_mouse_y = UI_GetMouseYPxSafe(0.0); // dparam nicht vorhanden -> Chart-MouseY
+   // Wir reagieren nur, wenn die Maus wirklich nahe an der Linie ist
+   const int THRESH_PX = 12;
+   const int my = (g_last_mouse_y >= 0 ? g_last_mouse_y : 0);
 
-      BaseLines_ApplyCoupling(SL_HL, false);
-      UI_OnBaseLinesChanged(false);
+   double entry = 0.0, sl = 0.0;
+   if(!UI_GetHLinePriceSafe(PR_HL, entry) || !UI_GetHLinePriceSafe(SL_HL, sl))
       return;
-     }
-  }
+
+   // y-Positionen der Linien berechnen, um "welche Linie wird gerade gezogen?" sauber zu entscheiden
+   datetime t = TimeCurrent();
+   int x = 0, y_pr = 0, y_sl = 0;
+
+   bool ok_pr = ChartTimePriceToXY(0, 0, t, entry, x, y_pr);
+   bool ok_sl = ChartTimePriceToXY(0, 0, t, sl,    x, y_sl);
+
+   if(!ok_pr && !ok_sl)
+      return;
+
+   int d_pr = (ok_pr ? (int)MathAbs(my - y_pr) : 999999);
+   int d_sl = (ok_sl ? (int)MathAbs(my - y_sl) : 999999);
+
+   // Wenn Maus nicht nahe genug an irgendeiner Linie ist -> kein Fallback-Drag starten
+   if(MathMin(d_pr, d_sl) > THRESH_PX)
+      return;
+
+   // Linie wählen:
+   string chosen = "";
+
+   if(pr_sel && !sl_sel)
+      chosen = PR_HL;
+   else if(sl_sel && !pr_sel)
+      chosen = SL_HL;
+   else
+   {
+      // beide selected: wähle die nähere Linie zur Maus
+      // Default bei Gleichstand: SL (sicherer, weil SL frei sein soll)
+      chosen = (d_sl <= d_pr ? SL_HL : PR_HL);
+   }
+
+   // Drag starten/tracken (Delta wird bei PR_HL korrekt eingefroren)
+   BaseLines_BeginDragIfNeeded(chosen);
+
+   // MouseY für live UI
+   g_base_drag_mouse_y = my;
+
+   BaseLines_ApplyCoupling(chosen, false);
+   UI_OnBaseLinesChanged(false);
+}
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -330,6 +376,21 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
 
 // NEU: Delta im Idle aktuell halten
    BaseLines_UpdateDeltaIfIdle();
+   /**
+    * Beschreibung: Merkt den letzten Klick auf PR_HL/SL_HL, damit Live-Fallback beim Drag die richtige Linie wählt.
+    * Parameter:    id/lparam/dparam/sparam - Standard OnChartEvent Parameter
+    * Rückgabewert: void
+    * Hinweise:     Fix gegen "SL wird gezogen, aber PR-Branch greift -> SL springt zurück".
+    * Fehlerfälle:  keine
+    */
+   if(id == CHARTEVENT_OBJECT_CLICK)
+     {
+      if(sparam == PR_HL || sparam == SL_HL)
+        {
+         g_base_last_clicked_line = sparam;
+         // Kein return: Click kann zusätzlich für andere Logik relevant sein
+        }
+     }
 
    if(UI_TradesPanel_OnChartEvent(id, lparam, dparam, sparam))
       return;
@@ -392,6 +453,9 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
       // --- Basislinien (PR_HL / SL_HL): UI live nachziehen
       if(sparam == PR_HL || sparam == SL_HL)
         {
+        
+        g_base_last_clicked_line = sparam;
+
          // Live-MouseY merken, damit Buttons sofort mitlaufen (auch wenn ChartTimePriceToXY spinnt)
          g_base_drag_mouse_y = UI_GetMouseYPxSafe(dparam);
          // Programmgesteuerte Änderungen (z.B. SL folgt) ignorieren, sonst Rekursion/Flackern
@@ -399,6 +463,12 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
             return;
 
          BaseLines_BeginDragIfNeeded(sparam);
+         static string last_dbg = "";
+         if(last_dbg != sparam)
+           {
+            Print("BASE DRAG START: ", sparam, " last_click=", g_base_last_clicked_line);
+            last_dbg = sparam;
+           }
 
          // Live die gewünschte Kopplung anwenden:
          // PR_HL-Drag -> SL folgt; SL_HL-Drag -> Entry bleibt, Delta wird neu
@@ -436,7 +506,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
          // Final: Kopplung + Delta sauber setzen
          BaseLines_ApplyCoupling(sparam, true);
 
-         g_base_drag_active  = false;
+
          g_base_drag_name    = "";
          g_base_drag_last_ms = 0;
          g_base_drag_mouse_y = -1;
@@ -1444,5 +1514,9 @@ bool BaseButtons_OnMouseMove(const int mx, const int my, const int mouseState)
    g_base_btn_prev_left_down = left_down;
    return false;
   }
+
+
+// Merkt, welche Basislinie der User zuletzt angeklickt hat (wichtig, wenn beide "selected" sind)
+static string g_base_last_clicked_line = "";
 
 #endif // __EVENTHANDLER__
