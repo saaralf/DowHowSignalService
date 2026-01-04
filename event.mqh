@@ -6,6 +6,9 @@
 #ifndef __EVENTHANDLER__
 #define __EVENTHANDLER__
 
+#include "CSendButtonController.mqh"
+#include "CTradePosLineDragController.mqh"
+#include "CChartEventRouter.mqh"
 
 #include "discord_client.mqh"
 #include "trade_manager.mqh"
@@ -698,6 +701,11 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
                   const string &sparam) // Parameter des Ereignisses des Typs string, name of the object, state
   {
 
+// Router zuerst: wenn verarbeitet -> return
+   if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
+      return;
+
+
 // Panel zuerst (damit es seine Buttons/Rows sauber abfangen kann)
    if(g_tp.OnChartEvent(id, lparam, dparam, sparam))
       return;
@@ -721,25 +729,8 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
    if(id == CHARTEVENT_OBJECT_CLICK)
      {
 
-      // SEND button: nur auf echten Klick reagieren (kein State-Polling)
-      if(sparam == SENDTRADEBTN)
-        {
-         // Button-State zurücksetzen, damit kein "stuck pressed" bleibt
-         UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_STATE, 0);
-
-         if(Sabioedit == true)
-           {
-            int result = MessageBox("Sabio Preise angepasst?", NULL, MB_YESNO);
-            if(result == IDYES)
-               DiscordSend();
-           }
-         else
-           {
-            DiscordSend();
-           }
+      if(g_send_ctl.OnObjectClick(sparam))
          return;
-        }
-
 
       if(sparam == PR_HL || sparam == SL_HL)
         {
@@ -757,84 +748,21 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
 // --- Trade-Pos-Linien: Tag live nachziehen (DRAG), Discord/DB genau 1x pro Drag (Finalize)
    if(id == CHARTEVENT_OBJECT_DRAG)
      {
-      string direction, kind;
-      int trade_no, pos_no;
 
-      // Nur Entry/SL der TradePos-Linien tracken
-      if(UI_ParseTradePosFromName(sparam, direction, trade_no, pos_no, kind) && (kind == "entry" || kind == "sl"))
-        {
-         const double cur_price = ObjectGetDouble(0, sparam, OBJPROP_PRICE);
 
-         // Drag-Start (neues Objekt oder vorher nicht aktiv)
-         if(!g_tp_drag_active || g_tp_drag_name != sparam)
-           {
-            g_tp_drag_active   = true;
-            g_tp_drag_name     = sparam;
-            g_tp_drag_dir      = direction;
-            g_tp_drag_kind     = kind;
-            g_tp_drag_trade_no = trade_no;
-            g_tp_drag_pos_no   = pos_no;
-            g_tp_drag_last_ms  = GetTickCount();
-            g_tp_drag_last     = cur_price;
-
-            // old aus DB holen (falls vorhanden), sonst erstes Drag-Price als Fallback
-            g_tp_drag_old = 0.0;
-            DB_PositionRow row;
-            if(g_DB.GetPosition(_Symbol, (ENUM_TIMEFRAMES)_Period, direction, trade_no, pos_no, row))
-               g_tp_drag_old = (kind == "entry") ? row.entry : row.sl;
-            if(g_tp_drag_old <= 0.0)
-               g_tp_drag_old = cur_price;
-           }
-         else
-           {
-            // laufender Drag
-            g_tp_drag_last_ms = GetTickCount();
-            g_tp_drag_last    = cur_price;
-           }
-
-         // Tag live nachziehen
-         UI_CreateOrUpdateLineTag(sparam);
-
-         static uint last_redraw = 0;
-         uint now = GetTickCount();
-         if(now - last_redraw > 50)   // ~20 FPS
-           {
-            UI_RequestRedraw();
-            last_redraw = now;
-           }
-
-         return; // TradePos-Drag fertig behandelt
-        }
-      // --- Basislinien (PR_HL / SL_HL): UI live nachziehen
+      // 1) TradePos Entry/SL Linien (pro Trade/Pos)
+      if(g_tp_drag.OnObjectDrag(sparam))
+         return;
+#ifdef PR_HL
+#ifdef SL_HL
       if(sparam == PR_HL || sparam == SL_HL)
         {
-
-         g_base_last_clicked_line = sparam;
-
-         // WICHTIG: Bei OBJECT_DRAG ist dparam bei HLINE/MT5 oft ein PREIS (Forex ~1.xxx).
-         // Daher primär auf die echte MouseMove-Y zurückgreifen.
-         g_base_drag_mouse_y = (g_last_mouse_y >= 0 ? g_last_mouse_y : UI_GetMouseYPxSafe(dparam));
-
-         // Programmgesteuerte Änderungen (z.B. SL folgt) ignorieren, sonst Rekursion/Flackern
-         if(g_base_sync_guard)
+         // Klassen-Handler
+         if(g_BaseLines.OnObjectDrag(sparam, dparam))
             return;
-
-         BaseLines_BeginDragIfNeeded(sparam);
-         static string last_dbg = "";
-         if(last_dbg != sparam)
-           {
-            Print("BASE DRAG START: ", sparam, " last_click=", g_base_last_clicked_line);
-            last_dbg = sparam;
-           }
-
-         // Live die gewünschte Kopplung anwenden:
-         // PR_HL-Drag -> SL folgt; SL_HL-Drag -> Entry bleibt, Delta wird neu
-         BaseLines_ApplyCoupling(sparam, false);
-
-         // UI live nachziehen (Buttons/Edits/Texte), aber NICHT speichern
-         UI_OnBaseLinesChanged(false);
-         return;
         }
+#endif
+#endif
 
       // sonstige Trade-Linien (z.B. TP): nur Tag live
       if(UI_IsTradePosLine(sparam))
@@ -846,32 +774,18 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
 
    if(id == CHARTEVENT_OBJECT_CHANGE)
      {
-      // Wenn MT5 CHANGE liefert: finalize sofort (Discord + DB)
-      if(g_tp_drag_active && sparam == g_tp_drag_name)
-        {
-         g_tp_drag_last = ObjectGetDouble(0, sparam, OBJPROP_PRICE);
-         TP_FinalizeLineMove();
+      if(g_tp_drag.OnObjectChange(sparam))
          return;
-        }
 
+#ifdef PR_HL
+#ifdef SL_HL
       if(sparam == PR_HL || sparam == SL_HL)
         {
-         // Programmgesteuerte CHANGE-Events ignorieren
-         if(g_base_sync_guard)
+         if(g_BaseLines.OnObjectChange(sparam))
             return;
-
-         // Final: Kopplung + Delta sauber setzen
-         BaseLines_ApplyCoupling(sparam, true);
-
-
-         g_base_drag_name    = "";
-         g_base_drag_last_ms = 0;
-         g_base_drag_mouse_y = -1;
-
-         // Final speichern
-         UI_OnBaseLinesChanged(true);
-         return;
         }
+#endif
+#endif
 
 
       // Trade-Linien: wie gehabt
@@ -891,36 +805,56 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
    SL_Price = Get_Price_d(SL_HL);
 
    if(id == CHARTEVENT_MOUSE_MOVE)
+
      {
-      int MouseD_X = (int)lparam;
-      int MouseD_Y = (int)dparam;
-      g_last_mouse_y = MouseD_Y; // NEU: Fallback für Linien-Drag / OBJECT_DRAG
+      const int mx = (int)lparam;
+      const int my = (int)dparam;
+      const int MouseState = (int)sparam;
 
-      int MouseState = (int)StringToInteger(sparam);
+      g_last_mouse_y = my;          // bleibt für anderes Zeug erhalten
+      g_BaseLines.SetLastMouseY(my);
 
-      // bestehend: TradePos-Fallback finalize
-      if(MouseState == 0 && g_tp_drag_active)
-         TP_FinalizeLineMove();
-
-      // bestehend: BaseLines MouseUp-Fallback (für Linien-Drag)
-      BaseLines_FinalizeDragIfNeeded(MouseState);
-
-      // NEU: Button-Drag Controller (EntryButton/SLButton)
-      if(BaseButtons_OnMouseMove(MouseD_X, MouseD_Y, MouseState))
+      // 1) Button-Drag (Entry/SL) hat Priorität
+      if(g_BaseBtnDrag.OnMouseMove(mx, my, MouseState))
          return;
-      // 2) NEU: Linien-Drag live synchronisieren (auch ohne OBJECT_DRAG)
-      const bool left_down = ((MouseState & 1) != 0);
-      BaseLines_LiveSyncFallback(left_down);
-      // nichts weiter im MouseMove nötig
+
+      // 2) HLine-Fallback/Finalize (nur wenn Button-Drag NICHT aktiv)
+      g_BaseLines.OnMouseMove(mx, my, MouseState, g_BaseBtnDrag.IsDragging());
       return;
      }
+   /*
+       {
+        int MouseD_X = (int)lparam;
+        int MouseD_Y = (int)dparam;
+        g_last_mouse_y = MouseD_Y; // NEU: Fallback für Linien-Drag / OBJECT_DRAG
 
+        int MouseState = (int)StringToInteger(sparam);
+
+        // MouseUp-Fallback finalize für TradePos Drag
+        g_tp_drag.OnMouseMoveFinalizeIfNeeded(MouseState);
+
+        // bestehend: BaseLines MouseUp-Fallback (für Linien-Drag)
+        BaseLines_FinalizeDragIfNeeded(MouseState);
+
+        // NEU: Button-Drag Controller (EntryButton/SLButton)
+        if(BaseButtons_OnMouseMove(MouseD_X, MouseD_Y, MouseState))
+           return;
+        // 2) NEU: Linien-Drag live synchronisieren (auch ohne OBJECT_DRAG)
+        const bool left_down = ((MouseState & 1) != 0);
+        BaseLines_LiveSyncFallback(left_down);
+        // nichts weiter im MouseMove nötig
+        return;
+       }
+   */
 
    if(id == CHARTEVENT_CHART_CHANGE)
      {
-      // Bei Resize/Zoom: X rechts verankern + Y neu syncen (Skalierung ändert sich)
-      BaseUI_ApplyRightAnchor();
-      UI_OnBaseLinesChanged(false);   // nur UI, kein Save/Discord
+      // Right Anchor neu anwenden
+      g_BaseLines.ApplyRightAnchor();
+
+      // Optional: UI sync (ohne Save)
+      UI_OnBaseLinesChanged(false);
+
       return;
      }
 
@@ -953,7 +887,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
 
 // Zentraler, gedrosselter Redraw (statt vieler ChartRedraw-Aufrufe)
    UI_ProcessRedraw();
-g_tp.ProcessRebuild();
+   g_tp.ProcessRebuild();
 
   } // Ende ChartEvent
 
@@ -1303,14 +1237,12 @@ void UI_SyncBaseButtonsToLines()
       bool did_set = false;
 
       // 1) Wenn gerade SL_HL gezogen wird: UI direkt aus MouseY setzen (kein Springen)
-      if(g_base_drag_active && g_base_drag_name == SL_HL && g_base_drag_mouse_y >= 0)
+      if(g_BaseLines.IsDraggingSL() && g_BaseLines.GetDragMouseY() >= 0)
         {
-         const int baseY = g_base_drag_mouse_y - ysize_sl_btn;
+         const int baseY = g_BaseLines.GetDragMouseY() - ysize_sl_btn;
          UI_ObjSetIntSafe(0, SLButton, OBJPROP_YDISTANCE, baseY);
-
          if(ObjectFind(0, SabioSL) >= 0)
             UI_ObjSetIntSafe(0, SabioSL, OBJPROP_YDISTANCE, baseY + 30);
-
          did_set = true;
         }
 

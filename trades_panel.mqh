@@ -183,8 +183,7 @@ bool TP_CreateLabel(const string name, const int x, const int y, const int w, co
    // Text
    ObjectSetString(0, name, OBJPROP_TEXT, txt);
 
-   // Standard-Style (Farbe setzen wir im Rebuild gezielt)
-   UI_ObjSetIntSafe(0, name, OBJPROP_COLOR, clrWhite);
+
    UI_ObjSetIntSafe(0, name, OBJPROP_SELECTABLE, false);
 
    // Ganz nach vorne, damit nichts drüber liegt
