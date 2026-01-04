@@ -303,77 +303,7 @@ void CreateLabelsShort()
   }
 
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void DeleteLinesandLabelsLong()
-  {
-// löscht alle Objekte, die zu LONG-Trade-Linien/Labels gehören (inkl. _1.._4)
-   string prefixes[] = {SL_Long, Entry_Long, LabelSLLong, LabelEntryLong};
-   int total = ObjectsTotal(0, -1, -1);
-   for(int i = total - 1; i >= 0; i--)
-     {
-      string name = ObjectName(0, i, -1, -1);
-      for(int p = 0; p < ArraySize(prefixes); p++)
-        {
-         if(StringFind(name, prefixes[p]) == 0)
-           {
-            UI_Reg_DeleteOne(name);
 
-            break;
-           }
-        }
-     }
-  }
-
-// ============================================================================
-// "Putzkommando": löscht ALLE Trade/Pos-Linien, die nach deinem Schema heißen:
-//   Entry_Long_<trade>_<pos>  (+ optional _TAG)
-//   SL_Long_<trade>_<pos>     (+ optional _TAG)
-//   Entry_Short_<trade>_<pos> (+ optional _TAG)
-//   SL_Short_<trade>_<pos>    (+ optional _TAG)
-//
-// Wichtig: löscht NICHT PR_HL / SL_HL (Basislinien) – nur die suf-Linien.
-// Rückgabe: Anzahl gelöschter Objekte.
-// ============================================================================
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-int UI_DeleteAllTradePosLinesByScan()
-  {
-// Prefixe exakt so, dass nur suf-Objekte getroffen werden (weil suf mit "_" beginnt)
-   string p1 = Entry_Long + "_";
-   string p2 = SL_Long + "_";
-   string p3 = Entry_Short + "_";
-   string p4 = SL_Short + "_";
-
-   int deleted = 0;
-
-// sub_window = -1 => alle Subwindows, type = -1 => alle Typen
-   int total = ObjectsTotal(0, -1, -1);
-
-   for(int i = total - 1; i >= 0; i--)
-     {
-      string name = ObjectName(0, i, -1, -1);
-      if(name == "")
-         continue;
-
-      bool match =
-         (StringFind(name, p1, 0) == 0) ||
-         (StringFind(name, p2, 0) == 0) ||
-         (StringFind(name, p3, 0) == 0) ||
-         (StringFind(name, p4, 0) == 0);
-
-      if(match)
-        {
-         if(UI_Reg_DeleteOne(name))
-            deleted++;
-        }
-     }
-
-   return deleted;
-  }
 
 //+------------------------------------------------------------------+
 //| Create Trading Button                                                                 |
@@ -636,62 +566,6 @@ int UI_GetOverviewTopY()
    return y_max + 10; // Abstand nach unten
   }
 
-// Positioniert BG + Labels konsistent unter den Cancel-Buttons.
-void UI_PositionOverviewPanel()
-  {
-   if(ObjectFind(0, TA_OVERVIEW_BG) < 0)
-      return;
-
-// an Cancel-Buttons ausrichten
-   int panel_x = 100; // wie Cancel-Buttons
-   int panel_y = UI_GetOverviewTopY();
-   int panel_w = 330; // 150 + 30 + 150
-   int panel_h = 220; // wird später ggf. dynamisch angepasst
-
-
-   UI_ObjSetIntSafe(0,TA_OVERVIEW_BG, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-   UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_XDISTANCE, panel_x);
-   UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_YDISTANCE, panel_y);
-   UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_XSIZE, panel_w);
-   UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_YSIZE, panel_h);
-   /*
-      UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-      UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_XDISTANCE, panel_x);
-      UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_YDISTANCE, panel_y);
-      UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_XSIZE, panel_w);
-      UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_YSIZE, panel_h);
-   */
-// Header (TA_OVERVIEW_TXT)
-   if(ObjectFind(0, TA_OVERVIEW_TXT) >= 0)
-     {
-      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT, OBJPROP_XDISTANCE, panel_x + 8);
-      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT, OBJPROP_YDISTANCE, panel_y + 6);
-     }
-
-// Zwei Spalten
-   int padding = 8;
-   int gap = 10;
-   int col_w = (panel_w - padding * 2 - gap) / 2;
-   int x_long = panel_x + padding;
-   int x_short = panel_x + padding + col_w + gap;
-   int y_text = panel_y + 24;
-
-   if(ObjectFind(0, TA_OVERVIEW_TXT_LONG) >= 0)
-     {
-      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT_LONG, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT_LONG, OBJPROP_XDISTANCE, x_long);
-      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT_LONG, OBJPROP_YDISTANCE, y_text);
-     }
-
-   if(ObjectFind(0, TA_OVERVIEW_TXT_SHORT) >= 0)
-     {
-      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT_SHORT, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT_SHORT, OBJPROP_XDISTANCE, x_short);
-      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT_SHORT, OBJPROP_YDISTANCE, y_text);
-     }
-  }
-
 // --------- Globale Wrapper (einfach in OnInit/OnTick/OnDeinit nutzbar) ----------
 
 bool g_TA_TradeListsCreated = false;
@@ -712,43 +586,8 @@ int UI_TradeLists_TopY()
    return UI_GetOverviewTopY() + 10;
   }
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-int UI_TradeLists_Height()
-  {
-   int ch = (int)ChartGetInteger(0, CHART_HEIGHT_IN_PIXELS, 0);
-   int y = UI_TradeLists_TopY();
-   int h = ch - y - 10;
 
-   if(h < 160)
-      h = 160;
-   if(h > 360)
-      h = 360;
-   return h;
-  }
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void UI_TradeLists_Deinit(const int reason)
-  {
-   if(!g_TA_TradeListsCreated)
-      return;
-
-   g_TA_TradeListsCreated = false;
-  }
-
-// optional: in OnTick aufrufen (throttled)
-void UI_TradeLists_AutoRefresh()
-  {
-   static uint last_ms = 0;
-   uint now_ms = GetTickCount();
-   if(now_ms - last_ms < 1500)
-      return;
-
-   last_ms = now_ms;
-  }
 
 
 

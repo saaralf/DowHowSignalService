@@ -845,37 +845,6 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
 
 
 
-
-// Prüft, ob innerhalb einer Trade-Nummer (und Richtung) noch irgendeine pending Position existiert.
-// (falls nein -> Trade ist "zu" und darf nicht mehr als aktiv gelten)
-bool UI_TradeHasAnyPendingPosition(const string direction, const int trade_no)
-  {
-   DB_PositionRow rows[];
-   int n = g_DB.LoadPositions(_Symbol, _Period, rows);
-
-   for(int i = 0; i < n; i++)
-     {
-      if(rows[i].direction != direction)
-         continue;
-      if(rows[i].trade_no   != trade_no)
-         continue;
-
-      // Nur echte/gesendete Positionen berücksichtigen
-      if(rows[i].was_sent   != 1)
-         continue;
-
-      // Pending/offen?
-      if(rows[i].is_pending != 1)
-         continue;
-
-      // Alles was mit "CLOSED" beginnt, ist zu
-      if(StringFind(rows[i].status, "CLOSED", 0) == 0)
-         continue;
-
-      return true;
-     }
-   return false;
-  }
 /**
  * Beschreibung: Hält den Basis-Abstand (Delta = SL - Entry) aktuell, solange kein Drag läuft.
  * Parameter:    none

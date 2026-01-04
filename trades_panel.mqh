@@ -267,41 +267,6 @@ void showCancel_short(bool show)
 
 
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void UI_TradesPanel_Destroy()
-  {
-
-   Del_TP_CreateRectBG(TP_BG);
-
-   UI_Reg_DeleteOne(TP_BG);
-
-   UI_Reg_DeleteOne(TP_LBL_LONG);
-   UI_Reg_DeleteOne(TP_LBL_SHORT);
-   UI_Reg_DeleteOne(TP_BTN_ACTIVE_LONG);
-   UI_Reg_DeleteOne(TP_BTN_ACTIVE_SHORT);
-   UI_Reg_DeleteOne(TP_BTN_CANCEL_LONG);
-   UI_Reg_DeleteOne(TP_BTN_CANCEL_SHORT);
-
-   TP_DeleteByPrefix(TP_ROW_LONG_TR_PREFIX);
-   TP_DeleteByPrefix(TP_ROW_SHORT_TR_PREFIX);
-
-   TP_DeleteByPrefix(TP_ROW_LONG_TR_Cancel_PREFIX);
-   TP_DeleteByPrefix(TP_ROW_SHORT_TR_Cancel_PREFIX);
-
-   TP_DeleteByPrefix(TP_ROW_LONG_PREFIX);
-   TP_DeleteByPrefix(TP_ROW_SHORT_PREFIX);
-
-   TP_DeleteByPrefix(TP_ROW_LONG_Cancel_PREFIX);
-   TP_DeleteByPrefix(TP_ROW_SHORT_Cancel_PREFIX);
-
-   TP_DeleteByPrefix(TP_ROW_LONG_hitSL_PREFIX);
-   TP_DeleteByPrefix(TP_ROW_SHORT_hitSL_PREFIX);
-
-   ChartRedraw(0);
-  }
-
 // ============================================================================
 // Löscht Entry/SL-Linien (und optional deren _TAG) für eine konkrete Trade/Pos.
 // Passt exakt zu deinem Suffix-Schema: "_" + trade_no + "_" + pos_no
