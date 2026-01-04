@@ -683,6 +683,8 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
 
    CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+if(g_tp.OnChartEvent(id, lparam, dparam, sparam))
+   return;
 
 // NEU: Delta im Idle aktuell halten
    BaseLines_UpdateDeltaIfIdle();
