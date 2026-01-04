@@ -22,6 +22,53 @@
 #define PR_HL "PR_HL"
 #endif
 
+
+
+/**
+ * Beschreibung: Aktualisiert Long-Labels nur wenn Entry/SL sich geändert haben.
+ * Parameter:    none
+ * Rückgabewert: void
+ * Hinweise:     Reduziert ObjectMove/ObjectSetString Spam pro Tick.
+ * Fehlerfälle:  keine
+ */
+void CreateLabelsLong_IfChanged()
+{
+   static double last_entry = 0.0;
+   static double last_sl    = 0.0;
+
+   if(MathAbs(Entry_Price - last_entry) < (_Point*0.1) && MathAbs(SL_Price - last_sl) < (_Point*0.1))
+      return;
+
+   last_entry = Entry_Price;
+   last_sl    = SL_Price;
+
+   CreateLabelsLong();
+}
+
+/**
+ * Beschreibung: Aktualisiert Short-Labels nur, wenn Entry/SL sich geändert haben.
+ * Parameter:    -
+ * Rückgabewert: void
+ * Hinweise:     Reduziert UI-Updates pro Tick.
+ * Fehlerfälle:  Keine (CreateLabelsShort() loggt intern falls nötig)
+ */
+void CreateLabelsShort_IfChanged()
+{
+   static double last_entry = 0.0;
+   static double last_sl    = 0.0;
+
+   if(MathAbs(Entry_Price - last_entry) < (_Point * 0.1) &&
+      MathAbs(SL_Price    - last_sl)    < (_Point * 0.1))
+      return;
+
+   last_entry = Entry_Price;
+   last_sl    = SL_Price;
+
+   CreateLabelsShort();
+}
+
+
+
 //+------------------------------------------------------------------+
 //| Die Funktion erhält den Wert der Höhe des Charts in Pixeln       |
 //+------------------------------------------------------------------+
@@ -64,13 +111,33 @@ int getChartWidthInPixels(const long chart_ID = 0)
    return ((int)result);
   }
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-string update_Text(string name, string val)
+/**
+ * Beschreibung: Setzt den Text eines Chart-Objekts robust (mit Logging).
+ * Parameter:    name - Objektname
+ *               val  - Text
+ * Rückgabewert: bool - true wenn gesetzt, sonst false
+ * Hinweise:     Für OBJ_BUTTON/OBJ_LABEL/OBJ_EDIT etc. nutzbar.
+ * Fehlerfälle:  ObjectSetString==false -> Print/CLogger mit GetLastError
+ */
+bool update_Text(const string name, const string val)
   {
-   return (string)ObjectSetString(0, name, OBJPROP_TEXT, val);
+   if(ObjectFind(0, name) < 0)
+     {
+      CLogger::Add(LOG_LEVEL_WARNING, __FUNCTION__ + ": object not found: " + name);
+      return false;
+     }
+
+   ResetLastError();
+   if(!ObjectSetString(0, name, OBJPROP_TEXT, val))
+     {
+      CLogger::Add(LOG_LEVEL_ERROR,
+                   __FUNCTION__ + ": ObjectSetString failed name=" + name +
+                   " err=" + IntegerToString(GetLastError()));
+      return false;
+     }
+   return true;
   }
+
 
 
 
@@ -140,12 +207,12 @@ bool CreateEntryAndSLLines(string objName, datetime time1, double price1, color 
    if(ObjectFind(0, objName) >= 0)
      {
       ObjectSetDouble(0, objName, OBJPROP_PRICE, price1);
-      ObjectSetInteger(0, objName, OBJPROP_COLOR, clr);
-      ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_DASH);
-      ObjectSetInteger(0, objName, OBJPROP_BACK, false);
-      ObjectSetInteger(0, objName, OBJPROP_SELECTABLE, true);
-      ObjectSetInteger(0, objName, OBJPROP_SELECTED, false);
-      ChartRedraw(0);
+      UI_ObjSetIntSafe(0, objName, OBJPROP_COLOR, clr);
+      UI_ObjSetIntSafe(0, objName, OBJPROP_STYLE, STYLE_DASH);
+      UI_ObjSetIntSafe(0, objName, OBJPROP_BACK, false);
+      UI_ObjSetIntSafe(0, objName, OBJPROP_SELECTABLE, true);
+      UI_ObjSetIntSafe(0, objName, OBJPROP_SELECTED, false);
+      UI_RequestRedraw();
 
       return true;
      }
@@ -153,21 +220,21 @@ bool CreateEntryAndSLLines(string objName, datetime time1, double price1, color 
 // neu erstellen
    if(!ObjectCreate(0, objName, OBJ_HLINE, 0, time1, price1))
      {
-     
-      CLogger::Add(LOG_LEVEL_INFO, "__FUNCTION__ : Failed to create "+ objName+ " err="+ GetLastError());
-          return false;
-     }
-   
-   UI_Reg_Add(objName); // Speichere Object im Array zum späteren löschen
-   
-   ObjectSetDouble(0, objName, OBJPROP_PRICE, price1);
-   ObjectSetInteger(0, objName, OBJPROP_COLOR, clr);
-   ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_DASH);
-   ObjectSetInteger(0, objName, OBJPROP_BACK, false);
-   ObjectSetInteger(0, objName, OBJPROP_SELECTABLE, true);
-   ObjectSetInteger(0, objName, OBJPROP_SELECTED, false);
 
-   ChartRedraw(0);
+      CLogger::Add(LOG_LEVEL_INFO, "__FUNCTION__ : Failed to create "+ objName+ " err="+ GetLastError());
+      return false;
+     }
+
+   UI_Reg_Add(objName); // Speichere Object im Array zum späteren löschen
+
+   ObjectSetDouble(0, objName, OBJPROP_PRICE, price1);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_COLOR, clr);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_STYLE, STYLE_DASH);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_BACK, false);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_SELECTABLE, true);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_SELECTED, false);
+
+   UI_RequestRedraw();
    return true;
   }
 
@@ -187,15 +254,15 @@ void CreateLabelsTPcolor_SLLines(string LABEL_NAME, string text, double price2, 
      {
       if(!ObjectCreate(0, LABEL_NAME, OBJ_TEXT, 0, TimeCurrent(), price2))
         {
-      CLogger::Add(LOG_LEVEL_INFO, "__FUNCTION__ : Failed to create "+ LABEL_NAME+ " Error Code: "+ GetLastError());
-   
+         CLogger::Add(LOG_LEVEL_INFO, "__FUNCTION__ : Failed to create "+ LABEL_NAME+ " Error Code: "+ GetLastError());
+
          return; // raus bei Fehler
         }
-   
+
       UI_Reg_Add(LABEL_NAME); // Speichere Object im Array zum späteren löschen
       // Grund-Layout nur beim ersten Erzeugen
-      ObjectSetInteger(0, LABEL_NAME, OBJPROP_COLOR, clr1);
-      ObjectSetInteger(0, LABEL_NAME, OBJPROP_FONTSIZE, InpFontSize);
+      UI_ObjSetIntSafe(0, LABEL_NAME, OBJPROP_COLOR, clr1);
+      UI_ObjSetIntSafe(0, LABEL_NAME, OBJPROP_FONTSIZE, InpFontSize);
       ObjectSetString(0, LABEL_NAME, OBJPROP_FONT, InpFont);
       ObjectSetString(0, LABEL_NAME, OBJPROP_TEXT, " ");
      }
@@ -316,30 +383,30 @@ bool createButton(string objName, string text, int xD, int yD, int xS, int yS, c
    ResetLastError();
    if(!ObjectCreate(0, objName, OBJ_BUTTON, 0, 0, TimeCurrent()))
      {
-    CLogger::Add(LOG_LEVEL_INFO, "create failed for "+ objName+ " err="+ GetLastError());
-     
- 
+      CLogger::Add(LOG_LEVEL_INFO, "create failed for "+ objName+ " err="+ GetLastError());
+
+
       return (false);
      }
    UI_Reg_Add(objName); // Speichere Object im Array zum späteren löschen
-   ObjectSetInteger(0, objName, OBJPROP_XDISTANCE, xD);
-   ObjectSetInteger(0, objName, OBJPROP_YDISTANCE, yD);
-   ObjectSetInteger(0, objName, OBJPROP_XSIZE, xS);
-   ObjectSetInteger(0, objName, OBJPROP_YSIZE, yS);
-   ObjectSetInteger(0, objName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_XDISTANCE, xD);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_YDISTANCE, yD);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_XSIZE, xS);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_YSIZE, yS);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
    ObjectSetString(0, objName, OBJPROP_TEXT, text);
-   ObjectSetInteger(0, objName, OBJPROP_FONTSIZE, InpFontSize);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_FONTSIZE, InpFontSize);
    ObjectSetString(0, objName, OBJPROP_FONT, InpFont);
-   ObjectSetInteger(0, objName, OBJPROP_COLOR, clrTxt);
-   ObjectSetInteger(0, objName, OBJPROP_BGCOLOR, clrBG);
-   ObjectSetInteger(0, objName, OBJPROP_BORDER_COLOR, clrBorder);
-   ObjectSetInteger(0, objName, OBJPROP_BACK, false);
-   ObjectSetInteger(0, objName, OBJPROP_STATE, false);
-   ObjectSetInteger(0, objName, OBJPROP_SELECTABLE, false);
-   ObjectSetInteger(0, objName, OBJPROP_SELECTED, false);
-   ObjectSetInteger(0, objName, OBJPROP_ANCHOR, ANCHOR_CENTER);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_COLOR, clrTxt);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_BGCOLOR, clrBG);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_BORDER_COLOR, clrBorder);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_BACK, false);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_STATE, false);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_SELECTABLE, false);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_SELECTED, false);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_ANCHOR, ANCHOR_CENTER);
 
-   ChartRedraw(0);
+   UI_RequestRedraw();
    return (true);
   }
 
@@ -357,30 +424,30 @@ bool createHL(string objName, datetime time1, double price1, color clr)
   {
    ResetLastError();
 
-   // Wenn Objekt existiert: updaten statt neu erzeugen (wichtig bei Reload)
+// Wenn Objekt existiert: updaten statt neu erzeugen (wichtig bei Reload)
    if(ObjectFind(0, objName) >= 0)
      {
       UI_Reg_Add(objName); // sicherstellen, dass Cleanup es später findet
 
       // Preis/Farbe aktualisieren
       ObjectSetDouble(0, objName, OBJPROP_PRICE, price1);
-      ObjectSetInteger(0, objName, OBJPROP_COLOR, clr);
+      UI_ObjSetIntSafe(0, objName, OBJPROP_COLOR, clr);
 
       // Bedienbarkeit & Sichtbarkeit
-      ObjectSetInteger(0, objName, OBJPROP_SELECTABLE, true);
-      ObjectSetInteger(0, objName, OBJPROP_SELECTED, false);
-      ObjectSetInteger(0, objName, OBJPROP_HIDDEN, false);
-      ObjectSetInteger(0, objName, OBJPROP_BACK, false);
+      UI_ObjSetIntSafe(0, objName, OBJPROP_SELECTABLE, true);
+      UI_ObjSetIntSafe(0, objName, OBJPROP_SELECTED, false);
+      UI_ObjSetIntSafe(0, objName, OBJPROP_HIDDEN, false);
+      UI_ObjSetIntSafe(0, objName, OBJPROP_BACK, false);
 
       // "Trefferfläche" & Ebenen
-      ObjectSetInteger(0, objName, OBJPROP_WIDTH, 2);
-      ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_SOLID);
-      ObjectSetInteger(0, objName, OBJPROP_ZORDER, 10);
+      UI_ObjSetIntSafe(0, objName, OBJPROP_WIDTH, 2);
+      UI_ObjSetIntSafe(0, objName, OBJPROP_STYLE, STYLE_SOLID);
+      UI_ObjSetIntSafe(0, objName, OBJPROP_ZORDER, 10);
 
       return true;
      }
 
-   // Neu erzeugen
+// Neu erzeugen
    if(!ObjectCreate(0, objName, OBJ_HLINE, 0, time1, price1))
      {
       CLogger::Add(LOG_LEVEL_INFO, __FUNCTION__ + ": create failed for " + objName +
@@ -390,21 +457,21 @@ bool createHL(string objName, datetime time1, double price1, color clr)
 
    UI_Reg_Add(objName); // fürs Deinit-Cleanup
 
-   // Initiale Properties
+// Initiale Properties
    ObjectSetDouble(0, objName, OBJPROP_PRICE, price1);
-   ObjectSetInteger(0, objName, OBJPROP_COLOR, clr);
-   ObjectSetInteger(0, objName, OBJPROP_BACK, false);
-   ObjectSetInteger(0, objName, OBJPROP_STYLE, STYLE_SOLID);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_COLOR, clr);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_BACK, false);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_STYLE, STYLE_SOLID);
 
-   // KRITISCH: sonst ist SL_HL oft nicht greifbar
-   ObjectSetInteger(0, objName, OBJPROP_SELECTABLE, true);
-   ObjectSetInteger(0, objName, OBJPROP_SELECTED, false);
-   ObjectSetInteger(0, objName, OBJPROP_HIDDEN, false);
+// KRITISCH: sonst ist SL_HL oft nicht greifbar
+   UI_ObjSetIntSafe(0, objName, OBJPROP_SELECTABLE, true);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_SELECTED, false);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_HIDDEN, false);
 
-   ObjectSetInteger(0, objName, OBJPROP_WIDTH, 2);
-   ObjectSetInteger(0, objName, OBJPROP_ZORDER, 10);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_WIDTH, 2);
+   UI_ObjSetIntSafe(0, objName, OBJPROP_ZORDER, 10);
 
-   ChartRedraw(0);
+   UI_RequestRedraw();
    return true;
   }
 
@@ -418,57 +485,57 @@ void SendButton()
 
    ObjectCreate(0, SENDTRADEBTN, OBJ_BUTTON, 0, 0, 0);
    UI_Reg_Add(SENDTRADEBTN); // Speichere Object im Array zum späteren löschen
-   ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_XDISTANCE, xd3 - 100);
-   ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_XSIZE, 100);
-   ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_YDISTANCE, yd3);
-   ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_YSIZE, 30);
-   ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_CORNER, 0);
+   UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_XDISTANCE, xd3 - 100);
+   UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_XSIZE, 100);
+   UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_YDISTANCE, yd3);
+   UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_YSIZE, 30);
+   UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_CORNER, 0);
    if(!SendOnlyButton)
      {
       ObjectSetString(0, SENDTRADEBTN, OBJPROP_TEXT, "T & S"); // label
-      ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_BGCOLOR, TSButton_bgcolor);
-      ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_COLOR, TSButton_font_color);
+      UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_BGCOLOR, TSButton_bgcolor);
+      UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_COLOR, TSButton_font_color);
      }
    else
      {
       ObjectSetString(0, SENDTRADEBTN, OBJPROP_TEXT, "Send only"); // label
-      ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_BGCOLOR, SendOnlyButton_bgcolor);
-      ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_COLOR, SendOnlyButton_font_color);
+      UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_BGCOLOR, SendOnlyButton_bgcolor);
+      UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_COLOR, SendOnlyButton_font_color);
      }
 
    ObjectSetString(0, SENDTRADEBTN, OBJPROP_FONT, InpFont);
-   ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_FONTSIZE, InpFontSize);
+   UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_FONTSIZE, InpFontSize);
 
 // TRNB (TradeNo) links
    ObjectCreate(0, TRNB, OBJ_EDIT, 0, 0, 0);
    UI_Reg_Add(TRNB); // Speichere Object im Array zum späteren löschen
-   ObjectSetInteger(0, TRNB, OBJPROP_XDISTANCE, xd3 - 100);
-   ObjectSetInteger(0, TRNB, OBJPROP_YDISTANCE, yd3 + 30);
-   ObjectSetInteger(0, TRNB, OBJPROP_XSIZE, 60);
-   ObjectSetInteger(0, TRNB, OBJPROP_YSIZE, 30);
+   UI_ObjSetIntSafe(0, TRNB, OBJPROP_XDISTANCE, xd3 - 100);
+   UI_ObjSetIntSafe(0, TRNB, OBJPROP_YDISTANCE, yd3 + 30);
+   UI_ObjSetIntSafe(0, TRNB, OBJPROP_XSIZE, 60);
+   UI_ObjSetIntSafe(0, TRNB, OBJPROP_YSIZE, 30);
    ObjectSetString(0, TRNB, OBJPROP_TEXT, "0");
-   ObjectSetInteger(0, TRNB, OBJPROP_BGCOLOR, clrWhite);
-   ObjectSetInteger(0, TRNB, OBJPROP_COLOR, clrBlack);
-   ObjectSetInteger(0, TRNB, OBJPROP_ALIGN, ALIGN_CENTER);
-   ObjectSetInteger(0, TRNB, OBJPROP_READONLY, false);
+   UI_ObjSetIntSafe(0, TRNB, OBJPROP_BGCOLOR, clrWhite);
+   UI_ObjSetIntSafe(0, TRNB, OBJPROP_COLOR, clrBlack);
+   UI_ObjSetIntSafe(0, TRNB, OBJPROP_ALIGN, ALIGN_CENTER);
+   UI_ObjSetIntSafe(0, TRNB, OBJPROP_READONLY, false);
 
    ObjectSetString(0, TRNB, OBJPROP_FONT, InpFont);
-   ObjectSetInteger(0, TRNB, OBJPROP_FONTSIZE, InpFontSize);
+   UI_ObjSetIntSafe(0, TRNB, OBJPROP_FONTSIZE, InpFontSize);
 
 // POSNB (PosNo) rechts daneben
    ObjectCreate(0, POSNB, OBJ_EDIT, 0, 0, 0);
    UI_Reg_Add(POSNB); // Speichere Object im Array zum späteren löschen
-   ObjectSetInteger(0, POSNB, OBJPROP_XDISTANCE, xd3 - 40);
-   ObjectSetInteger(0, POSNB, OBJPROP_YDISTANCE, yd3 + 30);
-   ObjectSetInteger(0, POSNB, OBJPROP_XSIZE, 40);
-   ObjectSetInteger(0, POSNB, OBJPROP_YSIZE, 30);
+   UI_ObjSetIntSafe(0, POSNB, OBJPROP_XDISTANCE, xd3 - 40);
+   UI_ObjSetIntSafe(0, POSNB, OBJPROP_YDISTANCE, yd3 + 30);
+   UI_ObjSetIntSafe(0, POSNB, OBJPROP_XSIZE, 40);
+   UI_ObjSetIntSafe(0, POSNB, OBJPROP_YSIZE, 30);
    ObjectSetString(0, POSNB, OBJPROP_TEXT, "1");
-   ObjectSetInteger(0, POSNB, OBJPROP_BGCOLOR, clrWhite);
-   ObjectSetInteger(0, POSNB, OBJPROP_COLOR, clrBlack);
-   ObjectSetInteger(0, POSNB, OBJPROP_ALIGN, ALIGN_CENTER);
-   ObjectSetInteger(0, POSNB, OBJPROP_READONLY, false);
+   UI_ObjSetIntSafe(0, POSNB, OBJPROP_BGCOLOR, clrWhite);
+   UI_ObjSetIntSafe(0, POSNB, OBJPROP_COLOR, clrBlack);
+   UI_ObjSetIntSafe(0, POSNB, OBJPROP_ALIGN, ALIGN_CENTER);
+   UI_ObjSetIntSafe(0, POSNB, OBJPROP_READONLY, false);
    ObjectSetString(0, POSNB, OBJPROP_FONT, InpFont);
-   ObjectSetInteger(0, POSNB, OBJPROP_FONTSIZE, InpFontSize);
+   UI_ObjSetIntSafe(0, POSNB, OBJPROP_FONTSIZE, InpFontSize);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -489,37 +556,37 @@ void SabioEdit()
    ObjectCreate(0, SabioSL, OBJ_EDIT, 0, 0, 0);
    UI_Reg_Add(SabioSL); // Speichere Object im Array zum späteren löschen
 //--- Objektkoordinaten angeben
-   ObjectSetInteger(0, SabioSL, OBJPROP_XDISTANCE, xd5);
-   ObjectSetInteger(0, SabioSL, OBJPROP_YDISTANCE, yd5 + 30);
+   UI_ObjSetIntSafe(0, SabioSL, OBJPROP_XDISTANCE, xd5);
+   UI_ObjSetIntSafe(0, SabioSL, OBJPROP_YDISTANCE, yd5 + 30);
 //--- Objektgröße setzen
-   ObjectSetInteger(0, SabioSL, OBJPROP_XSIZE, 280);
-   ObjectSetInteger(0, SabioSL, OBJPROP_YSIZE, 30);
+   UI_ObjSetIntSafe(0, SabioSL, OBJPROP_XSIZE, 280);
+   UI_ObjSetIntSafe(0, SabioSL, OBJPROP_YSIZE, 30);
 //--- den Text setzen
    ObjectSetString(0, SabioSL, OBJPROP_TEXT, "SABIO SL: " + Get_Price_s(SL_HL));
 //--- Schriftgröße setzen
-   ObjectSetInteger(0, SabioSL, OBJPROP_BGCOLOR, clrWhite);
-   ObjectSetInteger(0, SabioSL, OBJPROP_COLOR, clrBlack);
+   UI_ObjSetIntSafe(0, SabioSL, OBJPROP_BGCOLOR, clrWhite);
+   UI_ObjSetIntSafe(0, SabioSL, OBJPROP_COLOR, clrBlack);
 
 //--- aktivieren (true) oder deaktivieren (false) den schreibgeschützten Modus
-   ObjectSetInteger(0, SabioSL, OBJPROP_READONLY, false);
+   UI_ObjSetIntSafe(0, SabioSL, OBJPROP_READONLY, false);
 
 // SabioEntryEdit
    ObjectCreate(0, SabioEntry, OBJ_EDIT, 0, 0, 0);
    UI_Reg_Add(SabioEntry); // Speichere Object im Array zum späteren löschen
 //--- Objektkoordinaten angeben
-   ObjectSetInteger(0, SabioEntry, OBJPROP_XDISTANCE, xd3);
-   ObjectSetInteger(0, SabioEntry, OBJPROP_YDISTANCE, yd3 + 30);
+   UI_ObjSetIntSafe(0, SabioEntry, OBJPROP_XDISTANCE, xd3);
+   UI_ObjSetIntSafe(0, SabioEntry, OBJPROP_YDISTANCE, yd3 + 30);
 //--- Objektgröße setzen
-   ObjectSetInteger(0, SabioEntry, OBJPROP_XSIZE, 280);
-   ObjectSetInteger(0, SabioEntry, OBJPROP_YSIZE, 30);
+   UI_ObjSetIntSafe(0, SabioEntry, OBJPROP_XSIZE, 280);
+   UI_ObjSetIntSafe(0, SabioEntry, OBJPROP_YSIZE, 30);
 //--- den Text setzen
    ObjectSetString(0, SabioEntry, OBJPROP_TEXT, "SABIO ENTRY: " + Get_Price_s(PR_HL));
 //--- Schriftgröße setzen
-   ObjectSetInteger(0, SabioEntry, OBJPROP_BGCOLOR, clrWhite);
-   ObjectSetInteger(0, SabioEntry, OBJPROP_COLOR, clrBlack);
+   UI_ObjSetIntSafe(0, SabioEntry, OBJPROP_BGCOLOR, clrWhite);
+   UI_ObjSetIntSafe(0, SabioEntry, OBJPROP_COLOR, clrBlack);
 
 //--- aktivieren (true) oder deaktivieren (false) den schreibgeschützten Modus
-   ObjectSetInteger(0, SabioEntry, OBJPROP_READONLY, false);
+   UI_ObjSetIntSafe(0, SabioEntry, OBJPROP_READONLY, false);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -581,18 +648,25 @@ void UI_PositionOverviewPanel()
    int panel_w = 330; // 150 + 30 + 150
    int panel_h = 220; // wird später ggf. dynamisch angepasst
 
-   ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-   ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_XDISTANCE, panel_x);
-   ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_YDISTANCE, panel_y);
-   ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_XSIZE, panel_w);
-   ObjectSetInteger(0, TA_OVERVIEW_BG, OBJPROP_YSIZE, panel_h);
 
+   UI_ObjSetIntSafe(0,TA_OVERVIEW_BG, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+   UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_XDISTANCE, panel_x);
+   UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_YDISTANCE, panel_y);
+   UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_XSIZE, panel_w);
+   UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_YSIZE, panel_h);
+   /*
+      UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+      UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_XDISTANCE, panel_x);
+      UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_YDISTANCE, panel_y);
+      UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_XSIZE, panel_w);
+      UI_ObjSetIntSafe(0, TA_OVERVIEW_BG, OBJPROP_YSIZE, panel_h);
+   */
 // Header (TA_OVERVIEW_TXT)
    if(ObjectFind(0, TA_OVERVIEW_TXT) >= 0)
      {
-      ObjectSetInteger(0, TA_OVERVIEW_TXT, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-      ObjectSetInteger(0, TA_OVERVIEW_TXT, OBJPROP_XDISTANCE, panel_x + 8);
-      ObjectSetInteger(0, TA_OVERVIEW_TXT, OBJPROP_YDISTANCE, panel_y + 6);
+      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT, OBJPROP_XDISTANCE, panel_x + 8);
+      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT, OBJPROP_YDISTANCE, panel_y + 6);
      }
 
 // Zwei Spalten
@@ -605,16 +679,16 @@ void UI_PositionOverviewPanel()
 
    if(ObjectFind(0, TA_OVERVIEW_TXT_LONG) >= 0)
      {
-      ObjectSetInteger(0, TA_OVERVIEW_TXT_LONG, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-      ObjectSetInteger(0, TA_OVERVIEW_TXT_LONG, OBJPROP_XDISTANCE, x_long);
-      ObjectSetInteger(0, TA_OVERVIEW_TXT_LONG, OBJPROP_YDISTANCE, y_text);
+      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT_LONG, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT_LONG, OBJPROP_XDISTANCE, x_long);
+      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT_LONG, OBJPROP_YDISTANCE, y_text);
      }
 
    if(ObjectFind(0, TA_OVERVIEW_TXT_SHORT) >= 0)
      {
-      ObjectSetInteger(0, TA_OVERVIEW_TXT_SHORT, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-      ObjectSetInteger(0, TA_OVERVIEW_TXT_SHORT, OBJPROP_XDISTANCE, x_short);
-      ObjectSetInteger(0, TA_OVERVIEW_TXT_SHORT, OBJPROP_YDISTANCE, y_text);
+      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT_SHORT, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT_SHORT, OBJPROP_XDISTANCE, x_short);
+      UI_ObjSetIntSafe(0, TA_OVERVIEW_TXT_SHORT, OBJPROP_YDISTANCE, y_text);
      }
   }
 
@@ -675,6 +749,40 @@ void UI_TradeLists_AutoRefresh()
 
    last_ms = now_ms;
   }
+
+
+
+/**
+ * Beschreibung: Setzt eine Integer-Property auf ein Objekt mit sauberem Error-Logging.
+ * Parameter:    name  - Objektname
+ *               prop  - OBJPROP_*
+ *               value - Wert
+ * Rückgabewert: bool - true wenn gesetzt, sonst false
+ * Hinweise:     Verhindert stilles Scheitern (z.B. bei gelöschten Objekten).
+ * Fehlerfälle:  ObjectSetInteger==false -> Print + GetLastError
+ */
+bool UI_ObjSetIntSafe(const int chartID, const string name, const ENUM_OBJECT_PROPERTY_INTEGER prop, const long value)
+  {
+   if(ObjectFind(chartID, name) < 0)
+     {
+      Print(__FUNCTION__, ": object not found: ", name);
+      return false;
+     }
+
+   ResetLastError();
+   if(!ObjectSetInteger(chartID, name, prop, value))
+     {
+      Print(__FUNCTION__, ": ObjectSetInteger failed name=", name, " prop=", (int)prop, " err=", GetLastError());
+      return false;
+     }
+   return true;
+  }
+
+
+
+
+
+
 
 #endif // __GUI__
 //+------------------------------------------------------------------+

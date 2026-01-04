@@ -63,18 +63,18 @@ bool TP_CreateRectBG(const string name, const int x, const int y, const int w, c
          return false;
    UI_Reg_Add(name); // Speichere Object im Array zum späteren löschen
 
-   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
-   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
-   ObjectSetInteger(0, name, OBJPROP_XSIZE, w);
-   ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
+   UI_ObjSetIntSafe(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+   UI_ObjSetIntSafe(0, name, OBJPROP_XDISTANCE, x);
+   UI_ObjSetIntSafe(0, name, OBJPROP_YDISTANCE, y);
+   UI_ObjSetIntSafe(0, name, OBJPROP_XSIZE, w);
+   UI_ObjSetIntSafe(0, name, OBJPROP_YSIZE, h);
 
-   ObjectSetInteger(0, name, OBJPROP_COLOR, clrDimGray);
+   UI_ObjSetIntSafe(0, name, OBJPROP_COLOR, clrDimGray);
 
-   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-   ObjectSetInteger(0, name, OBJPROP_BGCOLOR, clrBlack); // NICHT clrNONE
-   ObjectSetInteger(0, name, OBJPROP_BACK, false);       // Vordergrund
-   ObjectSetInteger(0, name, OBJPROP_ZORDER, 10000);     // ganz nach vorne
+   UI_ObjSetIntSafe(0, name, OBJPROP_SELECTABLE, false);
+   UI_ObjSetIntSafe(0, name, OBJPROP_BGCOLOR, clrBlack); // NICHT clrNONE
+   UI_ObjSetIntSafe(0, name, OBJPROP_BACK, false);       // Vordergrund
+   UI_ObjSetIntSafe(0, name, OBJPROP_ZORDER, 10000);     // ganz nach vorne
 
 
    return true;
@@ -98,16 +98,16 @@ bool TP_CreateLabel(const string name, const int x, const int y, const int w, co
       if(!ObjectCreate(0, name, OBJ_LABEL, 0, 0, 0))
          return false;
    UI_Reg_Add(name); // Speichere Object im Array zum späteren löschen
-   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
-   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
-   ObjectSetInteger(0, name, OBJPROP_XSIZE, w);
-   ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
+   UI_ObjSetIntSafe(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+   UI_ObjSetIntSafe(0, name, OBJPROP_XDISTANCE, x);
+   UI_ObjSetIntSafe(0, name, OBJPROP_YDISTANCE, y);
+   UI_ObjSetIntSafe(0, name, OBJPROP_XSIZE, w);
+   UI_ObjSetIntSafe(0, name, OBJPROP_YSIZE, h);
 
    ObjectSetString(0, name, OBJPROP_TEXT, txt);
-   ObjectSetInteger(0, name, OBJPROP_COLOR, clrWhite);
-   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-   ObjectSetInteger(0, name, OBJPROP_ZORDER, 10010);
+   UI_ObjSetIntSafe(0, name, OBJPROP_COLOR, clrWhite);
+   UI_ObjSetIntSafe(0, name, OBJPROP_SELECTABLE, false);
+   UI_ObjSetIntSafe(0, name, OBJPROP_ZORDER, 10010);
    UI_Reg_Add(name); // Speichere Object im Array zum späteren löschen
    return true;
   }
@@ -123,18 +123,18 @@ bool TP_CreateButton(const string name, const int x, const int y, const int w, c
          return false;
 
    UI_Reg_Add(name); // Speichere Object im Array zum späteren löschen
-   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
-   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
-   ObjectSetInteger(0, name, OBJPROP_XSIZE, w);
-   ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
+   UI_ObjSetIntSafe(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+   UI_ObjSetIntSafe(0, name, OBJPROP_XDISTANCE, x);
+   UI_ObjSetIntSafe(0, name, OBJPROP_YDISTANCE, y);
+   UI_ObjSetIntSafe(0, name, OBJPROP_XSIZE, w);
+   UI_ObjSetIntSafe(0, name, OBJPROP_YSIZE, h);
 
    ObjectSetString(0, name, OBJPROP_TEXT, txt);
-   ObjectSetInteger(0, name, OBJPROP_FONTSIZE, InpFontSize);
+   UI_ObjSetIntSafe(0, name, OBJPROP_FONTSIZE, InpFontSize);
    ObjectSetString(0, name, OBJPROP_FONT, InpFont);
-   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-   ObjectSetInteger(0, name, OBJPROP_STATE, 0);
-   ObjectSetInteger(0, name, OBJPROP_ZORDER, 10010);
+   UI_ObjSetIntSafe(0, name, OBJPROP_SELECTABLE, false);
+   UI_ObjSetIntSafe(0, name, OBJPROP_STATE, 0);
+   UI_ObjSetIntSafe(0, name, OBJPROP_ZORDER, 10010);
 
 
    return true;
@@ -210,24 +210,24 @@ void TP_SetButtonVisible(const string name, const bool visible, const string cap
 
    if(visible)
      {
-      ObjectSetInteger(0, name, OBJPROP_TIMEFRAMES, OBJ_ALL_PERIODS);
+      UI_ObjSetIntSafe(0, name, OBJPROP_TIMEFRAMES, OBJ_ALL_PERIODS);
       ObjectSetString(0, name, OBJPROP_TEXT, caption);
 
-      ObjectSetInteger(0, name, OBJPROP_COLOR,        txt_col);
-      ObjectSetInteger(0, name, OBJPROP_BGCOLOR,      bg_col);
-      ObjectSetInteger(0, name, OBJPROP_BORDER_COLOR, border_col);
+      UI_ObjSetIntSafe(0, name, OBJPROP_COLOR,        txt_col);
+      UI_ObjSetIntSafe(0, name, OBJPROP_BGCOLOR,      bg_col);
+      UI_ObjSetIntSafe(0, name, OBJPROP_BORDER_COLOR, border_col);
      }
    else
      {
       // wirklich unsichtbar
-      ObjectSetInteger(0, name, OBJPROP_TIMEFRAMES, 0);
+      UI_ObjSetIntSafe(0, name, OBJPROP_TIMEFRAMES, 0);
 
       // optional: gegen “Rahmen-Flicker”
       color bg = TP_PanelBg();
       ObjectSetString(0, name, OBJPROP_TEXT, "");
-      ObjectSetInteger(0, name, OBJPROP_COLOR,        bg);
-      ObjectSetInteger(0, name, OBJPROP_BGCOLOR,      bg);
-      ObjectSetInteger(0, name, OBJPROP_BORDER_COLOR, bg);
+      UI_ObjSetIntSafe(0, name, OBJPROP_COLOR,        bg);
+      UI_ObjSetIntSafe(0, name, OBJPROP_BGCOLOR,      bg);
+      UI_ObjSetIntSafe(0, name, OBJPROP_BORDER_COLOR, bg);
      }
   }
 
@@ -607,123 +607,98 @@ void SortRowsByTradePos(DB_PositionRow &arr[], const int cnt)
 
 
   
-  
-  // ================= Optional: Click handling (Rows + Header Buttons) =================
+  /**
+ * Beschreibung: Zentraler Click-Dispatcher für das Trades-Panel.
+ * Parameter:    id     - ChartEvent-ID (wir reagieren nur auf OBJECT_CLICK)
+ *               lparam - vom ChartEvent (ungenutzt)
+ *               dparam - vom ChartEvent (ungenutzt)
+ *               sparam - Objektname, der geklickt wurde
+ * Rückgabewert: bool - true, wenn Event behandelt wurde, sonst false
+ * Hinweise:     Keine doppelte Logik; Header-Buttons + Row-Buttons sauber getrennt.
+ * Fehlerfälle:  Parsing-Fehler bei Row-Buttons -> kein Close/Notify, aber Event gilt als behandelt.
+ */
 bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
 {
    if(id != CHARTEVENT_OBJECT_CLICK)
       return false;
 
-   // Header-Buttons (bereits vorhanden)
+   // ------------------------------------------------------------
+   // 1) Header-Buttons
+   // ------------------------------------------------------------
+
+   // Active-Buttons sind derzeit reine Status-Anzeige -> Klick "schlucken"
+   if(sparam == TP_BTN_ACTIVE_LONG || sparam == TP_BTN_ACTIVE_SHORT)
+      return true;
+
+/*
    if(sparam == TP_BTN_CANCEL_LONG)
    {
       UI_CancelActiveTrade("LONG");
       return true;
    }
+
    if(sparam == TP_BTN_CANCEL_SHORT)
    {
       UI_CancelActiveTrade("SHORT");
       return true;
    }
+*/
+   // ------------------------------------------------------------
+   // 2) Row-Buttons (Cancel / HitSL) je TradeNo + PosNo
+   // ------------------------------------------------------------
+   int trade_no = 0, pos_no = 0;
 
-   // ---------------- Row Buttons: LONG ----------------
+   // LONG Cancel
    if(StringFind(sparam, TP_ROW_LONG_Cancel_PREFIX, 0) == 0)
    {
-      int trade_no = 0, pos_no = 0;
       if(UI_ParseTradePosFromButtonName(sparam, TP_ROW_LONG_Cancel_PREFIX, trade_no, pos_no))
       {
-         // CANCEL: Discord + DB + Cache + UI-Linien/Tags via zentrale Funktion
          UI_CloseOnePositionAndNotify("CANCEL", "LONG", trade_no, pos_no);
          UI_TradesPanel_RebuildRows();
-         ChartRedraw(0);
+         UI_RequestRedraw();
       }
       return true;
    }
 
+   // LONG HitSL
    if(StringFind(sparam, TP_ROW_LONG_hitSL_PREFIX, 0) == 0)
    {
-      int trade_no = 0, pos_no = 0;
       if(UI_ParseTradePosFromButtonName(sparam, TP_ROW_LONG_hitSL_PREFIX, trade_no, pos_no))
       {
-         // SL: Discord + DB + Cache + UI-Linien/Tags via zentrale Funktion
          UI_CloseOnePositionAndNotify("HIT_SL", "LONG", trade_no, pos_no);
          UI_TradesPanel_RebuildRows();
-         ChartRedraw(0);
+         UI_RequestRedraw();
       }
       return true;
    }
 
-   // ---------------- Row Buttons: SHORT ----------------
+   // SHORT Cancel
    if(StringFind(sparam, TP_ROW_SHORT_Cancel_PREFIX, 0) == 0)
    {
-      int trade_no = 0, pos_no = 0;
       if(UI_ParseTradePosFromButtonName(sparam, TP_ROW_SHORT_Cancel_PREFIX, trade_no, pos_no))
       {
          UI_CloseOnePositionAndNotify("CANCEL", "SHORT", trade_no, pos_no);
          UI_TradesPanel_RebuildRows();
-         ChartRedraw(0);
+         UI_RequestRedraw();
       }
       return true;
    }
 
+   // SHORT HitSL
    if(StringFind(sparam, TP_ROW_SHORT_hitSL_PREFIX, 0) == 0)
    {
-      int trade_no = 0, pos_no = 0;
       if(UI_ParseTradePosFromButtonName(sparam, TP_ROW_SHORT_hitSL_PREFIX, trade_no, pos_no))
       {
          UI_CloseOnePositionAndNotify("HIT_SL", "SHORT", trade_no, pos_no);
          UI_TradesPanel_RebuildRows();
-         ChartRedraw(0);
+         UI_RequestRedraw();
       }
       return true;
    }
 
-
-
-  
-  
-   if(id != CHARTEVENT_OBJECT_CLICK)
-      return false;
-
-// Header-Buttons
-   if(sparam == TP_BTN_ACTIVE_LONG)
-     {
-     
-      return true;
-     }
-   if(sparam == TP_BTN_ACTIVE_SHORT)
-     {
-     
-      return true;
-     }
-     
-     if(sparam == TP_BTN_CANCEL_LONG)
-  {
-   UI_CancelActiveTrade("LONG");
-   return true;
-  }
-
-if(sparam == TP_BTN_CANCEL_SHORT)
-  {
-   UI_CancelActiveTrade("SHORT");
-   return true;
-  }
-  
-
-// Row Buttons
-   if(StringFind(sparam, TP_ROW_LONG_PREFIX, 0) == 0)
-     {
-     
-      return true;
-     }
-   if(StringFind(sparam, TP_ROW_SHORT_PREFIX, 0) == 0)
-     {
-      
-      return true;
-     }
-
    return false;
-  }
+}
+
 
 //+------------------------------------------------------------------+
 //|                                                                  |

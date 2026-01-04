@@ -17,6 +17,43 @@
 input int InpBaseUI_RightMarginPx = 30;   // Abstand von rechts (EntryButton-Rechte Kante)
 input int InpBaseUI_RightShiftPx  = 0;    // optional: gesamtes Paket weiter nach links (+) / rechts (-)
 
+input int InpUI_RedrawMinIntervalMs = 50;
+
+static bool g_ui_redraw_pending = false;
+static uint g_ui_last_redraw_ms = 0;
+
+/**
+ * Beschreibung: Merkt, dass ein Redraw nötig ist (ohne sofort zu zeichnen).
+ * Parameter:    none
+ * Rückgabewert: void
+ * Hinweise:     Verwenden statt ChartRedraw in Low-Level UI Funktionen.
+ * Fehlerfälle:  keine
+ */
+void UI_RequestRedraw()
+{
+   g_ui_redraw_pending = true;
+}
+
+/**
+ * Beschreibung: Führt ein gedrosseltes ChartRedraw aus, wenn angefordert.
+ * Parameter:    none
+ * Rückgabewert: void
+ * Hinweise:     Am Ende von OnChartEvent und/oder OnTick aufrufen.
+ * Fehlerfälle:  keine
+ */
+void UI_ProcessRedraw()
+{
+   if(!g_ui_redraw_pending)
+      return;
+
+   uint now = GetTickCount();
+   if((now - g_ui_last_redraw_ms) < (uint)InpUI_RedrawMinIntervalMs)
+      return;
+
+   ChartRedraw(0);
+   g_ui_last_redraw_ms = now;
+   g_ui_redraw_pending = false;
+}
 
 
 // ------------------------------------------------------------------
@@ -67,7 +104,7 @@ static int  g_dx_sabSL   = 0;
  * Fehlerfälle:  EntryButton fehlt -> false (kein Anchor möglich)
  */
 bool BaseUI_CaptureAnchorBaseline(const bool force)
-{
+  {
    if(g_base_anchor_inited && !force)
       return true;
 
@@ -76,9 +113,10 @@ bool BaseUI_CaptureAnchorBaseline(const bool force)
 
    g_base_ref_x = (int)ObjectGetInteger(0, EntryButton, OBJPROP_XDISTANCE);
    g_base_ref_w = (int)ObjectGetInteger(0, EntryButton, OBJPROP_XSIZE);
-   if(g_base_ref_w <= 0) g_base_ref_w = 200; // Fallback
+   if(g_base_ref_w <= 0)
+      g_base_ref_w = 200; // Fallback
 
-   // relative Offsets (obj_x - entry_x)
+// relative Offsets (obj_x - entry_x)
    if(ObjectFind(0, SLButton) >= 0)
       g_dx_slbtn = (int)ObjectGetInteger(0, SLButton, OBJPROP_XDISTANCE) - g_base_ref_x;
 
@@ -99,7 +137,7 @@ bool BaseUI_CaptureAnchorBaseline(const bool force)
 
    g_base_anchor_inited = true;
    return true;
-}
+  }
 
 // ------------------------------------------------------------------
 // BaseLine-Kopplung / Reentrancy-Guard
@@ -117,16 +155,16 @@ static int    g_base_drag_mouse_y = -1;
  * Fehlerfälle:  ChartGetInteger schlägt fehl -> Print + GetLastError
  */
 int UI_GetChartWidthPx()
-{
+  {
    long w = 0;
    ResetLastError();
    if(!ChartGetInteger(0, CHART_WIDTH_IN_PIXELS, 0, w))
-   {
+     {
       Print(__FUNCTION__, ": ChartGetInteger(CHART_WIDTH_IN_PIXELS) failed err=", GetLastError());
       return 0;
-   }
+     }
    return (int)w;
-}
+  }
 
 
 /**
@@ -162,7 +200,7 @@ void BaseLines_BeginDragIfNeeded(const string dragged_line)
 // laufender Drag
    g_base_drag_last_ms = GetTickCount();
   }
-  
+
 
 /**
  * Beschreibung: Verankert die Base-UI an der rechten Chartkante.
@@ -172,7 +210,7 @@ void BaseLines_BeginDragIfNeeded(const string dragged_line)
  * Fehlerfälle:  Chartbreite 0 oder EntryButton fehlt -> keine Aktion
  */
 void BaseUI_ApplyRightAnchor()
-{
+  {
    if(!BaseUI_CaptureAnchorBaseline(false))
       return;
 
@@ -184,10 +222,12 @@ void BaseUI_ApplyRightAnchor()
                  ? (int)ObjectGetInteger(0, EntryButton, OBJPROP_XSIZE)
                  : g_base_ref_w;
 
-   if(entry_w <= 0) entry_w = g_base_ref_w;
+   if(entry_w <= 0)
+      entry_w = g_base_ref_w;
 
    int new_entry_x = w - InpBaseUI_RightMarginPx - entry_w - InpBaseUI_RightShiftPx;
-   if(new_entry_x < 0) new_entry_x = 0;
+   if(new_entry_x < 0)
+      new_entry_x = 0;
 
    UI_SetObjectXClamped(EntryButton,   new_entry_x, w);
    UI_SetObjectXClamped(SLButton,      new_entry_x + g_dx_slbtn,  w);
@@ -196,7 +236,7 @@ void BaseUI_ApplyRightAnchor()
    UI_SetObjectXClamped(POSNB,         new_entry_x + g_dx_posnb,  w);
    UI_SetObjectXClamped(SabioEntry,    new_entry_x + g_dx_sabEnt, w);
    UI_SetObjectXClamped(SabioSL,       new_entry_x + g_dx_sabSL,  w);
-}
+  }
 
 /**
  * Beschreibung: Setzt das X (XDISTANCE) eines Objekts sicher (clamp an Chartbreite).
@@ -208,22 +248,26 @@ void BaseUI_ApplyRightAnchor()
  * Fehlerfälle:  Objekt fehlt -> silent return
  */
 void UI_SetObjectXClamped(const string name, const int x_left, const int chart_w)
-{
+  {
    if(ObjectFind(0, name) < 0)
       return;
 
-   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+   UI_ObjSetIntSafe(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
 
    int xs = (int)ObjectGetInteger(0, name, OBJPROP_XSIZE);
-   if(xs < 0) xs = 0;
+   if(xs < 0)
+      xs = 0;
 
    int xx = x_left;
-   if(xx < 0) xx = 0;
-   if(chart_w > 0 && xs > 0 && xx > (chart_w - xs)) xx = (chart_w - xs);
-   if(xx < 0) xx = 0;
+   if(xx < 0)
+      xx = 0;
+   if(chart_w > 0 && xs > 0 && xx > (chart_w - xs))
+      xx = (chart_w - xs);
+   if(xx < 0)
+      xx = 0;
 
-   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, xx);
-}
+   UI_ObjSetIntSafe(0, name, OBJPROP_XDISTANCE, xx);
+  }
 
 /**
  * Beschreibung: Verankert die Base-UI an der rechten Chartkante.
@@ -232,42 +276,42 @@ void UI_SetObjectXClamped(const string name, const int x_left, const int chart_w
  * Hinweise:     Nur X wird gesetzt.
  * Fehlerfälle:  s.o.
  */
- /*
+/*
 void BaseUI_ApplyRightAnchor()
 {
-   if(!BaseUI_CaptureAnchorBaseline(false))
-      return;
+  if(!BaseUI_CaptureAnchorBaseline(false))
+     return;
 
-   int w = UI_GetChartWidthPx();
-   if(w <= 0)
-      return;
+  int w = UI_GetChartWidthPx();
+  if(w <= 0)
+     return;
 
-   int entry_w = (ObjectFind(0, EntryButton) >= 0) ? (int)ObjectGetInteger(0, EntryButton, OBJPROP_XSIZE) : g_base_ref_w;
-   if(entry_w <= 0) entry_w = g_base_ref_w;
+  int entry_w = (ObjectFind(0, EntryButton) >= 0) ? (int)ObjectGetInteger(0, EntryButton, OBJPROP_XSIZE) : g_base_ref_w;
+  if(entry_w <= 0) entry_w = g_base_ref_w;
 
-   int new_entry_x = w - InpBaseUI_RightMarginPx - entry_w - InpBaseUI_RightShiftPx;
-   if(new_entry_x < 0) new_entry_x = 0;
+  int new_entry_x = w - InpBaseUI_RightMarginPx - entry_w - InpBaseUI_RightShiftPx;
+  if(new_entry_x < 0) new_entry_x = 0;
 
-   UI_SetObjectXClamped(EntryButton, new_entry_x, w);
+  UI_SetObjectXClamped(EntryButton, new_entry_x, w);
 
-   UI_SetObjectXClamped(SLButton,     new_entry_x + g_dx_slbtn,  w);
-   UI_SetObjectXClamped(SENDTRADEBTN, new_entry_x + g_dx_send,   w);
-   UI_SetObjectXClamped(TRNB,         new_entry_x + g_dx_trnb,   w);
-   UI_SetObjectXClamped(POSNB,        new_entry_x + g_dx_posnb,  w);
-   UI_SetObjectXClamped(SabioEntry,   new_entry_x + g_dx_sabEnt, w);
-   UI_SetObjectXClamped(SabioSL,      new_entry_x + g_dx_sabSL,  w);
+  UI_SetObjectXClamped(SLButton,     new_entry_x + g_dx_slbtn,  w);
+  UI_SetObjectXClamped(SENDTRADEBTN, new_entry_x + g_dx_send,   w);
+  UI_SetObjectXClamped(TRNB,         new_entry_x + g_dx_trnb,   w);
+  UI_SetObjectXClamped(POSNB,        new_entry_x + g_dx_posnb,  w);
+  UI_SetObjectXClamped(SabioEntry,   new_entry_x + g_dx_sabEnt, w);
+  UI_SetObjectXClamped(SabioSL,      new_entry_x + g_dx_sabSL,  w);
 }
 /*
 /**
- * Beschreibung: Wendet die gewünschte Linien-Drag-Regel an:
- *               - PR_HL-Drag: SL_HL folgt mit konstantem Delta
- *               - SL_HL-Drag: PR_HL bleibt stehen, Delta wird aktualisiert (SL - Entry)
- * Parameter:    dragged_line - PR_HL oder SL_HL (die vom Nutzer gezogene Linie)
- *               is_finalize  - true wenn Drag beendet (MouseUp/OBJECT_CHANGE), false für live
- * Rückgabewert: bool - true wenn angewendet/ok, false bei fehlenden Objekten/Fehlern
- * Hinweise:     Nutzt g_base_sync_guard gegen Rekursion durch ObjectSetDouble auf SL_HL.
- * Fehlerfälle:  UI_SetHLinePriceSafe/UI_GetHLinePriceSafe loggen GetLastError.
- */
+* Beschreibung: Wendet die gewünschte Linien-Drag-Regel an:
+*               - PR_HL-Drag: SL_HL folgt mit konstantem Delta
+*               - SL_HL-Drag: PR_HL bleibt stehen, Delta wird aktualisiert (SL - Entry)
+* Parameter:    dragged_line - PR_HL oder SL_HL (die vom Nutzer gezogene Linie)
+*               is_finalize  - true wenn Drag beendet (MouseUp/OBJECT_CHANGE), false für live
+* Rückgabewert: bool - true wenn angewendet/ok, false bei fehlenden Objekten/Fehlern
+* Hinweise:     Nutzt g_base_sync_guard gegen Rekursion durch ObjectSetDouble auf SL_HL.
+* Fehlerfälle:  UI_SetHLinePriceSafe/UI_GetHLinePriceSafe loggen GetLastError.
+*/
 bool BaseLines_ApplyCoupling(const string dragged_line, const bool is_finalize)
   {
    if(!g_base_lock_distance)
@@ -457,42 +501,42 @@ void TP_FinalizeLineMove()
  * Fehlerfälle:  ChartTimePriceToXY kann fehlschlagen -> dann wird nichts erzwungen (sicherer als Springen).
  */
 void BaseLines_LiveSyncFallback(const bool left_down)
-{
+  {
    if(!left_down)
       return;
 
-   // Button-Drag hat Vorrang
+// Button-Drag hat Vorrang
    if(g_base_btn_drag_active)
       return;
 
-   // Während programmgesteuertem Sync niemals eingreifen
+// Während programmgesteuertem Sync niemals eingreifen
    if(g_base_sync_guard)
       return;
 
-   // -------------------------------------------------------------
-   // 1) WICHTIG: Wenn Base-Drag bereits aktiv ist -> NICHT umschalten!
-   //    (genau das verursacht "SL springt auf Entry und zurück", wenn beide selected sind)
-   // -------------------------------------------------------------
+// -------------------------------------------------------------
+// 1) WICHTIG: Wenn Base-Drag bereits aktiv ist -> NICHT umschalten!
+//    (genau das verursacht "SL springt auf Entry und zurück", wenn beide selected sind)
+// -------------------------------------------------------------
    if(g_base_drag_active && (g_base_drag_name == PR_HL || g_base_drag_name == SL_HL))
-   {
+     {
       // MouseY pflegen (für SLButton-MouseY-Fallback in UI_SyncBaseButtonsToLines)
       g_base_drag_mouse_y = (g_last_mouse_y >= 0 ? g_last_mouse_y : 0);
 
       BaseLines_ApplyCoupling(g_base_drag_name, false);
       UI_OnBaseLinesChanged(false);
       return;
-   }
+     }
 
-   // -------------------------------------------------------------
-   // 2) Kein Base-Drag aktiv: Nur dann versuchen wir anhand selection zu starten
-   // -------------------------------------------------------------
+// -------------------------------------------------------------
+// 2) Kein Base-Drag aktiv: Nur dann versuchen wir anhand selection zu starten
+// -------------------------------------------------------------
    bool pr_sel = (ObjectFind(0, PR_HL) >= 0 && ObjectGetInteger(0, PR_HL, OBJPROP_SELECTED) != 0);
    bool sl_sel = (ObjectFind(0, SL_HL) >= 0 && ObjectGetInteger(0, SL_HL, OBJPROP_SELECTED) != 0);
 
    if(!pr_sel && !sl_sel)
       return;
 
-   // Wir reagieren nur, wenn die Maus wirklich nahe an der Linie ist
+// Wir reagieren nur, wenn die Maus wirklich nahe an der Linie ist
    const int THRESH_PX = 12;
    const int my = (g_last_mouse_y >= 0 ? g_last_mouse_y : 0);
 
@@ -500,7 +544,7 @@ void BaseLines_LiveSyncFallback(const bool left_down)
    if(!UI_GetHLinePriceSafe(PR_HL, entry) || !UI_GetHLinePriceSafe(SL_HL, sl))
       return;
 
-   // y-Positionen der Linien berechnen, um "welche Linie wird gerade gezogen?" sauber zu entscheiden
+// y-Positionen der Linien berechnen, um "welche Linie wird gerade gezogen?" sauber zu entscheiden
    datetime t = TimeCurrent();
    int x = 0, y_pr = 0, y_sl = 0;
 
@@ -513,33 +557,34 @@ void BaseLines_LiveSyncFallback(const bool left_down)
    int d_pr = (ok_pr ? (int)MathAbs(my - y_pr) : 999999);
    int d_sl = (ok_sl ? (int)MathAbs(my - y_sl) : 999999);
 
-   // Wenn Maus nicht nahe genug an irgendeiner Linie ist -> kein Fallback-Drag starten
+// Wenn Maus nicht nahe genug an irgendeiner Linie ist -> kein Fallback-Drag starten
    if(MathMin(d_pr, d_sl) > THRESH_PX)
       return;
 
-   // Linie wählen:
+// Linie wählen:
    string chosen = "";
 
    if(pr_sel && !sl_sel)
       chosen = PR_HL;
-   else if(sl_sel && !pr_sel)
-      chosen = SL_HL;
    else
-   {
-      // beide selected: wähle die nähere Linie zur Maus
-      // Default bei Gleichstand: SL (sicherer, weil SL frei sein soll)
-      chosen = (d_sl <= d_pr ? SL_HL : PR_HL);
-   }
+      if(sl_sel && !pr_sel)
+         chosen = SL_HL;
+      else
+        {
+         // beide selected: wähle die nähere Linie zur Maus
+         // Default bei Gleichstand: SL (sicherer, weil SL frei sein soll)
+         chosen = (d_sl <= d_pr ? SL_HL : PR_HL);
+        }
 
-   // Drag starten/tracken (Delta wird bei PR_HL korrekt eingefroren)
+// Drag starten/tracken (Delta wird bei PR_HL korrekt eingefroren)
    BaseLines_BeginDragIfNeeded(chosen);
 
-   // MouseY für live UI
+// MouseY für live UI
    g_base_drag_mouse_y = my;
 
    BaseLines_ApplyCoupling(chosen, false);
    UI_OnBaseLinesChanged(false);
-}
+  }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -622,7 +667,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
          uint now = GetTickCount();
          if(now - last_redraw > 50)   // ~20 FPS
            {
-            ChartRedraw(0);
+            UI_RequestRedraw();
             last_redraw = now;
            }
 
@@ -631,8 +676,8 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
       // --- Basislinien (PR_HL / SL_HL): UI live nachziehen
       if(sparam == PR_HL || sparam == SL_HL)
         {
-        
-        g_base_last_clicked_line = sparam;
+
+         g_base_last_clicked_line = sparam;
 
          // Live-MouseY merken, damit Buttons sofort mitlaufen (auch wenn ChartTimePriceToXY spinnt)
          g_base_drag_mouse_y = UI_GetMouseYPxSafe(dparam);
@@ -736,138 +781,14 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
       return;
      }
 
-   /*
 
-      if(id == CHARTEVENT_MOUSE_MOVE)
-        {
-
-         int MouseD_X = (int)lparam;
-         int MouseD_Y = (int)dparam;
-
-         int MouseState = (int)StringToInteger(sparam);
-
-         // Fallback-Finalize: Wenn MT5 kein CHARTEVENT_OBJECT_CHANGE feuert,
-         // senden wir Discord + speichern beim MouseUp (state==0).
-         if(MouseState == 0 && g_tp_drag_active)
-            TP_FinalizeLineMove();
-         // MouseUp-Fallback für Basislinien (falls OBJECT_CHANGE ausbleibt)
-         BaseLines_FinalizeDragIfNeeded(MouseState);
-
-         int XD_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_XDISTANCE);
-         int YD_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_YDISTANCE);
-         int XS_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_XSIZE);
-         int YS_EntryButton = (int)ObjectGetInteger(0, EntryButton, OBJPROP_YSIZE);
-
-         int XD_R5 = (int)ObjectGetInteger(0, SLButton, OBJPROP_XDISTANCE);
-         int YD_R5 = (int)ObjectGetInteger(0, SLButton, OBJPROP_YDISTANCE);
-         int XS_R5 = (int)ObjectGetInteger(0, SLButton, OBJPROP_XSIZE);
-         int YS_R5 = (int)ObjectGetInteger(0, SLButton, OBJPROP_YSIZE);
-
-         if(prevMouseState == 0 && MouseState == 1)  // 1 = true: clicked left mouse btn
-           {
-
-            mlbDownX3 = MouseD_X;
-            mlbDownY3 = MouseD_Y;
-            mlbDownXD_R3 = XD_EntryButton;
-            mlbDownYD_R3 = YD_EntryButton;
-
-            mlbDownX5 = MouseD_X;
-            mlbDownY5 = MouseD_Y;
-            mlbDownXD_R5 = XD_R5;
-            mlbDownYD_R5 = YD_R5;
-
-            if(MouseD_X >= XD_EntryButton && MouseD_X <= XD_EntryButton + XS_EntryButton &&
-               MouseD_Y >= YD_EntryButton && MouseD_Y <= YD_EntryButton + YS_EntryButton)
-              {
-               movingState_R3 = true;
-              }
-
-            if(MouseD_X >= XD_R5 && MouseD_X <= XD_R5 + XS_R5 &&
-               MouseD_Y >= YD_R5 && MouseD_Y <= YD_R5 + YS_R5)
-              {
-               movingState_R5 = true;
-              }
-           }
-
-         if(movingState_R5)
-           {
-            ChartSetInteger(0, CHART_MOUSE_SCROLL, false);
-            //move SLButton und SabioSL
-            ObjectSetInteger(0, SLButton, OBJPROP_YDISTANCE, mlbDownYD_R5 + MouseD_Y - mlbDownY5);
-            ObjectSetInteger(0, SabioSL, OBJPROP_YDISTANCE, mlbDownYD_R5 + MouseD_Y + 30 - mlbDownY5);
-
-            datetime dt_SL = 0;
-            double price_SL = 0;
-            int window = 0;
-
-            ChartXYToTimePrice(0, XD_R5, YD_R5 + YS_R5, window, dt_SL, price_SL);
-            //Move SL HL LInie
-            ObjectSetInteger(0, SL_HL, OBJPROP_TIME, dt_SL);
-            ObjectSetDouble(0, SL_HL, OBJPROP_PRICE, price_SL);
-
-            // 1 Quelle der Wahrheit: Text/Lot/Direction aus PR_HL & SL_HL ableiten
-            UI_UpdateBaseSignalTexts();
-
-
-            datetime dt_TP = 0;
-            double price_TP = 0;
-
-
-            ChartRedraw(0);
-           }
-
-         if(movingState_R3)
-           {
-            ChartSetInteger(0, CHART_MOUSE_SCROLL, false);
-            ObjectSetInteger(0, EntryButton, OBJPROP_YDISTANCE, mlbDownYD_R3 + MouseD_Y - mlbDownY3);
-
-            ObjectSetInteger(0, SLButton, OBJPROP_YDISTANCE, mlbDownYD_R5 + MouseD_Y - mlbDownY5);
-            ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_YDISTANCE, mlbDownYD_R3 + MouseD_Y - mlbDownY3);
-            ObjectSetInteger(0, TRNB, OBJPROP_YDISTANCE, (mlbDownYD_R3 + MouseD_Y - mlbDownY3) + 30);
-            ObjectSetInteger(0, POSNB, OBJPROP_YDISTANCE, (mlbDownYD_R3 + MouseD_Y - mlbDownY3) + 30);
-
-            ObjectSetInteger(0, SabioEntry, OBJPROP_YDISTANCE, mlbDownYD_R3 + MouseD_Y + 30 - mlbDownY5);
-            ObjectSetInteger(0, SabioSL, OBJPROP_YDISTANCE, mlbDownYD_R5 + MouseD_Y + 30 - mlbDownY5);
-
-            datetime dt_PRC = 0, dt_SL1 = 0, dt_TP1 = 0;
-            double price_PRC = 0, price_SL1 = 0, price_TP1 = 0;
-            int window = 0;
-
-            ChartXYToTimePrice(0, XD_EntryButton, YD_EntryButton + YS_EntryButton, window, dt_PRC, price_PRC);
-
-            ChartXYToTimePrice(0, XD_R5, YD_R5 + YS_R5, window, dt_SL1, price_SL1);
-
-            ObjectSetInteger(0, PR_HL, OBJPROP_TIME, dt_PRC);
-            ObjectSetDouble(0, PR_HL, OBJPROP_PRICE, price_PRC);
-
-            ObjectSetInteger(0, SL_HL, OBJPROP_TIME, dt_SL1);
-            ObjectSetDouble(0, SL_HL, OBJPROP_PRICE, price_SL1);
-            // 1 Quelle der Wahrheit: Text/Lot/Direction aus PR_HL & SL_HL ableiten
-            UI_UpdateBaseSignalTexts();
-
-            ChartRedraw(0);
-           }
-
-         if(MouseState == 0)
-           {
-            bool wasMoving = (movingState_R3 || movingState_R5);
-            movingState_R3 = false;
-            movingState_R5 = false;
-            ChartSetInteger(0, CHART_MOUSE_SCROLL, true);
-            if(wasMoving)
-               g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
-           }
-         prevMouseState = MouseState;
-        }
-
-       */
-  if(id == CHARTEVENT_CHART_CHANGE)
-{
-   // Bei Resize/Zoom: X rechts verankern + Y neu syncen (Skalierung ändert sich)
-   BaseUI_ApplyRightAnchor();
-   UI_OnBaseLinesChanged(false);   // nur UI, kein Save/Discord
-   return;
-}
+   if(id == CHARTEVENT_CHART_CHANGE)
+     {
+      // Bei Resize/Zoom: X rechts verankern + Y neu syncen (Skalierung ändert sich)
+      BaseUI_ApplyRightAnchor();
+      UI_OnBaseLinesChanged(false);   // nur UI, kein Save/Discord
+      return;
+     }
 
 
 // Klick Button Send only
@@ -876,7 +797,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
 //+------------------------------------------------------------------+
    if(ObjectGetInteger(0, SENDTRADEBTN, OBJPROP_STATE) != 0)
      {
-      ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_STATE, 0);
+      UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_STATE, 0);
 
       if(Sabioedit == true)
         {
@@ -1037,8 +958,8 @@ void UI_CloseOnePositionAndNotify(const string action,
 
          if(ObjectFind(0, "ActiveLongTrade") >= 0)
            {
-            ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_COLOR, clrNONE);
-            ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_BGCOLOR, clrNONE);
+            UI_ObjSetIntSafe(0, "ActiveLongTrade", OBJPROP_COLOR, clrNONE);
+            UI_ObjSetIntSafe(0, "ActiveLongTrade", OBJPROP_BGCOLOR, clrNONE);
            }
         }
       else
@@ -1055,15 +976,15 @@ void UI_CloseOnePositionAndNotify(const string action,
 
          if(ObjectFind(0, "ActiveShortTrade") >= 0)
            {
-            ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_COLOR, clrNONE);
-            ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_BGCOLOR, clrNONE);
+            UI_ObjSetIntSafe(0, "ActiveShortTrade", OBJPROP_COLOR, clrNONE);
+            UI_ObjSetIntSafe(0, "ActiveShortTrade", OBJPROP_BGCOLOR, clrNONE);
            }
         }
      }
 
 // 4) UI Refresh
    UI_UpdateNextTradePosUI();
-   ChartRedraw(0);
+ UI_ProcessRedraw();
   }
 
 
@@ -1109,8 +1030,8 @@ bool UI_CancelActiveTrade(const string direction)
 
       if(ObjectFind(0, "ActiveLongTrade") >= 0)
         {
-         ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_COLOR, clrNONE);
-         ObjectSetInteger(0, "ActiveLongTrade", OBJPROP_BGCOLOR, clrNONE);
+         UI_ObjSetIntSafe(0, "ActiveLongTrade", OBJPROP_COLOR, clrNONE);
+         UI_ObjSetIntSafe(0, "ActiveLongTrade", OBJPROP_BGCOLOR, clrNONE);
         }
      }
    else
@@ -1130,8 +1051,8 @@ bool UI_CancelActiveTrade(const string direction)
 
       if(ObjectFind(0, "ActiveShortTrade") >= 0)
         {
-         ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_COLOR, clrNONE);
-         ObjectSetInteger(0, "ActiveShortTrade", OBJPROP_BGCOLOR, clrNONE);
+         UI_ObjSetIntSafe(0, "ActiveShortTrade", OBJPROP_COLOR, clrNONE);
+         UI_ObjSetIntSafe(0, "ActiveShortTrade", OBJPROP_BGCOLOR, clrNONE);
         }
      }
 
@@ -1265,21 +1186,21 @@ void UI_SyncBaseButtonsToLines()
         {
          const int baseY = y - ysize_entry_btn;
 
-         ObjectSetInteger(0, EntryButton,  OBJPROP_YDISTANCE, baseY);
+         UI_ObjSetIntSafe(0, EntryButton,  OBJPROP_YDISTANCE, baseY);
 
          // SendButton sitzt links neben EntryButton auf gleicher Höhe
          if(ObjectFind(0, SENDTRADEBTN) >= 0)
-            ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_YDISTANCE, baseY);
+            UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_YDISTANCE, baseY);
 
          // TRNB/POSNB + SabioEntry sind 30px unter EntryButton
          if(ObjectFind(0, TRNB) >= 0)
-            ObjectSetInteger(0, TRNB, OBJPROP_YDISTANCE, baseY + 30);
+            UI_ObjSetIntSafe(0, TRNB, OBJPROP_YDISTANCE, baseY + 30);
 
          if(ObjectFind(0, POSNB) >= 0)
-            ObjectSetInteger(0, POSNB, OBJPROP_YDISTANCE, baseY + 30);
+            UI_ObjSetIntSafe(0, POSNB, OBJPROP_YDISTANCE, baseY + 30);
 
          if(ObjectFind(0, SabioEntry) >= 0)
-            ObjectSetInteger(0, SabioEntry, OBJPROP_YDISTANCE, baseY + 30);
+            UI_ObjSetIntSafe(0, SabioEntry, OBJPROP_YDISTANCE, baseY + 30);
         }
       else
         {
@@ -1301,10 +1222,10 @@ void UI_SyncBaseButtonsToLines()
       if(g_base_drag_active && g_base_drag_name == SL_HL && g_base_drag_mouse_y >= 0)
         {
          const int baseY = g_base_drag_mouse_y - ysize_sl_btn;
-         ObjectSetInteger(0, SLButton, OBJPROP_YDISTANCE, baseY);
+         UI_ObjSetIntSafe(0, SLButton, OBJPROP_YDISTANCE, baseY);
 
          if(ObjectFind(0, SabioSL) >= 0)
-            ObjectSetInteger(0, SabioSL, OBJPROP_YDISTANCE, baseY + 30);
+            UI_ObjSetIntSafe(0, SabioSL, OBJPROP_YDISTANCE, baseY + 30);
 
          did_set = true;
         }
@@ -1315,10 +1236,10 @@ void UI_SyncBaseButtonsToLines()
          if(ChartTimePriceToXY(0, 0, t, sl, x, y))
            {
             const int baseY = y - ysize_sl_btn;
-            ObjectSetInteger(0, SLButton, OBJPROP_YDISTANCE, baseY);
+            UI_ObjSetIntSafe(0, SLButton, OBJPROP_YDISTANCE, baseY);
 
             if(ObjectFind(0, SabioSL) >= 0)
-               ObjectSetInteger(0, SabioSL, OBJPROP_YDISTANCE, baseY + 30);
+               UI_ObjSetIntSafe(0, SabioSL, OBJPROP_YDISTANCE, baseY + 30);
            }
          else
            {
@@ -1326,10 +1247,10 @@ void UI_SyncBaseButtonsToLines()
             if(g_base_drag_mouse_y >= 0)
               {
                const int baseY = g_base_drag_mouse_y - ysize_sl_btn;
-               ObjectSetInteger(0, SLButton, OBJPROP_YDISTANCE, baseY);
+               UI_ObjSetIntSafe(0, SLButton, OBJPROP_YDISTANCE, baseY);
 
                if(ObjectFind(0, SabioSL) >= 0)
-                  ObjectSetInteger(0, SabioSL, OBJPROP_YDISTANCE, baseY + 30);
+                  UI_ObjSetIntSafe(0, SabioSL, OBJPROP_YDISTANCE, baseY + 30);
               }
             else
               {
@@ -1452,17 +1373,11 @@ bool UI_PointInButtonRect(const string obj_name,
  */
 bool UI_SetHLinePriceSafe(const string line_name, const double price)
   {
-   if(ObjectFind(0, line_name) < 0)
-     {
-      Print(__FUNCTION__, ": line not found: ", line_name);
-      return false;
-     }
-
+  
    ResetLastError();
    if(!ObjectSetDouble(0, line_name, OBJPROP_PRICE, price))
      {
-      Print(__FUNCTION__, ": ObjectSetDouble failed for ", line_name, " err=", GetLastError());
-      return false;
+        return false;
      }
    return true;
   }
