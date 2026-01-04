@@ -34,18 +34,25 @@ input bool InpDebugEventTrace = false; // true: Events in Experts loggen
  * Fehlerfälle:  Keine.
  */
 string UI_EventIdToStr(const int id)
-{
+  {
    switch(id)
-   {
-      case CHARTEVENT_OBJECT_CLICK:   return "OBJECT_CLICK";
-      case CHARTEVENT_OBJECT_DRAG:    return "OBJECT_DRAG";
-      case CHARTEVENT_OBJECT_CHANGE:  return "OBJECT_CHANGE";
-      case CHARTEVENT_OBJECT_ENDEDIT: return "OBJECT_ENDEDIT";
-      case CHARTEVENT_MOUSE_MOVE:     return "MOUSE_MOVE";
-      case CHARTEVENT_CHART_CHANGE:   return "CHART_CHANGE";
-      default:                        return "OTHER";
-   }
-}
+     {
+      case CHARTEVENT_OBJECT_CLICK:
+         return "OBJECT_CLICK";
+      case CHARTEVENT_OBJECT_DRAG:
+         return "OBJECT_DRAG";
+      case CHARTEVENT_OBJECT_CHANGE:
+         return "OBJECT_CHANGE";
+      case CHARTEVENT_OBJECT_ENDEDIT:
+         return "OBJECT_ENDEDIT";
+      case CHARTEVENT_MOUSE_MOVE:
+         return "MOUSE_MOVE";
+      case CHARTEVENT_CHART_CHANGE:
+         return "CHART_CHANGE";
+      default:
+         return "OTHER";
+     }
+  }
 
 /**
  * Beschreibung: Prüft, ob ein Objektname zu den “interessanten” UI/Trade-Objekten gehört.
@@ -55,26 +62,38 @@ string UI_EventIdToStr(const int id)
  * Fehlerfälle:  Keine.
  */
 bool UI_IsWatchedEventObject(const string name)
-{
-   if(name == PR_HL || name == SL_HL) return true;
-   if(name == EntryButton || name == SLButton) return true;
-   if(name == SENDTRADEBTN) return true;
-   if(name == SabioEntry || name == SabioSL) return true;
+  {
+   if(name == PR_HL || name == SL_HL)
+      return true;
+   if(name == EntryButton || name == SLButton)
+      return true;
+   if(name == SENDTRADEBTN)
+      return true;
+   if(name == SabioEntry || name == SabioSL)
+      return true;
 
-   // Trade-Pos Linien
-   if(StringFind(name, "Entry_Long_")  == 0) return true;
-   if(StringFind(name, "SL_Long_")     == 0) return true;
-   if(StringFind(name, "Entry_Short_") == 0) return true;
-   if(StringFind(name, "SL_Short_")    == 0) return true;
+// Trade-Pos Linien
+   if(StringFind(name, "Entry_Long_")  == 0)
+      return true;
+   if(StringFind(name, "SL_Long_")     == 0)
+      return true;
+   if(StringFind(name, "Entry_Short_") == 0)
+      return true;
+   if(StringFind(name, "SL_Short_")    == 0)
+      return true;
 
-   // TradesPanel Row Buttons (Cancel/HitSL)
-   if(StringFind(name, TP_ROW_LONG_Cancel_PREFIX)  == 0) return true;
-   if(StringFind(name, TP_ROW_LONG_hitSL_PREFIX)   == 0) return true;
-   if(StringFind(name, TP_ROW_SHORT_Cancel_PREFIX) == 0) return true;
-   if(StringFind(name, TP_ROW_SHORT_hitSL_PREFIX)  == 0) return true;
+// TradesPanel Row Buttons (Cancel/HitSL)
+   if(StringFind(name, TP_ROW_LONG_Cancel_PREFIX)  == 0)
+      return true;
+   if(StringFind(name, TP_ROW_LONG_hitSL_PREFIX)   == 0)
+      return true;
+   if(StringFind(name, TP_ROW_SHORT_Cancel_PREFIX) == 0)
+      return true;
+   if(StringFind(name, TP_ROW_SHORT_hitSL_PREFIX)  == 0)
+      return true;
 
    return false;
-}
+  }
 
 /**
  * Beschreibung: Loggt relevante Chart-Events für watched Objects.
@@ -84,11 +103,11 @@ bool UI_IsWatchedEventObject(const string name)
  * Fehlerfälle:  Keine; reine Diagnose.
  */
 void UI_DebugTraceEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
-{
+  {
    if(!InpDebugEventTrace)
       return;
 
-   // MouseMove nur loggen, wenn gerade ein Drag aktiv ist (sonst Spam)
+// MouseMove nur loggen, wenn gerade ein Drag aktiv ist (sonst Spam)
    if(id == CHARTEVENT_MOUSE_MOVE && !(g_base_btn_drag_active || g_base_drag_active || g_tp_drag_active))
       return;
 
@@ -100,9 +119,9 @@ void UI_DebugTraceEvent(const int id, const long &lparam, const double &dparam, 
          "' lparam=", (long)lparam,
          " dparam=", DoubleToString(dparam, 8),
          " baseDrag=", (g_base_drag_active ? "1":"0"),
-         " btnDrag=",  (g_base_btn_drag_active ? "1":"0"),
-         " tpDrag=",   (g_tp_drag_active ? "1":"0"));
-}
+         " btnDrag=", (g_base_btn_drag_active ? "1":"0"),
+         " tpDrag=", (g_tp_drag_active ? "1":"0"));
+  }
 
 
 /**
@@ -113,9 +132,9 @@ void UI_DebugTraceEvent(const int id, const long &lparam, const double &dparam, 
  * Fehlerfälle:  keine
  */
 void UI_RequestRedraw()
-{
+  {
    g_ui_redraw_pending = true;
-}
+  }
 
 /**
  * Beschreibung: Führt ein gedrosseltes ChartRedraw aus, wenn angefordert.
@@ -125,7 +144,7 @@ void UI_RequestRedraw()
  * Fehlerfälle:  keine
  */
 void UI_ProcessRedraw()
-{
+  {
    if(!g_ui_redraw_pending)
       return;
 
@@ -136,7 +155,7 @@ void UI_ProcessRedraw()
    ChartRedraw(0);
    g_ui_last_redraw_ms = now;
    g_ui_redraw_pending = false;
-}
+  }
 
 
 // ------------------------------------------------------------------
@@ -536,7 +555,7 @@ void TP_FinalizeLineMove()
 
 // UI: Tag sauber nachziehen
    UI_CreateOrUpdateLineTag(g_tp_drag_name);
-     UI_RequestRedraw();
+   UI_RequestRedraw();
 
 
 // DB: persistieren (erst nach dem old/new Vergleich)
@@ -678,13 +697,17 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
                   const double &dparam, // Parameter des Ereignisses des Typs double, Y cordinates
                   const string &sparam) // Parameter des Ereignisses des Typs string, name of the object, state
   {
- 
-    UI_DebugTraceEvent(id, lparam, dparam, sparam);
+
+// Panel zuerst (damit es seine Buttons/Rows sauber abfangen kann)
+   if(g_tp.OnChartEvent(id, lparam, dparam, sparam))
+      return;
+
+   UI_DebugTraceEvent(id, lparam, dparam, sparam);
 
    CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-if(g_tp.OnChartEvent(id, lparam, dparam, sparam))
-   return;
+   if(g_tp.OnChartEvent(id, lparam, dparam, sparam))
+      return;
 
 // NEU: Delta im Idle aktuell halten
    BaseLines_UpdateDeltaIfIdle();
@@ -697,27 +720,27 @@ if(g_tp.OnChartEvent(id, lparam, dparam, sparam))
     */
    if(id == CHARTEVENT_OBJECT_CLICK)
      {
-     
-           // SEND button: nur auf echten Klick reagieren (kein State-Polling)
+
+      // SEND button: nur auf echten Klick reagieren (kein State-Polling)
       if(sparam == SENDTRADEBTN)
-      {
+        {
          // Button-State zurücksetzen, damit kein "stuck pressed" bleibt
          UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_STATE, 0);
 
          if(Sabioedit == true)
-         {
+           {
             int result = MessageBox("Sabio Preise angepasst?", NULL, MB_YESNO);
             if(result == IDYES)
                DiscordSend();
-         }
+           }
          else
-         {
+           {
             DiscordSend();
-         }
+           }
          return;
-      }
+        }
 
-     
+
       if(sparam == PR_HL || sparam == SL_HL)
         {
          g_base_last_clicked_line = sparam;
@@ -725,8 +748,7 @@ if(g_tp.OnChartEvent(id, lparam, dparam, sparam))
         }
      }
 
-   if(UI_TradesPanel_OnChartEvent(id, lparam, dparam, sparam))
-      return;
+
 
 
 
@@ -789,7 +811,7 @@ if(g_tp.OnChartEvent(id, lparam, dparam, sparam))
 
          g_base_last_clicked_line = sparam;
 
-                // WICHTIG: Bei OBJECT_DRAG ist dparam bei HLINE/MT5 oft ein PREIS (Forex ~1.xxx).
+         // WICHTIG: Bei OBJECT_DRAG ist dparam bei HLINE/MT5 oft ein PREIS (Forex ~1.xxx).
          // Daher primär auf die echte MouseMove-Y zurückgreifen.
          g_base_drag_mouse_y = (g_last_mouse_y >= 0 ? g_last_mouse_y : UI_GetMouseYPxSafe(dparam));
 
@@ -922,15 +944,16 @@ if(g_tp.OnChartEvent(id, lparam, dparam, sparam))
    if(last_ui_direction_is_long != ui_direction_is_long)
      {
       last_ui_direction_is_long = ui_direction_is_long;
-      UI_UpdateNextTradePosUI();
+      TP_RebuildRows();
 
       UI_UpdateAllLineTags();
      }
 
 
 
-   // Zentraler, gedrosselter Redraw (statt vieler ChartRedraw-Aufrufe)
+// Zentraler, gedrosselter Redraw (statt vieler ChartRedraw-Aufrufe)
    UI_ProcessRedraw();
+g_tp.ProcessRebuild();
 
   } // Ende ChartEvent
 
@@ -1044,7 +1067,7 @@ void UI_CloseOnePositionAndNotify(const string action,
 
 // 4) UI Refresh
    UI_UpdateNextTradePosUI();
- UI_ProcessRedraw();
+   UI_ProcessRedraw();
   }
 
 
@@ -1117,7 +1140,8 @@ bool UI_CancelActiveTrade(const string direction)
      }
 
    UI_UpdateNextTradePosUI();
-   UI_TradesPanel_RebuildRows();
+   g_tp.RebuildRows();
+
    ChartRedraw(0);
    return true;
   }
@@ -1433,11 +1457,11 @@ bool UI_PointInButtonRect(const string obj_name,
  */
 bool UI_SetHLinePriceSafe(const string line_name, const double price)
   {
-  
+
    ResetLastError();
    if(!ObjectSetDouble(0, line_name, OBJPROP_PRICE, price))
      {
-        return false;
+      return false;
      }
    return true;
   }

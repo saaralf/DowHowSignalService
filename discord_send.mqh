@@ -120,14 +120,14 @@ void DiscordSend()
          showActive_long(true);
          showCancel_long(true);
          update_Text(TP_BTN_ACTIVE_LONG, "ACTIVE POSITION");
-         UI_TradesPanel_RebuildRows();
+   g_tp.RebuildRows();
       }
       else
       {
          showActive_short(true);
          showCancel_short(true);
          update_Text(TP_BTN_ACTIVE_SHORT, "ACTIVE POSITION");
-         UI_TradesPanel_RebuildRows();
+      g_tp.RebuildRows();
       }
 
       if(active_before > 0)
