@@ -3,7 +3,7 @@
 #define __TRADES_PANEL_MQH__
 #include "db_service.mqh"
 
-#include "discord_client.mqh" 
+#include "discord_client.mqh"
 #define TP_BG "TP_BG"
 
 #define TP_LBL_LONG "TP_LBL_LONG"
@@ -369,7 +369,7 @@ void UI_TradesPanel_RebuildRows()
 // 3) DB laden
    DB_PositionRow rows[];
 
- int n = g_DB.LoadPositions(_Symbol, (ENUM_TIMEFRAMES)_Period, rows);
+   int n = g_DB.LoadPositions(_Symbol, (ENUM_TIMEFRAMES)_Period, rows);
 // 3.1) In LONG/SHORT Arrays filtern (und Lines restoren)
    DB_PositionRow longRows[];
    DB_PositionRow shortRows[];
@@ -571,98 +571,102 @@ void SortRowsByTradePos(DB_PositionRow &arr[], const int cnt)
   }
 
 
-  
-  /**
- * Beschreibung: Zentraler Click-Dispatcher für das Trades-Panel.
- * Parameter:    id     - ChartEvent-ID (wir reagieren nur auf OBJECT_CLICK)
- *               lparam - vom ChartEvent (ungenutzt)
- *               dparam - vom ChartEvent (ungenutzt)
- *               sparam - Objektname, der geklickt wurde
- * Rückgabewert: bool - true, wenn Event behandelt wurde, sonst false
- * Hinweise:     Keine doppelte Logik; Header-Buttons + Row-Buttons sauber getrennt.
- * Fehlerfälle:  Parsing-Fehler bei Row-Buttons -> kein Close/Notify, aber Event gilt als behandelt.
- */
+
+/**
+* Beschreibung: Zentraler Click-Dispatcher für das Trades-Panel.
+* Parameter:    id     - ChartEvent-ID (wir reagieren nur auf OBJECT_CLICK)
+*               lparam - vom ChartEvent (ungenutzt)
+*               dparam - vom ChartEvent (ungenutzt)
+*               sparam - Objektname, der geklickt wurde
+* Rückgabewert: bool - true, wenn Event behandelt wurde, sonst false
+* Hinweise:     Keine doppelte Logik; Header-Buttons + Row-Buttons sauber getrennt.
+* Fehlerfälle:  Parsing-Fehler bei Row-Buttons -> kein Close/Notify, aber Event gilt als behandelt.
+*/
 bool UI_TradesPanel_OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
-{
+  {
    if(id != CHARTEVENT_OBJECT_CLICK)
       return false;
 
-   // ------------------------------------------------------------
-   // 1) Header-Buttons
-   // ------------------------------------------------------------
+// ------------------------------------------------------------
+// 1) Header-Buttons
+// ------------------------------------------------------------
 
-   // Active-Buttons sind derzeit reine Status-Anzeige -> Klick "schlucken"
+// Active-Buttons sind derzeit reine Status-Anzeige -> Klick "schlucken"
    if(sparam == TP_BTN_ACTIVE_LONG || sparam == TP_BTN_ACTIVE_SHORT)
       return true;
 
-/*
+
    if(sparam == TP_BTN_CANCEL_LONG)
-   {
+     {
       UI_CancelActiveTrade("LONG");
+      UI_TradesPanel_RebuildRows();
+      UI_RequestRedraw();
       return true;
-   }
+     }
 
    if(sparam == TP_BTN_CANCEL_SHORT)
-   {
+     {
       UI_CancelActiveTrade("SHORT");
+      UI_TradesPanel_RebuildRows();
+      UI_RequestRedraw();
       return true;
-   }
-*/
-   // ------------------------------------------------------------
-   // 2) Row-Buttons (Cancel / HitSL) je TradeNo + PosNo
-   // ------------------------------------------------------------
+     }
+
+// ------------------------------------------------------------
+// 2) Row-Buttons (Cancel / HitSL) je TradeNo + PosNo
+// ------------------------------------------------------------
    int trade_no = 0, pos_no = 0;
 
-   // LONG Cancel
+// LONG Cancel
    if(StringFind(sparam, TP_ROW_LONG_Cancel_PREFIX, 0) == 0)
-   {
+     {
       if(UI_ParseTradePosFromButtonName(sparam, TP_ROW_LONG_Cancel_PREFIX, trade_no, pos_no))
-      {
+        {
          UI_CloseOnePositionAndNotify("CANCEL", "LONG", trade_no, pos_no);
          UI_TradesPanel_RebuildRows();
          UI_RequestRedraw();
-      }
+        }
       return true;
-   }
+     }
 
-   // LONG HitSL
+// LONG HitSL
    if(StringFind(sparam, TP_ROW_LONG_hitSL_PREFIX, 0) == 0)
-   {
+     {
       if(UI_ParseTradePosFromButtonName(sparam, TP_ROW_LONG_hitSL_PREFIX, trade_no, pos_no))
-      {
+        {
          UI_CloseOnePositionAndNotify("HIT_SL", "LONG", trade_no, pos_no);
          UI_TradesPanel_RebuildRows();
          UI_RequestRedraw();
-      }
+        }
       return true;
-   }
+     }
 
-   // SHORT Cancel
+// SHORT Cancel
    if(StringFind(sparam, TP_ROW_SHORT_Cancel_PREFIX, 0) == 0)
-   {
+     {
       if(UI_ParseTradePosFromButtonName(sparam, TP_ROW_SHORT_Cancel_PREFIX, trade_no, pos_no))
-      {
+        {
          UI_CloseOnePositionAndNotify("CANCEL", "SHORT", trade_no, pos_no);
          UI_TradesPanel_RebuildRows();
          UI_RequestRedraw();
-      }
+        }
       return true;
-   }
+     }
 
-   // SHORT HitSL
+// SHORT HitSL
    if(StringFind(sparam, TP_ROW_SHORT_hitSL_PREFIX, 0) == 0)
-   {
+     {
       if(UI_ParseTradePosFromButtonName(sparam, TP_ROW_SHORT_hitSL_PREFIX, trade_no, pos_no))
-      {
+        {
          UI_CloseOnePositionAndNotify("HIT_SL", "SHORT", trade_no, pos_no);
          UI_TradesPanel_RebuildRows();
          UI_RequestRedraw();
-      }
+        }
       return true;
-   }
+     }
 
    return false;
-}
+  }
 
 
 //+------------------------------------------------------------------+
