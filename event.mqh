@@ -431,8 +431,11 @@ void TP_FinalizeLineMove()
    const double new_price = g_tp_drag_last;
    const double old_price = g_tp_drag_old;
 
-// UI: Tag sauber nachziehen
-   UI_CreateOrUpdateLineTag(g_tp_drag_name);
+// UI: Tag sauber nachziehe 
+   // WICHTIG: auch für die "anderen" TradePos-Linien-Branches redraw anfordern,
+// sonst wirkt das Label wie "Lag" und springt später hinterher.
+UI_LineTag_SyncToLine(g_tp_drag_name);
+UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
    UI_RequestRedraw();
 
 
@@ -601,7 +604,11 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
       // sonstige Trade-Linien (z.B. TP): nur Tag live
       if(UI_IsTradePosLine(sparam))
         {
-         UI_CreateOrUpdateLineTag(sparam);
+      
+         // WICHTIG: auch für die "anderen" TradePos-Linien-Branches redraw anfordern,
+// sonst wirkt das Label wie "Lag" und springt später hinterher.
+UI_LineTag_SyncToLine(sparam);
+UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
          return;
         }
      }
@@ -625,7 +632,11 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
       // Trade-Linien: wie gehabt
       if(UI_IsTradePosLine(sparam))
         {
-         UI_CreateOrUpdateLineTag(sparam);
+    
+         // WICHTIG: auch für die "anderen" TradePos-Linien-Branches redraw anfordern,
+// sonst wirkt das Label wie "Lag" und springt später hinterher.
+UI_LineTag_SyncToLine(sparam);
+UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
          g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
          return;
         }
@@ -1229,7 +1240,25 @@ bool UI_GetHLinePriceSafe(const string line_name, double &out_price)
    return true;
   }
   
- 
+ /**
+ * Beschreibung: Fordert ein Chart-Redraw an, aber gedrosselt (Throttle), um flüssiges UI beim Drag zu bekommen,
+ *              ohne die CPU mit ChartRedraw() zu fluten.
+ * Parameter:    min_interval_ms - Mindestabstand zwischen Redraw-Requests in Millisekunden
+ * Rückgabewert: void
+ * Hinweise:     Nutzt UI_RequestRedraw() (dein bestehender Mechanismus). Nur während Drag klein wählen.
+ * Fehlerfälle:  Keine (rein logisch). Wenn UI_RequestRedraw() fehlt -> Compile-Fehler.
+ */
+void UI_RequestRedrawThrottled(const uint min_interval_ms)
+{
+   static uint s_last_ms = 0;
+   const uint now = GetTickCount();
+   if(now - s_last_ms < min_interval_ms)
+      return;
+
+   UI_RequestRedraw();     // dein bestehender "sanfter" Redraw-Request
+   s_last_ms = now;
+}
+
 
 // Merkt, welche Basislinie der User zuletzt angeklickt hat (wichtig, wenn beide "selected" sind)
 static string g_base_last_clicked_line = "";

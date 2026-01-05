@@ -541,6 +541,7 @@ bool UI_CreateOrUpdateLineTag(const string line_name)
       UI_ObjSetIntSafe(0, tag_name, OBJPROP_SELECTABLE, false);
       UI_ObjSetIntSafe(0, tag_name, OBJPROP_SELECTED,   false);
       UI_ObjSetIntSafe(0, tag_name, OBJPROP_BACK,       false);
+       UI_ObjSetIntSafe(0, tag_name, OBJPROP_HIDDEN,       true);
      }
 
    UI_ObjSetIntSafe(0, tag_name, OBJPROP_XDISTANCE, x);
@@ -550,6 +551,80 @@ bool UI_CreateOrUpdateLineTag(const string line_name)
    return true;
   }
 
+#ifndef LINE_TAG_SUFFIX
+   #define LINE_TAG_SUFFIX "_TAG"
+#endif
+
+/**
+ * Beschreibung: Synchronisiert ein Label-Tag (_TAG) pixelgenau an die Y-Position einer HLINE/Trade-Linie.
+ *              Ziel: Tag läuft beim Drag ohne sichtbares "Nachziehen" mit.
+ * Parameter:    line_name - Name der Linie (z.B. "Entry_Long_12_3")
+ * Rückgabewert: bool - true wenn Sync ok, sonst false
+ * Hinweise:     - Tag wird als OBJ_LABEL rechts oben verankert (CORNER_RIGHT_UPPER)
+ *              - Y wird per ChartTimePriceToXY aus einer garantiert sichtbaren Bar ermittelt
+ * Fehlerfälle:  - Linie nicht gefunden -> false
+ *              - ChartTimePriceToXY failt -> false (Print mit GetLastError)
+ */
+bool UI_LineTag_SyncToLine(const string line_name)
+{
+   if(ObjectFind(0, line_name) < 0)
+      return false;
+
+   const string tag_name = line_name + LINE_TAG_SUFFIX;
+
+   // Preis der Linie holen
+   const double price = ObjectGetDouble(0, line_name, OBJPROP_PRICE);
+   const int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
+
+   // Tag ggf. erstellen
+   if(ObjectFind(0, tag_name) < 0)
+   {
+      ResetLastError();
+      if(!ObjectCreate(0, tag_name, OBJ_LABEL, 0, 0, 0))
+      {
+         Print(__FUNCTION__, ": ObjectCreate failed tag='", tag_name, "' err=", GetLastError());
+         return false;
+      }
+
+      // Eigenschaften: nicht anklickbar, nicht im Objektbaum sichtbar
+      ObjectSetInteger(0, tag_name, OBJPROP_SELECTABLE, false);
+      ObjectSetInteger(0, tag_name, OBJPROP_HIDDEN,     true);
+      ObjectSetInteger(0, tag_name, OBJPROP_BACK,       false);
+      ObjectSetInteger(0, tag_name, OBJPROP_ZORDER,     1000);
+      ObjectSetInteger(0, tag_name, OBJPROP_FONTSIZE,   9);
+   }
+
+   // Text aktualisieren (du kannst hier auch "E:"/"SL:" ergänzen, wenn du willst)
+   ObjectSetString(0, tag_name, OBJPROP_TEXT, DoubleToString(price, digits));
+
+   // Rechts verankern, damit es sauber am rechten Rand steht
+   ObjectSetInteger(0, tag_name, OBJPROP_CORNER, CORNER_RIGHT_UPPER);
+   ObjectSetInteger(0, tag_name, OBJPROP_XDISTANCE, 8);
+
+   // Sichtbare Bar-Zeit holen (robuster als TimeCurrent)
+   long first_visible = ChartGetInteger(0, CHART_FIRST_VISIBLE_BAR, 0);
+   if(first_visible < 0) first_visible = 0;
+   datetime t_vis = iTime(_Symbol, (ENUM_TIMEFRAMES)_Period, (int)first_visible);
+   if(t_vis <= 0) t_vis = iTime(_Symbol, (ENUM_TIMEFRAMES)_Period, 0);
+
+   int x = 0, y = 0;
+   ResetLastError();
+   if(!ChartTimePriceToXY(0, 0, t_vis, price, x, y))
+   {
+      Print(__FUNCTION__, ": ChartTimePriceToXY failed line='", line_name,
+            "' price=", DoubleToString(price, digits),
+            " err=", GetLastError());
+      return false;
+   }
+
+   // Y setzen (kleiner Offset, damit Text nicht exakt auf der Linie klebt)
+   int y_px = y - 7;
+   if(y_px < 0) y_px = 0;
+
+   ObjectSetInteger(0, tag_name, OBJPROP_YDISTANCE, y_px);
+
+   return true;
+}
 
 
 //+------------------------------------------------------------------+
