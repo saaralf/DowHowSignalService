@@ -58,6 +58,20 @@ string UI_EventIdToStr(const int id)
   }
 
 /**
+ * Beschreibung: Stellt sicher, dass ein angefordertes Redraw auch wirklich ausgeführt wird,
+ *               bevor OnChartEvent per early-return endet (z.B. durch Router-Shortcuts).
+ * Parameter:    none
+ * Rückgabewert: void
+ * Hinweise:     Behebt das "Label zieht erst später nach" Verhalten bei Drag/Change.
+ * Fehlerfälle:  keine
+ */
+void UI_FlushRedrawBeforeReturn()
+  {
+   UI_ProcessRedraw();
+  }
+
+
+/**
  * Beschreibung: Prüft, ob ein Objektname zu den “interessanten” UI/Trade-Objekten gehört.
  * Parameter:    name - Objektname (sparam)
  * Rückgabewert: bool - true wenn relevant für Event-Diagnose
@@ -541,12 +555,18 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
 
 // Router zuerst: wenn verarbeitet -> return
    if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
+     {
+      UI_FlushRedrawBeforeReturn();
       return;
+     }
 
 
 // Panel zuerst (damit es seine Buttons/Rows sauber abfangen kann)
    if(g_tp.OnChartEvent(id, lparam, dparam, sparam))
+     {
+      UI_FlushRedrawBeforeReturn();
       return;
+     }
 
    UI_DebugTraceEvent(id, lparam, dparam, sparam);
 
@@ -609,6 +629,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
          // sonst wirkt das Label wie "Lag" und springt später hinterher.
          UI_LineTag_SyncToLine(sparam);
          UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
+         UI_FlushRedrawBeforeReturn();
          return;
         }
      }
@@ -638,6 +659,8 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
          UI_LineTag_SyncToLine(sparam);
          UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
          g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
+         
+         UI_FlushRedrawBeforeReturn();
          return;
         }
 

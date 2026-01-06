@@ -90,7 +90,7 @@ public:
 
       // Redraw gedrosselt
       const uint now = GetTickCount();
-      if(now - m_last_redraw_ms > 50)
+      if(now - m_last_redraw_ms > 15)
         {
          UI_RequestRedraw();
          m_last_redraw_ms = now;
