@@ -371,7 +371,7 @@ void BaseUI_ApplyRightAnchor()
   UI_SetObjectXClamped(SabioSL,      new_entry_x + g_dx_sabSL,  w);
 }
 
-  
+
 /**
  * Beschreibung: Liefert eine robuste Mouse-Y Pixelposition (für Live-UI beim Linien-Drag).
  * Parameter:    dparam - Event dparam (bei OBJECT_DRAG oft MouseY; sonst ggf. 0/unsinnig)
@@ -431,11 +431,11 @@ void TP_FinalizeLineMove()
    const double new_price = g_tp_drag_last;
    const double old_price = g_tp_drag_old;
 
-// UI: Tag sauber nachziehe 
-   // WICHTIG: auch für die "anderen" TradePos-Linien-Branches redraw anfordern,
+// UI: Tag sauber nachziehe
+// WICHTIG: auch für die "anderen" TradePos-Linien-Branches redraw anfordern,
 // sonst wirkt das Label wie "Lag" und springt später hinterher.
-UI_LineTag_SyncToLine(g_tp_drag_name);
-UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
+   UI_LineTag_SyncToLine(g_tp_drag_name);
+   UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
    UI_RequestRedraw();
 
 
@@ -556,7 +556,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
       return;
 
 
-  
+
    /**
     * Beschreibung: Merkt den letzten Klick auf PR_HL/SL_HL, damit Live-Fallback beim Drag die richtige Linie wählt.
     * Parameter:    id/lparam/dparam/sparam - Standard OnChartEvent Parameter
@@ -604,11 +604,11 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
       // sonstige Trade-Linien (z.B. TP): nur Tag live
       if(UI_IsTradePosLine(sparam))
         {
-      
+
          // WICHTIG: auch für die "anderen" TradePos-Linien-Branches redraw anfordern,
-// sonst wirkt das Label wie "Lag" und springt später hinterher.
-UI_LineTag_SyncToLine(sparam);
-UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
+         // sonst wirkt das Label wie "Lag" und springt später hinterher.
+         UI_LineTag_SyncToLine(sparam);
+         UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
          return;
         }
      }
@@ -632,11 +632,11 @@ UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter S
       // Trade-Linien: wie gehabt
       if(UI_IsTradePosLine(sparam))
         {
-    
+
          // WICHTIG: auch für die "anderen" TradePos-Linien-Branches redraw anfordern,
-// sonst wirkt das Label wie "Lag" und springt später hinterher.
-UI_LineTag_SyncToLine(sparam);
-UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
+         // sonst wirkt das Label wie "Lag" und springt später hinterher.
+         UI_LineTag_SyncToLine(sparam);
+         UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
          g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
          return;
         }
@@ -661,11 +661,11 @@ UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter S
       g_BaseLines.SetLastMouseY(my);
 
       // 1) Button-Drag (Entry/SL) hat Priorität
-      if(g_BaseBtnDrag.OnMouseMove(mx, my, MouseState))
+      if(g_BaseBtnDrag.OnMouseMove(mx, my, MouseState)) // Button Entry/Sl werden verschoben
          return;
 
       // 2) HLine-Fallback/Finalize (nur wenn Button-Drag NICHT aktiv)
-      g_BaseLines.OnMouseMove(mx, my, MouseState, g_BaseBtnDrag.IsDragging());
+      g_BaseLines.OnMouseMove(mx, my, MouseState, g_BaseBtnDrag.IsDragging()); //PR_HL und SL_HL werden verschoben
       return;
      }
 
@@ -998,6 +998,8 @@ void UI_SyncBaseButtonsToLines()
    if(ObjectFind(0, EntryButton) >= 0)
      {
       int ysize_entry_btn = (int)ObjectGetInteger(0, EntryButton, OBJPROP_YSIZE);
+      int entrySLBtnDistance = MathAbs((int)ObjectGetInteger(0, EntryButton, OBJPROP_YDISTANCE)- (int)ObjectGetInteger(0, SLButton, OBJPROP_YDISTANCE));
+
 
       if(ChartTimePriceToXY(0, 0, t, entry, x, y))
         {
@@ -1018,6 +1020,21 @@ void UI_SyncBaseButtonsToLines()
 
          if(ObjectFind(0, SabioEntry) >= 0)
             UI_ObjSetIntSafe(0, SabioEntry, OBJPROP_YDISTANCE, baseY + 30);
+
+         //Auch SL Button und der SLSabio muss verschoben werden
+         if(ObjectFind(0, SLButton) >= 0)
+            if(ui_direction_is_long)
+              {
+               UI_ObjSetIntSafe(0, SLButton, OBJPROP_YDISTANCE, baseY-entrySLBtnDistance);
+               if(ObjectFind(0, SabioSL) >= 0)
+                  UI_ObjSetIntSafe(0, SabioSL, OBJPROP_YDISTANCE, baseY-entrySLBtnDistance + 30);
+              }
+            else
+              {
+               UI_ObjSetIntSafe(0, SLButton, OBJPROP_YDISTANCE, baseY+entrySLBtnDistance);
+               if(ObjectFind(0, SabioSL) >= 0)
+                  UI_ObjSetIntSafe(0, SabioSL, OBJPROP_YDISTANCE, baseY-entrySLBtnDistance + 30);
+              }
         }
       else
         {
@@ -1239,17 +1256,17 @@ bool UI_GetHLinePriceSafe(const string line_name, double &out_price)
      }
    return true;
   }
-  
- /**
- * Beschreibung: Fordert ein Chart-Redraw an, aber gedrosselt (Throttle), um flüssiges UI beim Drag zu bekommen,
- *              ohne die CPU mit ChartRedraw() zu fluten.
- * Parameter:    min_interval_ms - Mindestabstand zwischen Redraw-Requests in Millisekunden
- * Rückgabewert: void
- * Hinweise:     Nutzt UI_RequestRedraw() (dein bestehender Mechanismus). Nur während Drag klein wählen.
- * Fehlerfälle:  Keine (rein logisch). Wenn UI_RequestRedraw() fehlt -> Compile-Fehler.
- */
+
+/**
+* Beschreibung: Fordert ein Chart-Redraw an, aber gedrosselt (Throttle), um flüssiges UI beim Drag zu bekommen,
+*              ohne die CPU mit ChartRedraw() zu fluten.
+* Parameter:    min_interval_ms - Mindestabstand zwischen Redraw-Requests in Millisekunden
+* Rückgabewert: void
+* Hinweise:     Nutzt UI_RequestRedraw() (dein bestehender Mechanismus). Nur während Drag klein wählen.
+* Fehlerfälle:  Keine (rein logisch). Wenn UI_RequestRedraw() fehlt -> Compile-Fehler.
+*/
 void UI_RequestRedrawThrottled(const uint min_interval_ms)
-{
+  {
    static uint s_last_ms = 0;
    const uint now = GetTickCount();
    if(now - s_last_ms < min_interval_ms)
@@ -1257,7 +1274,7 @@ void UI_RequestRedrawThrottled(const uint min_interval_ms)
 
    UI_RequestRedraw();     // dein bestehender "sanfter" Redraw-Request
    s_last_ms = now;
-}
+  }
 
 
 // Merkt, welche Basislinie der User zuletzt angeklickt hat (wichtig, wenn beide "selected" sind)

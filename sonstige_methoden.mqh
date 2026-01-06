@@ -1,4 +1,9 @@
-﻿
+﻿//+------------------------------------------------------------------+
+//|                                                      ProjectName |
+//|                                      Copyright 2020, CompanyName |
+//|                                       http://www.companyname.net |
+//+------------------------------------------------------------------+
+
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -362,9 +367,11 @@ void createEntryAndSLLinien()
 
 
 //+------------------------------------------------------------------+
-//createHL(PR_HL, dt_prc, price_prc, EntryLine);
+createHL(PR_HL, dt_prc, price_prc, EntryLine);
 
-   createButton(EntryButton, "", xd3, yd3, xs3, ys3, PriceButton_font_color, PriceButton_bgcolor, InpFontSize, clrNONE, InpFont);
+
+
+createButton(EntryButton, "", xd3, yd3, xs3, ys3, PriceButton_font_color, PriceButton_bgcolor, InpFontSize, clrNONE, InpFont);
 
 // SL Button
    xd5 = xd3;
@@ -402,7 +409,9 @@ void createEntryAndSLLinien()
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-   createButton(SLButton, "", xd5, yd5, xs5, ys5, SLButton_font_color, SLButton_bgcolor, InpFontSize, clrNONE, InpFont);
+
+
+ createButton(SLButton, "", xd5, yd5, xs5, ys5, SLButton_font_color, SLButton_bgcolor, InpFontSize, clrNONE, InpFont);
    ObjectMove(0, SLButton, 0, dt_sl, price_sl);
 
 //+------------------------------------------------------------------+
@@ -541,7 +550,7 @@ bool UI_CreateOrUpdateLineTag(const string line_name)
       UI_ObjSetIntSafe(0, tag_name, OBJPROP_SELECTABLE, false);
       UI_ObjSetIntSafe(0, tag_name, OBJPROP_SELECTED,   false);
       UI_ObjSetIntSafe(0, tag_name, OBJPROP_BACK,       false);
-       UI_ObjSetIntSafe(0, tag_name, OBJPROP_HIDDEN,       true);
+      UI_ObjSetIntSafe(0, tag_name, OBJPROP_HIDDEN,       true);
      }
 
    UI_ObjSetIntSafe(0, tag_name, OBJPROP_XDISTANCE, x);
@@ -552,7 +561,7 @@ bool UI_CreateOrUpdateLineTag(const string line_name)
   }
 
 #ifndef LINE_TAG_SUFFIX
-   #define LINE_TAG_SUFFIX "_TAG"
+#define LINE_TAG_SUFFIX "_TAG"
 #endif
 
 /**
@@ -566,25 +575,25 @@ bool UI_CreateOrUpdateLineTag(const string line_name)
  *              - ChartTimePriceToXY failt -> false (Print mit GetLastError)
  */
 bool UI_LineTag_SyncToLine(const string line_name)
-{
+  {
    if(ObjectFind(0, line_name) < 0)
       return false;
 
    const string tag_name = line_name + LINE_TAG_SUFFIX;
 
-   // Preis der Linie holen
+// Preis der Linie holen
    const double price = ObjectGetDouble(0, line_name, OBJPROP_PRICE);
    const int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
 
-   // Tag ggf. erstellen
+// Tag ggf. erstellen
    if(ObjectFind(0, tag_name) < 0)
-   {
+     {
       ResetLastError();
       if(!ObjectCreate(0, tag_name, OBJ_LABEL, 0, 0, 0))
-      {
+        {
          Print(__FUNCTION__, ": ObjectCreate failed tag='", tag_name, "' err=", GetLastError());
          return false;
-      }
+        }
 
       // Eigenschaften: nicht anklickbar, nicht im Objektbaum sichtbar
       ObjectSetInteger(0, tag_name, OBJPROP_SELECTABLE, false);
@@ -592,39 +601,42 @@ bool UI_LineTag_SyncToLine(const string line_name)
       ObjectSetInteger(0, tag_name, OBJPROP_BACK,       false);
       ObjectSetInteger(0, tag_name, OBJPROP_ZORDER,     1000);
       ObjectSetInteger(0, tag_name, OBJPROP_FONTSIZE,   9);
-   }
+     }
 
-   // Text aktualisieren (du kannst hier auch "E:"/"SL:" ergänzen, wenn du willst)
+// Text aktualisieren (du kannst hier auch "E:"/"SL:" ergänzen, wenn du willst)
    ObjectSetString(0, tag_name, OBJPROP_TEXT, DoubleToString(price, digits));
 
-   // Rechts verankern, damit es sauber am rechten Rand steht
+// Rechts verankern, damit es sauber am rechten Rand steht
    ObjectSetInteger(0, tag_name, OBJPROP_CORNER, CORNER_RIGHT_UPPER);
    ObjectSetInteger(0, tag_name, OBJPROP_XDISTANCE, 8);
 
-   // Sichtbare Bar-Zeit holen (robuster als TimeCurrent)
+// Sichtbare Bar-Zeit holen (robuster als TimeCurrent)
    long first_visible = ChartGetInteger(0, CHART_FIRST_VISIBLE_BAR, 0);
-   if(first_visible < 0) first_visible = 0;
+   if(first_visible < 0)
+      first_visible = 0;
    datetime t_vis = iTime(_Symbol, (ENUM_TIMEFRAMES)_Period, (int)first_visible);
-   if(t_vis <= 0) t_vis = iTime(_Symbol, (ENUM_TIMEFRAMES)_Period, 0);
+   if(t_vis <= 0)
+      t_vis = iTime(_Symbol, (ENUM_TIMEFRAMES)_Period, 0);
 
    int x = 0, y = 0;
    ResetLastError();
    if(!ChartTimePriceToXY(0, 0, t_vis, price, x, y))
-   {
+     {
       Print(__FUNCTION__, ": ChartTimePriceToXY failed line='", line_name,
             "' price=", DoubleToString(price, digits),
             " err=", GetLastError());
       return false;
-   }
+     }
 
-   // Y setzen (kleiner Offset, damit Text nicht exakt auf der Linie klebt)
+// Y setzen (kleiner Offset, damit Text nicht exakt auf der Linie klebt)
    int y_px = y - 7;
-   if(y_px < 0) y_px = 0;
+   if(y_px < 0)
+      y_px = 0;
 
    ObjectSetInteger(0, tag_name, OBJPROP_YDISTANCE, y_px);
 
    return true;
-}
+  }
 
 
 //+------------------------------------------------------------------+
