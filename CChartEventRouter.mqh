@@ -24,14 +24,17 @@ public:
 
       if(id == CHARTEVENT_OBJECT_DRAG)
         {
-         if(g_tp_drag.OnObjectDrag(sparam))
-            return true;
-        }
+         
+               // TradePos-Linien (Entry/SL pro Position): Drag/Finalize/MouseUp-Fallback
+      if(g_tp_lines.OnChartEvent(id, lparam, dparam, sparam))
+         return true;
+
+         
+         }
 
       if(id == CHARTEVENT_OBJECT_CHANGE)
         {
-         if(g_tp_drag.OnObjectChange(sparam))
-            return true;
+       
         }
 
       // MouseUp-Fallback wird im MOUSE_MOVE Block gemacht (weil MouseState benötigt wird)

@@ -1275,10 +1275,9 @@ void UI_TradesPanel_RebuildRows()
          if(rows[i].direction == "LONG")
            {
             CreateEntryAndSLLines(Entry_Long + suf, TimeCurrent(), entry_draw, TradeEntryLineLong);
-            UI_CreateOrUpdateLineTag(Entry_Long + suf);
-
+       
             CreateEntryAndSLLines(SL_Long + suf, TimeCurrent(), sl_draw, Tradecolor_SLLineLong);
-            UI_CreateOrUpdateLineTag(SL_Long + suf);
+     
 
             g_TradeMgr.SaveTradeLines(suf);
            }
@@ -1286,10 +1285,10 @@ void UI_TradesPanel_RebuildRows()
             if(rows[i].direction == "SHORT")
               {
                CreateEntryAndSLLines(Entry_Short + suf, TimeCurrent(), entry_draw, TradeEntryLineShort);
-               UI_CreateOrUpdateLineTag(Entry_Short + suf);
+    
 
                CreateEntryAndSLLines(SL_Short + suf, TimeCurrent(), sl_draw, Tradecolor_SLLineShort);
-               UI_CreateOrUpdateLineTag(SL_Short + suf);
+              
 
                g_TradeMgr.SaveTradeLines(suf);
               }

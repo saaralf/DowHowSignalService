@@ -141,59 +141,6 @@ bool update_Text(const string name, const string val)
 
 
 
-// direction: "LONG"/"SHORT"
-// kind: "entry"/"sl"/"tp"
-bool UI_ParseTradePosFromName(const string name, string &direction, int &trade_no, int &pos_no, string &kind)
-  {
-   direction = "";
-   kind = "";
-   trade_no = 0;
-   pos_no = 0;
-
-   if(StringFind(name, "Entry_Long_") == 0)
-     {
-      direction="LONG";
-      kind="entry";
-     }
-   else
-      if(StringFind(name, "SL_Long_") == 0)
-        {
-         direction="LONG";
-         kind="sl";
-        }
-      else
-
-         if(StringFind(name, "Entry_Short_") == 0)
-           {
-            direction="SHORT";
-            kind="entry";
-           }
-         else
-            if(StringFind(name, "SL_Short_") == 0)
-              {
-               direction="SHORT";
-               kind="sl";
-              }
-            else
-               return false;
-
-   string parts[];
-   int n = StringSplit(name, '_', parts);
-   if(n < 2)
-      return false;
-
-   trade_no = (int)StringToInteger(parts[n-2]);
-   pos_no   = (int)StringToInteger(parts[n-1]);
-
-   if(trade_no <= 0 || pos_no <= 0)
-      return false;
-   return true;
-  }
-
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 
 
 //+------------------------------------------------------------------+

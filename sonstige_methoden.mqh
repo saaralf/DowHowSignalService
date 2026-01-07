@@ -489,11 +489,7 @@ bool UI_IsTradePosLine(const string name)
              StringFind(name, "SL_Short_")   == 0 ||
              StringFind(name, "Entry_Short_")== 0);
   }
-bool UI_CreateOrUpdateLineTag(const string line_name)
-  {
-   // Jetzt über Klassen-Manager (HL + Label als Objekt)
-   return g_tp_lines.SyncOne(line_name, true, 0);
-  }
+
 /*
 // Erzeugt/updated das Tag-Label für genau DIESE Linie
 bool UI_CreateOrUpdateLineTag(const string line_name)
