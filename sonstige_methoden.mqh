@@ -1,4 +1,4 @@
-﻿#include "trade_pos_line_ui_v2.mqh"
+﻿#include "trade_pos_line_ui.mqh"
 
 //+------------------------------------------------------------------+
 //|                                                      ProjectName |
@@ -489,7 +489,11 @@ bool UI_IsTradePosLine(const string name)
              StringFind(name, "SL_Short_")   == 0 ||
              StringFind(name, "Entry_Short_")== 0);
   }
-
+bool UI_CreateOrUpdateLineTag(const string line_name)
+  {
+   // Jetzt über Klassen-Manager (HL + Label als Objekt)
+   return g_tp_lines.SyncOne(line_name, true, 0);
+  }
 /*
 // Erzeugt/updated das Tag-Label für genau DIESE Linie
 bool UI_CreateOrUpdateLineTag(const string line_name)
@@ -577,12 +581,7 @@ bool UI_CreateOrUpdateLineTag(const string line_name)
  * Fehlerfälle:  - Linie nicht gefunden -> false
  *              - ChartTimePriceToXY failt -> false (Print mit GetLastError)
  */
- bool UI_LineTag_SyncToLine(const string line_name)
-  {
-   // Präziser Sync über die gleiche Quelle (Single Source of Truth)
-   return g_tp_lines.SyncOne(line_name, true, 0);
-  }
-  /*
+ 
 bool UI_LineTag_SyncToLine(const string line_name)
   {
    if(ObjectFind(0, line_name) < 0)
@@ -647,5 +646,5 @@ bool UI_LineTag_SyncToLine(const string line_name)
    return true;
   }
 
-*/
+
 //+------------------------------------------------------------------+

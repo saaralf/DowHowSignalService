@@ -127,7 +127,7 @@ void UI_DebugTraceEvent(const int id, const long &lparam, const double &dparam, 
    const bool baseDrag = g_BaseLines.IsDragging();
    const bool btnDrag  = g_BaseBtnDrag.IsDragging();
 
-   if(id == CHARTEVENT_MOUSE_MOVE && !(btnDrag || baseDrag ))
+   if(id == CHARTEVENT_MOUSE_MOVE && !(btnDrag || baseDrag || g_tp_drag_active))
       return;
 
    Print("EVT ", UI_EventIdToStr(id),
@@ -135,8 +135,8 @@ void UI_DebugTraceEvent(const int id, const long &lparam, const double &dparam, 
          "' lparam=", (long)lparam,
          " dparam=", DoubleToString(dparam, 8),
          " baseDrag=", (baseDrag ? "1":"0"),
-         " btnDrag=", (btnDrag  ? "1":"0");
-
+         " btnDrag=", (btnDrag  ? "1":"0"),
+         " tpDrag=", (g_tp_drag_active ? "1":"0"));
   }
 
 
@@ -173,6 +173,14 @@ void UI_ProcessRedraw()
    g_ui_redraw_pending = false;
   }
 
+
+// ------------------------------------------------------------------
+// TradePos-Drag Tracking (damit Discord nur 1x pro Drag gesendet wird)
+// Hinweis: Bei manchen MT5-Objekten kommt CHARTEVENT_OBJECT_CHANGE nicht
+// zuverlässig. Darum finalisieren wir zusätzlich beim MouseUp.
+// ------------------------------------------------------------------
+static bool   g_tp_drag_active   = false;
+// ------------------------------------------------------------------
 // Basis-Linien-Drag Tracking (PR_HL / SL_HL)
 // Ziel: UI live synchronisieren, Speichern nur 1x beim Loslassen.
 // ------------------------------------------------------------------
@@ -312,45 +320,6 @@ void BaseUI_ApplyRightAnchor()
    UI_SetObjectXClamped(SabioEntry,    new_entry_x + g_dx_sabEnt, w);
    UI_SetObjectXClamped(SabioSL,       new_entry_x + g_dx_sabSL,  w);
   }
-/**
- * Beschreibung: Sink/Callback für TradePosLineUI.
- *              - Persistiert die neuen Linienpreise
- *              - Sendet die gewünschte Discord-Meldung exakt 1x pro Drag (Finalize)
- */
-class CTradePosLineMoveSink : public ITradePosLineMoveSink
-  {
-public:
-   virtual void      OnTradePosLineMoved(const string symbol,
-                                    const ENUM_TIMEFRAMES tf,
-                                    const string direction,
-                                    const int trade_no,
-                                    const int pos_no,
-                                    const string kind,
-                                    const double old_price,
-                                    const double new_price)
-     {
-      // 1) Persistieren (wie bisher)
-      g_TradeMgr.SaveLinePrices(symbol, tf);
-
-      // 2) Discord Text (neu, kurz, eindeutig)
-      string what = kind;
-      if(kind == "entry")
-         what = "Entry";
-      else
-         if(kind == "sl")
-            what = "SL";
-
-      const int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
-      const string ptxt = DoubleToString(new_price, digits);
-
-      const string msg = StringFormat("Trade Nummer %d Position %d %s verschoben auf %s",
-                                      trade_no, pos_no, what, ptxt);
-
-      g_Discord.SendMessage(symbol, msg);
-     }
-  };
-
-static CTradePosLineMoveSink g_tp_line_sink;
 
 /**
  * Beschreibung: Setzt das X (XDISTANCE) eines Objekts sicher (clamp an Chartbreite).
@@ -450,6 +419,77 @@ int UI_GetMouseYPxSafe(const double dparam)
 
 
 
+static string g_tp_drag_name     = "";
+static string g_tp_drag_dir      = "";   // "LONG" / "SHORT"
+static string g_tp_drag_kind     = "";   // "entry" / "sl"
+static int    g_tp_drag_trade_no = 0;
+static int    g_tp_drag_pos_no   = 0;
+static double g_tp_drag_old      = 0.0;
+static double g_tp_drag_last     = 0.0;
+static uint   g_tp_drag_last_ms  = 0;
+
+// Finalisiert eine TradePos-Linienverschiebung: Tag updaten, speichern, Discord senden
+void TP_FinalizeLineMove()
+  {
+   if(!g_tp_drag_active || g_tp_drag_name == "")
+      return;
+
+// Sicherheitscheck: Objekt muss existieren
+   if(ObjectFind(0, g_tp_drag_name) < 0)
+     {
+      g_tp_drag_active = false;
+      g_tp_drag_name = "";
+      return;
+     }
+
+   const double new_price = g_tp_drag_last;
+   const double old_price = g_tp_drag_old;
+
+// UI: Tag sauber nachziehe
+// WICHTIG: auch für die "anderen" TradePos-Linien-Branches redraw anfordern,
+// sonst wirkt das Label wie "Lag" und springt später hinterher.
+   UI_LineTag_SyncToLine(g_tp_drag_name);
+   UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
+   UI_RequestRedraw();
+
+
+// DB: persistieren (erst nach dem old/new Vergleich)
+   g_TradeMgr.SaveLinePrices(_Symbol,(ENUM_TIMEFRAMES)_Period);
+
+// Discord: nur melden, wenn sich der Preis wirklich geändert hat
+   const double pt = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+   const bool changed = (old_price <= 0.0) || (MathAbs(new_price - old_price) > pt*0.25);
+
+   if(changed && (g_tp_drag_kind == "entry" || g_tp_drag_kind == "sl"))
+     {
+      const string what = (g_tp_drag_kind == "entry") ? "Entry" : "SL";
+      string msg = "@everyone\n";
+      msg += StringFormat("**UPDATE:** %s %s Trade %d Pos %d (%s)\n",
+                          _Symbol, TF_ToString((ENUM_TIMEFRAMES)_Period),
+                          g_tp_drag_trade_no, g_tp_drag_pos_no, g_tp_drag_dir);
+      if(old_price > 0.0)
+         msg += StringFormat("**%s:** %s -> %s\n",
+                             what,
+                             DoubleToString(old_price, _Digits),
+                             DoubleToString(new_price, _Digits));
+      else
+         msg += StringFormat("**%s:** %s\n", what, DoubleToString(new_price, _Digits));
+      msg += "(Linie verschoben, Tag nachgezogen)\n";
+      g_Discord.SendMessage(_Symbol,msg);
+     }
+
+// Reset
+   g_tp_drag_active   = false;
+   g_tp_drag_name     = "";
+   g_tp_drag_dir      = "";
+   g_tp_drag_kind     = "";
+   g_tp_drag_trade_no = 0;
+   g_tp_drag_pos_no   = 0;
+   g_tp_drag_old      = 0.0;
+   g_tp_drag_last     = 0.0;
+   g_tp_drag_last_ms  = 0;
+  }
+
 /**
  * Beschreibung: Deselektiert beide Basislinien (PR_HL/SL_HL).
  * Parameter:    none
@@ -513,14 +553,6 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
                   const string &sparam) // Parameter des Ereignisses des Typs string, name of the object, state
   {
 
-
-   static bool s_tp_sink_bound = false;
-   if(!s_tp_sink_bound)
-     {
-      g_tp_lines_ui.SetSink(&g_tp_line_sink);
-      s_tp_sink_bound = true;
-     }
-
 // Router zuerst: wenn verarbeitet -> return
    if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
      {
@@ -575,7 +607,9 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
      {
 
 
-
+      // 1) TradePos Entry/SL Linien (pro Trade/Pos)
+      if(g_tp_drag.OnObjectDrag(sparam))
+         return;
 #ifdef PR_HL
 #ifdef SL_HL
       if(sparam == PR_HL || sparam == SL_HL)
@@ -587,12 +621,23 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
 #endif
 #endif
 
+      // sonstige Trade-Linien (z.B. TP): nur Tag live
+      if(UI_IsTradePosLine(sparam))
+        {
 
+         // WICHTIG: auch für die "anderen" TradePos-Linien-Branches redraw anfordern,
+         // sonst wirkt das Label wie "Lag" und springt später hinterher.
+         UI_LineTag_SyncToLine(sparam);
+         UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
+         UI_FlushRedrawBeforeReturn();
+         return;
+        }
      }
 
    if(id == CHARTEVENT_OBJECT_CHANGE)
      {
-
+      if(g_tp_drag.OnObjectChange(sparam))
+         return;
 
 #ifdef PR_HL
 #ifdef SL_HL
@@ -605,6 +650,19 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
 #endif
 
 
+      // Trade-Linien: wie gehabt
+      if(UI_IsTradePosLine(sparam))
+        {
+
+         // WICHTIG: auch für die "anderen" TradePos-Linien-Branches redraw anfordern,
+         // sonst wirkt das Label wie "Lag" und springt später hinterher.
+         UI_LineTag_SyncToLine(sparam);
+         UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
+         g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
+         
+         UI_FlushRedrawBeforeReturn();
+         return;
+        }
 
      }
 
@@ -636,16 +694,14 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
 
    if(id == CHARTEVENT_CHART_CHANGE)
      {
+      // Right Anchor neu anwenden
       g_BaseLines.ApplyRightAnchor();
+
+      // Optional: UI sync (ohne Save)
       UI_OnBaseLinesChanged(false);
 
-      // TradePos Tags neu positionieren (Skala/Zoom/Scroll)
-    
-
-      UI_ProcessRedraw();
       return;
      }
-
 
 
 
@@ -669,7 +725,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
       last_ui_direction_is_long = ui_direction_is_long;
       TP_RebuildRows();
 
-     
+      UI_UpdateAllLineTags();
      }
 
 
