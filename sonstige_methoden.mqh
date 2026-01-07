@@ -1,4 +1,6 @@
-﻿//+------------------------------------------------------------------+
+﻿#include "trade_pos_line_ui_v2.mqh"
+
+//+------------------------------------------------------------------+
 //|                                                      ProjectName |
 //|                                      Copyright 2020, CompanyName |
 //|                                       http://www.companyname.net |
@@ -288,7 +290,7 @@ void TPSLReached()
             g_DB.UpsertPosition(p);
             g_cache_rows[i] = p;
             DeletePosLines("SHORT", p.pos_no);
-            Alert(_Symbol + " SHORT Trade " + IntegerToString(p.trade_no) + " Pos" + IntegerToString(p.pos_no) + " stopped out");
+            Alert(_Symbol + _Period +" SHORT: Trade " + IntegerToString(p.trade_no) + " Pos" + IntegerToString(p.pos_no) + " stopped out");
             continue;
            }
         }
@@ -488,6 +490,7 @@ bool UI_IsTradePosLine(const string name)
              StringFind(name, "Entry_Short_")== 0);
   }
 
+/*
 // Erzeugt/updated das Tag-Label für genau DIESE Linie
 bool UI_CreateOrUpdateLineTag(const string line_name)
   {
@@ -559,7 +562,7 @@ bool UI_CreateOrUpdateLineTag(const string line_name)
 
    return true;
   }
-
+*/
 #ifndef LINE_TAG_SUFFIX
 #define LINE_TAG_SUFFIX "_TAG"
 #endif
@@ -574,6 +577,12 @@ bool UI_CreateOrUpdateLineTag(const string line_name)
  * Fehlerfälle:  - Linie nicht gefunden -> false
  *              - ChartTimePriceToXY failt -> false (Print mit GetLastError)
  */
+ bool UI_LineTag_SyncToLine(const string line_name)
+  {
+   // Präziser Sync über die gleiche Quelle (Single Source of Truth)
+   return g_tp_lines.SyncOne(line_name, true, 0);
+  }
+  /*
 bool UI_LineTag_SyncToLine(const string line_name)
   {
    if(ObjectFind(0, line_name) < 0)
@@ -638,5 +647,5 @@ bool UI_LineTag_SyncToLine(const string line_name)
    return true;
   }
 
-
+*/
 //+------------------------------------------------------------------+

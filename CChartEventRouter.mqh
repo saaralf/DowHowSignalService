@@ -22,12 +22,12 @@ public:
             return true;
         }
 
-      if(id == CHARTEVENT_OBJECT_DRAG)
-        {
-         if(g_tp_drag.OnObjectDrag(sparam))
-            return true;
-        }
-
+  // 2) TradePos-Line Drag (Entry/SL) – neue Version
+if(id == CHARTEVENT_OBJECT_DRAG || id == CHARTEVENT_OBJECT_CHANGE || id == CHARTEVENT_CHART_CHANGE)
+  {
+   if(g_tp_lines_ui.OnChartEvent(id, lparam, dparam, sparam))
+      return true;
+  }
       if(id == CHARTEVENT_OBJECT_CHANGE)
         {
          if(g_tp_drag.OnObjectChange(sparam))
