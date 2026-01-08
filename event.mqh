@@ -25,32 +25,7 @@ input int InpUI_RedrawMinIntervalMs = 50;
 static bool g_ui_redraw_pending = false;
 static uint g_ui_last_redraw_ms = 0;
 
-class CTradePosLineMoveSink : public ITradePosLineMoveSink
-  {
-public:
-   virtual void OnTradePosLineMoved(const string symbol,
-                                    const ENUM_TIMEFRAMES tf,
-                                    const string direction,
-                                    const int trade_no,
-                                    const int pos_no,
-                                    const string kind,
-                                    const double old_price,
-                                    const double new_price)
-     {
-      // Persistieren
-      g_TradeMgr.SaveLinePrices(symbol, tf);
 
-      // Discord-Text wie gewünscht
-      const string what = (kind == "sl" ? "SL" : "Entry");
-      const string price_txt = DoubleToString(new_price, _Digits);
-      const string msg = StringFormat("Trade Nummer %d Position %d %s verschoben auf %s",
-                                      trade_no, pos_no, what, price_txt);
-
-      g_Discord.SendMessage(symbol, msg);
-     }
-  };
-
-static CTradePosLineMoveSink g_tp_line_sink;
 
 
 input bool InpDebugEventTrace = false; // true: Events in Experts loggen
@@ -493,6 +468,8 @@ void UI_SelectBaseLineExclusive(const string clicked_line)
      }
   }
 
+static CTradePosLineMoveSink g_tp_line_sink;
+
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -503,7 +480,15 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
   {
 
 // Router zuerst: wenn verarbeitet -> return
-   if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
+   // TradePosLine-Sink muss VOR dem Router gebunden sein (Router kann Events konsumieren)
+static bool s_tp_sink_bound = false;
+if(!s_tp_sink_bound)
+  {
+   g_tp_lines.SetSink(&g_tp_line_sink);
+   s_tp_sink_bound = true;
+  }
+
+if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
      {
       UI_FlushRedrawBeforeReturn();
       return;
@@ -519,13 +504,6 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
 
    UI_DebugTraceEvent(id, lparam, dparam, sparam);
 
-
-static bool s_tp_sink_bound = false;
-if(!s_tp_sink_bound)
-  {
-   g_tp_lines.SetSink(&g_tp_line_sink);
-   s_tp_sink_bound = true;
-  }
 
 
    CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
