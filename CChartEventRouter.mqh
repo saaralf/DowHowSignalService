@@ -25,9 +25,7 @@ public:
       if(id == CHARTEVENT_OBJECT_DRAG)
         {
          
-               // TradePos-Linien (Entry/SL pro Position): Drag/Finalize/MouseUp-Fallback
-      if(g_tp_lines.OnChartEvent(id, lparam, dparam, sparam))
-         return true;
+   
 
          
          }

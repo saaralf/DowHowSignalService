@@ -2,7 +2,7 @@
 #ifndef __TRADES_PANEL_MQH__
 #define __TRADES_PANEL_MQH__
 #include "db_service.mqh"
-
+#include "trade_pos_line_registry.mqh"
 #include "discord_client.mqh"
 #define TP_BG "TP_BG"
 
@@ -142,55 +142,55 @@ bool Del_TP_CreateRectBG(const string name)
  * Fehlerfälle:  ObjectCreate/ObjectSet* schlägt fehl -> Print + false
  */
 bool TP_CreateLabel(const string name, const int x, const int y, const int w, const int h, const string txt)
-{
-   // Wenn Objekt existiert: Typ prüfen (sonst kann ein alter Button/Rect den Label-Look kapern)
+  {
+// Wenn Objekt existiert: Typ prüfen (sonst kann ein alter Button/Rect den Label-Look kapern)
    if(ObjectFind(0, name) >= 0)
-   {
+     {
       long t = ObjectGetInteger(0, name, OBJPROP_TYPE);
       if((ENUM_OBJECT)t != OBJ_LABEL)
-      {
+        {
          ResetLastError();
          if(!ObjectDelete(0, name))
-         {
+           {
             Print(__FUNCTION__, ": ObjectDelete failed for non-label '", name, "' err=", GetLastError());
             return false;
-         }
+           }
          UI_Reg_Remove(name); // falls in Registry
-      }
-   }
+        }
+     }
 
-   // Erstellen falls nötig
+// Erstellen falls nötig
    if(ObjectFind(0, name) < 0)
-   {
+     {
       ResetLastError();
       if(!ObjectCreate(0, name, OBJ_LABEL, 0, 0, 0))
-      {
+        {
          Print(__FUNCTION__, ": ObjectCreate OBJ_LABEL failed '", name, "' err=", GetLastError());
          return false;
-      }
+        }
       UI_Reg_Add(name); // nur einmal registrieren (neu erstellt)
-   }
+     }
 
-   // Geometrie
+// Geometrie
    UI_ObjSetIntSafe(0, name, OBJPROP_CORNER,    CORNER_LEFT_UPPER);
    UI_ObjSetIntSafe(0, name, OBJPROP_XDISTANCE, x);
    UI_ObjSetIntSafe(0, name, OBJPROP_YDISTANCE, y);
 
-   // Font/Größe explizit setzen -> garantiert sichtbar (nicht Default-mini)
+// Font/Größe explizit setzen -> garantiert sichtbar (nicht Default-mini)
    ObjectSetString(0, name, OBJPROP_FONT, InpFont);
    UI_ObjSetIntSafe(0, name, OBJPROP_FONTSIZE, 10);
 
-   // Text
+// Text
    ObjectSetString(0, name, OBJPROP_TEXT, txt);
 
 
    UI_ObjSetIntSafe(0, name, OBJPROP_SELECTABLE, false);
 
-   // Ganz nach vorne, damit nichts drüber liegt
+// Ganz nach vorne, damit nichts drüber liegt
    UI_ObjSetIntSafe(0, name, OBJPROP_ZORDER, 20000);
 
    return true;
-}
+  }
 
 
 //+------------------------------------------------------------------+
@@ -258,12 +258,12 @@ bool UI_TradesPanel_Create(const int x, const int y, const int w, const int h)
 // LONG/SHORT Label-Farben (grün/rot, gut lesbar)
 
 // LONG/SHORT Label-Farben (grün/rot) – NACH dem CreateLabel setzen, sonst wird’s überschrieben
-const color LBL_LONG_COL  = (color)C'0,170,100';   // Grün (nicht Neon)
-const color LBL_SHORT_COL = (color)C'220,70,70';   // Rot (angenehm)
+   const color LBL_LONG_COL  = (color)C'0,170,100';   // Grün (nicht Neon)
+   const color LBL_SHORT_COL = (color)C'220,70,70';   // Rot (angenehm)
 
 // Falls du die Labels oben neutral lassen willst, aber trotzdem LONG/SHORT farbig:
-UI_ObjSetIntSafe(0, TP_LBL_LONG,  OBJPROP_COLOR, LBL_LONG_COL);
-UI_ObjSetIntSafe(0, TP_LBL_SHORT, OBJPROP_COLOR, LBL_SHORT_COL);
+   UI_ObjSetIntSafe(0, TP_LBL_LONG,  OBJPROP_COLOR, LBL_LONG_COL);
+   UI_ObjSetIntSafe(0, TP_LBL_SHORT, OBJPROP_COLOR, LBL_SHORT_COL);
 
 
 
@@ -1043,40 +1043,40 @@ int UI_DeleteTradeLinesByTradeNo(const int trade_no)
 
    return deleted;
   }
-  
-  
-  /**
- * Beschreibung: Setzt die Textfarbe eines OBJ_LABEL robust (mit Logging).
- * Parameter:    name - Objektname (Label)
- *               col  - gewünschte Textfarbe
- * Rückgabewert: bool - true wenn gesetzt, sonst false
- * Hinweise:     Nutzt ResetLastError/GetLastError für klare Diagnose.
- * Fehlerfälle:  Label nicht gefunden oder ObjectSetInteger schlägt fehl -> Print.
- */
+
+
+/**
+* Beschreibung: Setzt die Textfarbe eines OBJ_LABEL robust (mit Logging).
+* Parameter:    name - Objektname (Label)
+*               col  - gewünschte Textfarbe
+* Rückgabewert: bool - true wenn gesetzt, sonst false
+* Hinweise:     Nutzt ResetLastError/GetLastError für klare Diagnose.
+* Fehlerfälle:  Label nicht gefunden oder ObjectSetInteger schlägt fehl -> Print.
+*/
 bool TP_SetLabelColorChecked(const string name, const color col)
-{
+  {
    if(ObjectFind(0, name) < 0)
-   {
+     {
       Print(__FUNCTION__, ": label not found: ", name);
       return false;
-   }
+     }
 
    ResetLastError();
    if(!ObjectSetInteger(0, name, OBJPROP_COLOR, (long)col))
-   {
+     {
       Print(__FUNCTION__, ": ObjectSetInteger(OBJPROP_COLOR) failed for '", name,
             "' err=", GetLastError());
       return false;
-   }
+     }
 
-   // Optional: aktuellen Farbwert loggen (hilft bei “wird wieder überschrieben”)
+// Optional: aktuellen Farbwert loggen (hilft bei “wird wieder überschrieben”)
    color now = (color)ObjectGetInteger(0, name, OBJPROP_COLOR);
    Print(__FUNCTION__, ": label='", name, "' color now=", (int)now);
 
    return true;
-}
+  }
 
-  
+
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -1195,7 +1195,7 @@ void UI_TradesPanel_RebuildRows()
 // Header Labels (neutral)
    TP_CreateLabel(TP_LBL_LONG,  xL + 6, y1 + 6, block_w, TP_HDR_H, "LONG");
    TP_CreateLabel(TP_LBL_SHORT, xR + 6, y1 + 6, block_w, TP_HDR_H, "SHORT");
-   // Header Labels (neutral) + Farben in einem Schritt
+// Header Labels (neutral) + Farben in einem Schritt
    TP_CreateLabelStyled(TP_LBL_LONG,  xL + 6, y1 + 6, block_w, TP_HDR_H, "LONG",  LBL_LONG_COL);
    TP_CreateLabelStyled(TP_LBL_SHORT, xR + 6, y1 + 6, block_w, TP_HDR_H, "SHORT", LBL_SHORT_COL);
 
@@ -1248,6 +1248,7 @@ void UI_TradesPanel_RebuildRows()
 // ----------------------------------------------------------------
 // 4) DB laden + LONG/SHORT filtern + Lines restoren
 // ----------------------------------------------------------------
+   TradePosLines_Reset();
    DB_PositionRow rows[];
    int n = g_DB.LoadPositions(_Symbol, (ENUM_TIMEFRAMES)_Period, rows);
 
@@ -1274,24 +1275,121 @@ void UI_TradesPanel_RebuildRows()
 
          if(rows[i].direction == "LONG")
            {
-            CreateEntryAndSLLines(Entry_Long + suf, TimeCurrent(), entry_draw, TradeEntryLineLong);
-       
-            CreateEntryAndSLLines(SL_Long + suf, TimeCurrent(), sl_draw, Tradecolor_SLLineLong);
-     
+            string entryName = Entry_Long + suf;
+            string slName    = SL_Long    + suf;
+
+            // ENTRY
+            CTradePosLine *entryLine = new CTradePosLine();
+            if(entryLine != NULL)
+              {
+               bool ok = entryLine.Create(entryName,
+                                          entry_draw,
+                                          (ENUM_TIMEFRAMES)_Period,
+                                          0,
+                                          StringFormat("E T%d P%d", trade_no, pos_no),
+                                          12,                    // tag_offset_points (oberhalb)
+                                          TradeEntryLineLong,     // line_color
+                                          1,                     // line_width
+                                          STYLE_DASH,             // Start: gestrichelt
+                                          TradeEntryLineLong,     // tag_color
+                                          10,                    // tag_font_size
+                                          "Arial",
+                                          "_TAG",
+                                          4);                    // tag_shift_bars (weiter links => bleibt sichtbar)
+
+               if(ok)
+                  g_tradePosLines.Add(entryLine);
+               else
+                  delete entryLine;
+              }
+
+            // SL
+            CTradePosLine *slLine = new CTradePosLine();
+            if(slLine != NULL)
+              {
+               bool ok = slLine.Create(slName,
+                                       sl_draw,
+                                       (ENUM_TIMEFRAMES)_Period,
+                                       0,
+                                       StringFormat("SL T%d P%d", trade_no, pos_no),
+                                       12,
+                                       Tradecolor_SLLineLong,
+                                       1,
+                                       STYLE_DASH,              // Start: gestrichelt
+                                       Tradecolor_SLLineLong,
+                                       10,
+                                       "Arial",
+                                       "_TAG",
+                                       4);
+
+               if(ok)
+                  g_tradePosLines.Add(slLine);
+               else
+                  delete slLine;
+              }
 
             g_TradeMgr.SaveTradeLines(suf);
            }
+
          else
             if(rows[i].direction == "SHORT")
               {
-               CreateEntryAndSLLines(Entry_Short + suf, TimeCurrent(), entry_draw, TradeEntryLineShort);
-    
+               string entryName = Entry_Short + suf;
+               string slName    = SL_Short    + suf;
 
-               CreateEntryAndSLLines(SL_Short + suf, TimeCurrent(), sl_draw, Tradecolor_SLLineShort);
-              
+               // ENTRY
+               CTradePosLine *entryLine = new CTradePosLine();
+               if(entryLine != NULL)
+                 {
+                  bool ok = entryLine.Create(entryName,
+                                             entry_draw,
+                                             (ENUM_TIMEFRAMES)_Period,
+                                             0,
+                                             StringFormat("E T%d P%d", trade_no, pos_no),
+                                             12,
+                                             TradeEntryLineShort,
+                                             1,
+                                             STYLE_DASH,
+                                             TradeEntryLineShort,
+                                             10,
+                                             "Arial",
+                                             "_TAG",
+                                             4);
+
+                  if(ok)
+                     g_tradePosLines.Add(entryLine);
+                  else
+                     delete entryLine;
+                 }
+
+               // SL
+               CTradePosLine *slLine = new CTradePosLine();
+               if(slLine != NULL)
+                 {
+                  bool ok = slLine.Create(slName,
+                                          sl_draw,
+                                          (ENUM_TIMEFRAMES)_Period,
+                                          0,
+                                          StringFormat("SL T%d P%d", trade_no, pos_no),
+                                          12,
+                                          Tradecolor_SLLineShort,
+                                          1,
+                                          STYLE_DASH,
+                                          Tradecolor_SLLineShort,
+                                          10,
+                                          "Arial",
+                                          "_TAG",
+                                          4);
+
+                  if(ok)
+                     g_tradePosLines.Add(slLine);
+                  else
+                     delete slLine;
+                 }
 
                g_TradeMgr.SaveTradeLines(suf);
               }
+
         }
 
       // Filtern
@@ -1476,11 +1574,10 @@ void UI_TradesPanel_RebuildRows()
                           SLButton_font_color, SLButton_bgcolor, SLButton_bgcolor);
      }
 
-   UI_UpdateAllLineTags();
 
 
 
-   // Letzter Schritt: Header-Labels "hart" einfärben (falls später irgendwas wieder auf Weiß setzt)
+// Letzter Schritt: Header-Labels "hart" einfärben (falls später irgendwas wieder auf Weiß setzt)
    TP_SetLabelColorChecked(TP_LBL_LONG,  LBL_LONG_COL);
    TP_SetLabelColorChecked(TP_LBL_SHORT, LBL_SHORT_COL);
 
@@ -1508,20 +1605,20 @@ bool TP_CreateLabelStyled(const string name,
                           const int w, const int h,
                           const string txt,
                           const color txt_color)
-{
+  {
    if(!TP_CreateLabel(name, x, y, w, h, txt))
       return false;
 
-   // Auf allen Perioden sichtbar (robust bei TF-Wechsel)
+// Auf allen Perioden sichtbar (robust bei TF-Wechsel)
    ResetLastError();
    ObjectSetInteger(0, name, OBJPROP_TIMEFRAMES, (long)OBJ_ALL_PERIODS);
 
-   // Farbe setzen (explizit, weil TP_CreateLabel default = clrWhite)
+// Farbe setzen (explizit, weil TP_CreateLabel default = clrWhite)
    ResetLastError();
    ObjectSetInteger(0, name, OBJPROP_COLOR, (long)txt_color);
 
    return true;
-}
+  }
 
 #endif // __TRADES_PANEL_MQH__
 //====================== end trades_panel.mqh ======================

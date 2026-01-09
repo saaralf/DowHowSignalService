@@ -12,7 +12,7 @@
 
 #include "discord_client.mqh"
 #include "trade_manager.mqh"
-#include "trade_pos_line_ui.mqh"
+
 
 // ------------------------------
 // UI Layout (Right Anchor)
@@ -468,7 +468,6 @@ void UI_SelectBaseLineExclusive(const string clicked_line)
      }
   }
 
-static CTradePosLineMoveSink g_tp_line_sink;
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -479,14 +478,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
                   const string &sparam) // Parameter des Ereignisses des Typs string, name of the object, state
   {
 
-// Router zuerst: wenn verarbeitet -> return
-   // TradePosLine-Sink muss VOR dem Router gebunden sein (Router kann Events konsumieren)
-static bool s_tp_sink_bound = false;
-if(!s_tp_sink_bound)
-  {
-   g_tp_lines.SetSink(&g_tp_line_sink);
-   s_tp_sink_bound = true;
-  }
+
 
 if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
      {
@@ -630,7 +622,7 @@ if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
 
       // Optional: UI sync (ohne Save)
       UI_OnBaseLinesChanged(false);
-g_tp_lines.SyncAll(true);
+
       return;
      }
 
@@ -656,7 +648,6 @@ g_tp_lines.SyncAll(true);
       last_ui_direction_is_long = ui_direction_is_long;
       TP_RebuildRows();
 
-      UI_UpdateAllLineTags();
      }
 
 
@@ -708,7 +699,7 @@ void UI_CloseOnePositionAndNotify(const string action,
      }
 
    UI_DeleteTradePosLines(trade_no, pos_no);
-   UI_UpdateAllLineTags();
+
 
 // 3) Falls letzte pending Position -> Runtime + Meta zurücksetzen
    if(!has_pending)
@@ -780,7 +771,7 @@ bool UI_CancelActiveTrade(const string direction)
 
 // Linien/Tags entfernen
    UI_DeleteTradeLinesByTradeNo(trade_no);
-   UI_UpdateAllLineTags();
+
 
 // Runtime + Meta zurücksetzen (damit OnInit NICHT reaktiviert)
    if(isLong)
