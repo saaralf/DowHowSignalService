@@ -47,8 +47,10 @@ bool UI_Reg_Remove(const string name)
   {
    int idx = UI_Reg_IndexOf(name);
    if(idx < 0)
+     {
+      CLogger::Add(LOG_LEVEL_DEBUG, "Object nicht registriert: " + name);
       return false;
-
+     }
    int n = ArraySize(g_UI_Registry);
    for(int i=idx; i<n-1; i++)
       g_UI_Registry[i] = g_UI_Registry[i+1];
@@ -64,6 +66,8 @@ bool UI_Reg_DeleteOne(const string name)
 
    if(ObjectFind(0, name) >= 0)
       ok = ObjectDelete(0, name);
+   else
+      CLogger::Add(LOG_LEVEL_DEBUG, "Fehler beim löschen vom Object" + name);
 
    UI_Reg_Remove(name); // auch wenn nicht existiert -> sauber halten
    return ok;
@@ -89,7 +93,7 @@ int UI_Reg_DeleteAll()
          if(ObjectDelete(0, name))
            {
             deleted++;
-           
+
            }
         }
      }

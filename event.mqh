@@ -109,7 +109,10 @@ bool UI_IsWatchedEventObject(const string name)
       return true;
    if(StringFind(name, TP_ROW_SHORT_hitSL_PREFIX)  == 0)
       return true;
-
+   if(name == "TP_BTN_CANCEL_LONG" || name == "TP_BTN_CANCEL_SHORT")
+      return true;
+   if(name == "TP_BTN_ACTIVE_LONG" || name == "TP_BTN_ACTIVE_SHORT")
+      return true;
    return false;
   }
 
@@ -128,7 +131,7 @@ void UI_DebugTraceEvent(const int id, const long &lparam, const double &dparam, 
    const bool baseDrag = g_BaseLines.IsDragging();
    const bool btnDrag  = g_BaseBtnDrag.IsDragging();
 
-   if(id == CHARTEVENT_MOUSE_MOVE && !(btnDrag || baseDrag ))
+   if(id == CHARTEVENT_MOUSE_MOVE && !(btnDrag || baseDrag))
       return;
 
    Print("EVT ", UI_EventIdToStr(id),
@@ -412,6 +415,75 @@ int UI_GetMouseYPxSafe(const double dparam)
   }
 
 
+// -------------------- TP ZORDER DEBUG --------------------
+void TP_DumpObj(const string name)
+{
+   if(ObjectFind(0, name) < 0)
+   {
+      PrintFormat("TP_DUMP missing: %s", name);
+      return;
+   }
+
+   long type = (long)ObjectGetInteger(0, name, OBJPROP_TYPE);
+   long z    = (long)ObjectGetInteger(0, name, OBJPROP_ZORDER);
+   long back = (long)ObjectGetInteger(0, name, OBJPROP_BACK);
+   long sel  = (long)ObjectGetInteger(0, name, OBJPROP_SELECTABLE);
+   long tf   = (long)ObjectGetInteger(0, name, OBJPROP_TIMEFRAMES);
+
+   long x = (long)ObjectGetInteger(0, name, OBJPROP_XDISTANCE);
+   long y = (long)ObjectGetInteger(0, name, OBJPROP_YDISTANCE);
+   long w = (long)ObjectGetInteger(0, name, OBJPROP_XSIZE);
+   long h = (long)ObjectGetInteger(0, name, OBJPROP_YSIZE);
+
+   string txt = ObjectGetString(0, name, OBJPROP_TEXT);
+
+   PrintFormat("TP_DUMP name=%s type=%d z=%d back=%d selectable=%d tf=%I64d x=%d y=%d w=%d h=%d text='%s'",
+               name, (int)type, (int)z, (int)back, (int)sel, tf, (int)x, (int)y, (int)w, (int)h, txt);
+}
+
+void TP_DumpFirstByPrefix(const string prefix)
+{
+   int total = ObjectsTotal(0, -1, -1);
+   for(int i=0; i<total; i++)
+   {
+      string n = ObjectName(0, i);
+      if(StringFind(n, prefix, 0) == 0)
+      {
+         TP_DumpObj(n);
+         return;
+      }
+   }
+   PrintFormat("TP_DUMP prefix not found: %s", prefix);
+}
+
+void TP_DumpPanel()
+{
+   Print("=== TP_DUMP_PANEL BEGIN ===");
+
+   // Static
+   TP_DumpObj("TP_BG");
+   TP_DumpObj("TP_HDR_LONG_BG");
+   TP_DumpObj("TP_HDR_SHORT_BG");
+   TP_DumpObj("TP_LBL_LONG");
+   TP_DumpObj("TP_LBL_SHORT");
+   TP_DumpObj("TP_BTN_ACTIVE_LONG");
+   TP_DumpObj("TP_BTN_CANCEL_LONG");
+   TP_DumpObj("TP_BTN_ACTIVE_SHORT");
+   TP_DumpObj("TP_BTN_CANCEL_SHORT");
+
+   // Dynamic examples (jeweils erstes Objekt, falls vorhanden)
+   TP_DumpFirstByPrefix("TP_ROW_LONG_TR_");
+   TP_DumpFirstByPrefix("TP_ROW_LONG_");
+   TP_DumpFirstByPrefix("TP_ROW_LONG_Cancel_");
+   TP_DumpFirstByPrefix("TP_ROW_LONG_sl_");
+
+   TP_DumpFirstByPrefix("TP_ROW_SHORT_TR_");
+   TP_DumpFirstByPrefix("TP_ROW_SHORT_");
+   TP_DumpFirstByPrefix("TP_ROW_SHORT_Cancel_");
+   TP_DumpFirstByPrefix("TP_ROW_SHORT_sl_");
+
+   Print("=== TP_DUMP_PANEL END ===");
+}
 
 
 /**
@@ -477,10 +549,18 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
                   const double &dparam, // Parameter des Ereignisses des Typs double, Y cordinates
                   const string &sparam) // Parameter des Ereignisses des Typs string, name of the object, state
   {
+  
+  
+if(id == CHARTEVENT_OBJECT_CLICK)
+   PrintFormat("GLOBAL CLICK: %s", sparam);
+   
+if(id == CHARTEVENT_OBJECT_CLICK && sparam == "TP_BG")
+{
+   TP_DumpPanel();
+}
 
 
-
-if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
+   if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
      {
       UI_FlushRedrawBeforeReturn();
       return;
@@ -500,8 +580,7 @@ if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
 
    CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-   if(g_tp.OnChartEvent(id, lparam, dparam, sparam))
-      return;
+
 
 
 
@@ -560,7 +639,7 @@ if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
 
    if(id == CHARTEVENT_OBJECT_CHANGE)
      {
-    
+
 
 #ifdef PR_HL
 #ifdef SL_HL
@@ -582,7 +661,7 @@ if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
          UI_LineTag_SyncToLine(sparam);
          UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
          g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
-         
+
          UI_FlushRedrawBeforeReturn();
          return;
         }
