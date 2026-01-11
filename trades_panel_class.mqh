@@ -548,10 +548,13 @@ void CTradesPanel::BuildRows()
      }
   }
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 void CTradesPanel::RestoreTradeLinesFromRows(const DB_PositionRow &rows[], const int n)
-{
+  {
    for(int i=0; i<n; i++)
-   {
+     {
       if(StringFind(rows[i].status, "CLOSED", 0) == 0)
          continue;
 
@@ -566,7 +569,7 @@ void CTradesPanel::RestoreTradeLinesFromRows(const DB_PositionRow &rows[], const
       const double sl_draw    = UI_DrawPriceOrMid(rows[i].sl, 0);
 
       if(rows[i].direction == "LONG")
-      {
+        {
          CreateEntryAndSLLines(Entry_Long + suf, TimeCurrent(), entry_draw, TradeEntryLineLong);
          UI_CreateOrUpdateLineTag(Entry_Long + suf);
 
@@ -574,19 +577,25 @@ void CTradesPanel::RestoreTradeLinesFromRows(const DB_PositionRow &rows[], const
          UI_CreateOrUpdateLineTag(SL_Long + suf);
 
          g_TradeMgr.SaveTradeLines(suf);
-      }
-      else if(rows[i].direction == "SHORT")
-      {
-         CreateEntryAndSLLines(Entry_Short + suf, TimeCurrent(), entry_draw, TradeEntryLineShort);
-         UI_CreateOrUpdateLineTag(Entry_Short + suf);
+        }
+      else
+         if(rows[i].direction == "SHORT")
+           {
+            CreateEntryAndSLLines(Entry_Short + suf, TimeCurrent(), entry_draw, TradeEntryLineShort);
+            UI_CreateOrUpdateLineTag(Entry_Short + suf);
 
-         CreateEntryAndSLLines(SL_Short + suf, TimeCurrent(), sl_draw, Tradecolor_SLLineShort);
-         UI_CreateOrUpdateLineTag(SL_Short + suf);
+            CreateEntryAndSLLines(SL_Short + suf, TimeCurrent(), sl_draw, Tradecolor_SLLineShort);
+            UI_CreateOrUpdateLineTag(SL_Short + suf);
 
-         g_TradeMgr.SaveTradeLines(suf);
-      }
-   }
-}
+            g_TradeMgr.SaveTradeLines(suf);
+           }
+      PrintFormat("RESTORE-LINE: dir=%s trade=%d pos=%d was_sent=%d status=%s entry=%f sl=%f",
+                  rows[i].direction, rows[i].trade_no, rows[i].pos_no,
+                  rows[i].was_sent, rows[i].status, rows[i].entry, rows[i].sl);
+
+
+     }
+  }
 
 
 //+------------------------------------------------------------------+
