@@ -12,7 +12,7 @@
 
 #include "discord_client.mqh"
 #include "trade_manager.mqh"
-
+#include "CTradePosLineDragController.mqh"
 
 // ------------------------------
 // UI Layout (Right Anchor)
@@ -417,12 +417,12 @@ int UI_GetMouseYPxSafe(const double dparam)
 
 // -------------------- TP ZORDER DEBUG --------------------
 void TP_DumpObj(const string name)
-{
+  {
    if(ObjectFind(0, name) < 0)
-   {
+     {
       PrintFormat("TP_DUMP missing: %s", name);
       return;
-   }
+     }
 
    long type = (long)ObjectGetInteger(0, name, OBJPROP_TYPE);
    long z    = (long)ObjectGetInteger(0, name, OBJPROP_ZORDER);
@@ -439,28 +439,34 @@ void TP_DumpObj(const string name)
 
    PrintFormat("TP_DUMP name=%s type=%d z=%d back=%d selectable=%d tf=%I64d x=%d y=%d w=%d h=%d text='%s'",
                name, (int)type, (int)z, (int)back, (int)sel, tf, (int)x, (int)y, (int)w, (int)h, txt);
-}
+  }
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 void TP_DumpFirstByPrefix(const string prefix)
-{
+  {
    int total = ObjectsTotal(0, -1, -1);
    for(int i=0; i<total; i++)
-   {
+     {
       string n = ObjectName(0, i);
       if(StringFind(n, prefix, 0) == 0)
-      {
+        {
          TP_DumpObj(n);
          return;
-      }
-   }
+        }
+     }
    PrintFormat("TP_DUMP prefix not found: %s", prefix);
-}
+  }
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 void TP_DumpPanel()
-{
+  {
    Print("=== TP_DUMP_PANEL BEGIN ===");
 
-   // Static
+// Static
    TP_DumpObj("TP_BG");
    TP_DumpObj("TP_HDR_LONG_BG");
    TP_DumpObj("TP_HDR_SHORT_BG");
@@ -471,7 +477,7 @@ void TP_DumpPanel()
    TP_DumpObj("TP_BTN_ACTIVE_SHORT");
    TP_DumpObj("TP_BTN_CANCEL_SHORT");
 
-   // Dynamic examples (jeweils erstes Objekt, falls vorhanden)
+// Dynamic examples (jeweils erstes Objekt, falls vorhanden)
    TP_DumpFirstByPrefix("TP_ROW_LONG_TR_");
    TP_DumpFirstByPrefix("TP_ROW_LONG_");
    TP_DumpFirstByPrefix("TP_ROW_LONG_Cancel_");
@@ -483,7 +489,7 @@ void TP_DumpPanel()
    TP_DumpFirstByPrefix("TP_ROW_SHORT_sl_");
 
    Print("=== TP_DUMP_PANEL END ===");
-}
+  }
 
 
 /**
@@ -549,15 +555,15 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
                   const double &dparam, // Parameter des Ereignisses des Typs double, Y cordinates
                   const string &sparam) // Parameter des Ereignisses des Typs string, name of the object, state
   {
-  
-  
-if(id == CHARTEVENT_OBJECT_CLICK)
-   PrintFormat("GLOBAL CLICK: %s", sparam);
-   
-if(id == CHARTEVENT_OBJECT_CLICK && sparam == "TP_BG")
-{
-   TP_DumpPanel();
-}
+
+
+   if(id == CHARTEVENT_OBJECT_CLICK)
+      PrintFormat("GLOBAL CLICK: %s", sparam);
+
+   if(id == CHARTEVENT_OBJECT_CLICK && sparam == "TP_BG")
+     {
+      TP_DumpPanel();
+     }
 
 
    if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
@@ -612,7 +618,8 @@ if(id == CHARTEVENT_OBJECT_CLICK && sparam == "TP_BG")
 // --- Trade-Pos-Linien: Tag live nachziehen (DRAG), Discord/DB genau 1x pro Drag (Finalize)
    if(id == CHARTEVENT_OBJECT_DRAG)
      {
-
+      if(g_tp_drag.OnObjectDrag(sparam))
+         return; // handled (sync + throttle intern)
 #ifdef PR_HL
 #ifdef SL_HL
       if(sparam == PR_HL || sparam == SL_HL)
@@ -630,7 +637,7 @@ if(id == CHARTEVENT_OBJECT_CLICK && sparam == "TP_BG")
 
          // WICHTIG: auch für die "anderen" TradePos-Linien-Branches redraw anfordern,
          // sonst wirkt das Label wie "Lag" und springt später hinterher.
-         UI_LineTag_SyncToLine(sparam);
+ 
          UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
          UI_FlushRedrawBeforeReturn();
          return;
@@ -639,7 +646,8 @@ if(id == CHARTEVENT_OBJECT_CLICK && sparam == "TP_BG")
 
    if(id == CHARTEVENT_OBJECT_CHANGE)
      {
-
+ if(g_tp_drag.OnObjectChange(sparam))
+      return; // handled -> Finalize + Discord + DB
 
 #ifdef PR_HL
 #ifdef SL_HL
@@ -658,7 +666,7 @@ if(id == CHARTEVENT_OBJECT_CLICK && sparam == "TP_BG")
 
          // WICHTIG: auch für die "anderen" TradePos-Linien-Branches redraw anfordern,
          // sonst wirkt das Label wie "Lag" und springt später hinterher.
-         UI_LineTag_SyncToLine(sparam);
+        
          UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
          g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
 
@@ -681,7 +689,7 @@ if(id == CHARTEVENT_OBJECT_CLICK && sparam == "TP_BG")
       const int my = (int)dparam;
       const int MouseState = (int)StringToInteger(sparam);
 
-
+   g_tp_drag.OnMouseMoveFinalizeIfNeeded(sparam);
       g_last_mouse_y = my;          // bleibt für anderes Zeug erhalten
       g_BaseLines.SetLastMouseY(my);
 
@@ -698,7 +706,7 @@ if(id == CHARTEVENT_OBJECT_CLICK && sparam == "TP_BG")
      {
       // Right Anchor neu anwenden
       g_BaseLines.ApplyRightAnchor();
-
+   g_tradePosLines.SyncAllTags();
       // Optional: UI sync (ohne Save)
       UI_OnBaseLinesChanged(false);
 
