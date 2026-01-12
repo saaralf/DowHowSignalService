@@ -7,7 +7,9 @@
 #include "trade_pos_line_registry.mqh"
 #include "discord_client.mqh"
 #include "logger.mqh"
-#include "UI_CreateOrUpdateLineTag.mqh"
+#include "UI_ParseTradePosFromName.mqh"
+
+
 
 // Optional: UI helpers (wo UI_Reg_Add/UI_ObjSetIntSafe/UI_RequestRedraw wohnen)
 // #include "ui_helpers.mqh"
@@ -498,7 +500,7 @@ void CTradesPanel::BuildRows()
    else
       n = g_DB.LoadPositions(_Symbol, (ENUM_TIMEFRAMES)_Period, rows);
 // NEU: Lines aus DB wiederherstellen (Entry/SL pro Position)
-   RestoreTradeLinesFromRows(rows, n);
+  
    if(n <= 0)
       return;
 
@@ -571,10 +573,10 @@ void CTradesPanel::RestoreTradeLinesFromRows(const DB_PositionRow &rows[], const
       if(rows[i].direction == "LONG")
         {
          CreateEntryAndSLLines(Entry_Long + suf, TimeCurrent(), entry_draw, TradeEntryLineLong);
-         UI_CreateOrUpdateLineTag(Entry_Long + suf);
+       
 
          CreateEntryAndSLLines(SL_Long + suf, TimeCurrent(), sl_draw, Tradecolor_SLLineLong);
-         UI_CreateOrUpdateLineTag(SL_Long + suf);
+       
 
          g_TradeMgr.SaveTradeLines(suf);
         }
@@ -582,10 +584,9 @@ void CTradesPanel::RestoreTradeLinesFromRows(const DB_PositionRow &rows[], const
          if(rows[i].direction == "SHORT")
            {
             CreateEntryAndSLLines(Entry_Short + suf, TimeCurrent(), entry_draw, TradeEntryLineShort);
-            UI_CreateOrUpdateLineTag(Entry_Short + suf);
-
+      
             CreateEntryAndSLLines(SL_Short + suf, TimeCurrent(), sl_draw, Tradecolor_SLLineShort);
-            UI_CreateOrUpdateLineTag(SL_Short + suf);
+        
 
             g_TradeMgr.SaveTradeLines(suf);
            }

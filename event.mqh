@@ -546,17 +546,11 @@ void UI_SelectBaseLineExclusive(const string clicked_line)
      }
   }
 
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void OnChartEvent(const int id,         // Identifikator des Ereignisses
-                  const long &lparam,   // Parameter des Ereignisses des Typs long, X cordinates
-                  const double &dparam, // Parameter des Ereignisses des Typs double, Y cordinates
-                  const string &sparam) // Parameter des Ereignisses des Typs string, name of the object, state
+void OnChartEvent(const int id,
+                  const long &lparam,
+                  const double &dparam,
+                  const string &sparam)
   {
-
-
    if(id == CHARTEVENT_OBJECT_CLICK)
       PrintFormat("GLOBAL CLICK: %s", sparam);
 
@@ -565,185 +559,148 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
       TP_DumpPanel();
      }
 
-
+   // 0) Router: Panel + SendClick etc.
+   bool handled = false;
    if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
+      handled = true;
+
+   // 1) Legacy / restliche Verarbeitung nur wenn Router NICHT handled hat
+   if(!handled)
      {
-      UI_FlushRedrawBeforeReturn();
-      return;
-     }
+      UI_DebugTraceEvent(id, lparam, dparam, sparam);
 
+      CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+      CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
 
-// Panel zuerst (damit es seine Buttons/Rows sauber abfangen kann)
-   if(g_tp.OnChartEvent(id, lparam, dparam, sparam))
-     {
-      UI_FlushRedrawBeforeReturn();
-      return;
-     }
-
-   UI_DebugTraceEvent(id, lparam, dparam, sparam);
-
-
-
-   CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-   CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-
-
-
-
-   /**
-    * Beschreibung: Merkt den letzten Klick auf PR_HL/SL_HL, damit Live-Fallback beim Drag die richtige Linie wählt.
-    * Parameter:    id/lparam/dparam/sparam - Standard OnChartEvent Parameter
-    * Rückgabewert: void
-    * Hinweise:     Fix gegen "SL wird gezogen, aber PR-Branch greift -> SL springt zurück".
-    * Fehlerfälle:  keine
-    */
-   if(id == CHARTEVENT_OBJECT_CLICK)
-     {
-      if(g_send_ctl.OnObjectClick(sparam))
-         return;
-
-      if(sparam == PR_HL || sparam == SL_HL)
+      // OBJECT_CLICK (Fallback)
+      if(id == CHARTEVENT_OBJECT_CLICK)
         {
-         UI_SelectBaseLineExclusive(sparam);   // Fix Bug #2
-         g_base_last_clicked_line = sparam;    // falls du das noch nutzt
-         // kein return: falls du später noch Click-Logik addest
+         if(g_send_ctl.OnObjectClick(sparam))
+           {
+            handled = true;
+           }
+         else
+           {
+            if(sparam == PR_HL || sparam == SL_HL)
+              {
+               UI_SelectBaseLineExclusive(sparam);
+               g_base_last_clicked_line = sparam;
+              }
+           }
         }
-     }
 
-
-
-
-
-
-// --- Trade-Pos-Linien: Tag live nachziehen (DRAG), Discord/DB genau 1x pro Drag (Finalize)
-   if(id == CHARTEVENT_OBJECT_DRAG)
-     {
-      if(g_tp_drag.OnObjectDrag(sparam))
-         return; // handled (sync + throttle intern)
+      // OBJECT_DRAG
+      if(!handled && id == CHARTEVENT_OBJECT_DRAG)
+        {
+         if(g_tp_drag.OnObjectDrag(sparam))
+           {
+            handled = true;
+           }
+         else
+           {
 #ifdef PR_HL
 #ifdef SL_HL
-      if(sparam == PR_HL || sparam == SL_HL)
-        {
-         // Klassen-Handler
-         if(g_BaseLines.OnObjectDrag(sparam, dparam))
-            return;
-        }
+            if(sparam == PR_HL || sparam == SL_HL)
+              {
+               if(g_BaseLines.OnObjectDrag(sparam, dparam))
+                  handled = true;
+              }
 #endif
 #endif
-
-      // sonstige Trade-Linien (z.B. TP): nur Tag live
-      if(UI_IsTradePosLine(sparam))
-        {
-
-         // WICHTIG: auch für die "anderen" TradePos-Linien-Branches redraw anfordern,
-         // sonst wirkt das Label wie "Lag" und springt später hinterher.
- 
-         UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
-         UI_FlushRedrawBeforeReturn();
-         return;
+            if(!handled && UI_IsTradePosLine(sparam))
+              {
+               UI_RequestRedrawThrottled(15);
+               handled = true;
+              }
+           }
         }
-     }
 
-   if(id == CHARTEVENT_OBJECT_CHANGE)
-     {
- if(g_tp_drag.OnObjectChange(sparam))
-      return; // handled -> Finalize + Discord + DB
-
+      // OBJECT_CHANGE
+      if(!handled && id == CHARTEVENT_OBJECT_CHANGE)
+        {
+         if(g_tp_drag.OnObjectChange(sparam))
+           {
+            handled = true;
+           }
+         else
+           {
 #ifdef PR_HL
 #ifdef SL_HL
-      if(sparam == PR_HL || sparam == SL_HL)
-        {
-         if(g_BaseLines.OnObjectChange(sparam))
-            return;
-        }
+            if(sparam == PR_HL || sparam == SL_HL)
+              {
+               if(g_BaseLines.OnObjectChange(sparam))
+                  handled = true;
+              }
 #endif
 #endif
-
-
-      // Trade-Linien: wie gehabt
-      if(UI_IsTradePosLine(sparam))
-        {
-
-         // WICHTIG: auch für die "anderen" TradePos-Linien-Branches redraw anfordern,
-         // sonst wirkt das Label wie "Lag" und springt später hinterher.
-        
-         UI_RequestRedrawThrottled(15); // 10–20ms wirkt flüssig; 15ms ist ein guter Start
-         g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
-
-         UI_FlushRedrawBeforeReturn();
-         return;
+            if(!handled && UI_IsTradePosLine(sparam))
+              {
+               UI_RequestRedrawThrottled(15);
+               g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
+               handled = true;
+              }
+           }
         }
 
-     }
+      // Preise der Linien (wie vorher, aber nur wenn wir noch nicht handled sind)
+      if(!handled)
+        {
+         Entry_Price = Get_Price_d(PR_HL);
+         SL_Price    = Get_Price_d(SL_HL);
+        }
 
+      // MOUSE_MOVE
+      if(!handled && id == CHARTEVENT_MOUSE_MOVE)
+        {
+         const int mx = (int)lparam;
+         const int my = (int)dparam;
+         const int MouseState = (int)StringToInteger(sparam);
 
+         g_tp_drag.OnMouseMoveFinalizeIfNeeded(MouseState);
 
-// Preise der Linien direkt als double holen
-   Entry_Price = Get_Price_d(PR_HL);
-   SL_Price = Get_Price_d(SL_HL);
+         g_last_mouse_y = my;
+         g_BaseLines.SetLastMouseY(my);
 
-   if(id == CHARTEVENT_MOUSE_MOVE)
+         if(g_BaseBtnDrag.OnMouseMove(mx, my, MouseState))
+           {
+            handled = true;
+           }
+         else
+           {
+            g_BaseLines.OnMouseMove(mx, my, MouseState, g_BaseBtnDrag.IsDragging());
+            handled = true;
+           }
+        }
 
-     {
-      const int mx = (int)lparam;
-      const int my = (int)dparam;
-      const int MouseState = (int)StringToInteger(sparam);
+      // CHART_CHANGE
+      if(!handled && id == CHARTEVENT_CHART_CHANGE)
+        {
+         g_BaseLines.ApplyRightAnchor();
+         g_tradePosLines.SyncAllTags();
+         UI_OnBaseLinesChanged(false);
+         handled = true;
+        }
+     } // if(!handled)
 
-   g_tp_drag.OnMouseMoveFinalizeIfNeeded(MouseState);
-      g_last_mouse_y = my;          // bleibt für anderes Zeug erhalten
-      g_BaseLines.SetLastMouseY(my);
-
-      // 1) Button-Drag (Entry/SL) hat Priorität
-      if(g_BaseBtnDrag.OnMouseMove(mx, my, MouseState)) // Button Entry/Sl werden verschoben
-         return;
-
-      // 2) HLine-Fallback/Finalize (nur wenn Button-Drag NICHT aktiv)
-      g_BaseLines.OnMouseMove(mx, my, MouseState, g_BaseBtnDrag.IsDragging()); //PR_HL und SL_HL werden verschoben
-      return;
-     }
-
-   if(id == CHARTEVENT_CHART_CHANGE)
-     {
-      // Right Anchor neu anwenden
-      g_BaseLines.ApplyRightAnchor();
-   g_tradePosLines.SyncAllTags();
-      // Optional: UI sync (ohne Save)
-      UI_OnBaseLinesChanged(false);
-
-      return;
-     }
-
-
-
-
-
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
+   // ENDEDIT soll immer laufen (unabhängig davon, ob Router handled hat)
    if(id == CHARTEVENT_OBJECT_ENDEDIT)
      {
       if(sparam == SabioEntry || sparam == SabioSL)
-        {
          UpdateSabioTP();
-        }
      }
 
+   // --- Post-Phase: MUSS IMMER laufen ---
    static bool last_ui_direction_is_long = true;
    if(last_ui_direction_is_long != ui_direction_is_long)
      {
       last_ui_direction_is_long = ui_direction_is_long;
       TP_RebuildRows();
-
      }
 
-
-
-// Zentraler, gedrosselter Redraw (statt vieler ChartRedraw-Aufrufe)
    UI_ProcessRedraw();
    g_tp.ProcessRebuild();
+  }
 
-  } // Ende ChartEvent
 
 
 
@@ -774,18 +731,8 @@ void UI_CloseOnePositionAndNotify(const string action,
 // 2) UI-Linien/Tags dieser Position entfernen (wie bisher)
    string suf_tp = "_" + IntegerToString(trade_no) + "_" + IntegerToString(pos_no);
 
-   if(direction == "LONG")
-     {
-      UI_DeleteLineAndAllKnownTags(Entry_Long + suf_tp);
-      UI_DeleteLineAndAllKnownTags(SL_Long    + suf_tp);
-     }
-   else
-     {
-      UI_DeleteLineAndAllKnownTags(Entry_Short + suf_tp);
-      UI_DeleteLineAndAllKnownTags(SL_Short    + suf_tp);
-     }
+ TradePosLines_DeleteTradePos(direction, trade_no, pos_no);
 
-   UI_DeleteTradePosLines(trade_no, pos_no);
 
 
 // 3) Falls letzte pending Position -> Runtime + Meta zurücksetzen
@@ -857,7 +804,8 @@ bool UI_CancelActiveTrade(const string direction)
      }
 
 // Linien/Tags entfernen
-   UI_DeleteTradeLinesByTradeNo(trade_no);
+TradePosLines_DeleteTradeByTradeNo(direction, trade_no);
+
 
 
 // Runtime + Meta zurücksetzen (damit OnInit NICHT reaktiviert)

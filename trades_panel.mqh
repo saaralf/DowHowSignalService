@@ -141,52 +141,6 @@ void showCancel_short(bool show)
 
 
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-bool UI_DeleteObjectIfExists(const string name)
-  {
-   if(ObjectFind(0, name) >= 0)
-      return UI_Reg_DeleteOne(name);
-   UI_Reg_Remove(name); // falls nur Registry-Rest
-   return true;
-
-  }
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-bool UI_DeleteLineAndTag(const string line_name)
-  {
-   bool ok = true;
-
-   ok = UI_DeleteObjectIfExists(line_name) && ok;
-
-   string tag_name = line_name + LINE_TAG_SUFFIX;
-   ok = UI_DeleteObjectIfExists(tag_name) && ok;
-
-   return ok;
-  }
-
-// Löscht die 4 möglichen Linien-Namen für genau diese Trade/Pos
-// (LONG: Entry_Long_#_# und SL_Long_#_#) + (SHORT: Entry_Short_#_# und SL_Short_#_#)
-// -> sicher, auch wenn nur LONG oder nur SHORT existiert.
-bool UI_DeleteTradePosLines(const int trade_no, const int pos_no)
-  {
-   if(trade_no <= 0 || pos_no <= 0)
-      return false;
-
-   string suf = "_" + IntegerToString(trade_no) + "_" + IntegerToString(pos_no);
-
-   bool ok = true;
-   ok = UI_DeleteLineAndTag(Entry_Long + suf) && ok;
-   ok = UI_DeleteLineAndTag(SL_Long + suf) && ok;
-   ok = UI_DeleteLineAndTag(Entry_Short + suf) && ok;
-   ok = UI_DeleteLineAndTag(SL_Short + suf) && ok;
-
-   return ok;
-  }
-
 
 
 /**
@@ -335,47 +289,6 @@ double UI_DrawPriceOrMid(const double intended_price, const int subwin = 0)
 // Rückgabe: Anzahl gelöschter Objekte.
 // ============================================================================
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-int UI_DeleteTradeLinesByTradeNo(const int trade_no)
-  {
-   if(trade_no <= 0)
-      return 0;
-
-// Muster: Prefix + "_" + trade_no + "_"
-   string mid = "_" + IntegerToString(trade_no) + "_";
-
-   string p1 = Entry_Long + mid;
-   string p2 = SL_Long + mid;
-   string p3 = Entry_Short + mid;
-   string p4 = SL_Short + mid;
-
-   int deleted = 0;
-
-   int total = ObjectsTotal(0, -1, -1);
-   for(int i = total - 1; i >= 0; i--)
-     {
-      string name = ObjectName(0, i, -1, -1);
-      if(name == "")
-         continue;
-
-      bool match =
-         (StringFind(name, p1, 0) == 0) ||
-         (StringFind(name, p2, 0) == 0) ||
-         (StringFind(name, p3, 0) == 0) ||
-         (StringFind(name, p4, 0) == 0);
-
-      if(match)
-        {
-         if(UI_Reg_DeleteOne(name))
-            deleted++;
-        }
-     }
-
-   return deleted;
-  }
-
 
 /**
 * Beschreibung: Setzt die Textfarbe eines OBJ_LABEL robust (mit Logging).
@@ -408,43 +321,6 @@ bool TP_SetLabelColorChecked(const string name, const color col)
    return true;
   }
 
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-bool UI_DeleteLineAndAllKnownTags(const string line_name)
-  {
-   bool ok = true;
-
-   ok = UI_DeleteObjectIfExists(line_name) && ok;
-   ok = UI_DeleteObjectIfExists(line_name + LINE_TAG_SUFFIX) && ok;
-
-// Legacy: LabelEntry*/LabelSL* mit gleichem Suffix (falls mal erzeugt)
-// Suffix aus line_name extrahieren (alles ab letztem "Entry_*" / "SL_*" bleibt gleich)
-// Einfacher: Kandidaten auf Basis der bekannten Prefixe:
-// Entry_Long_1_2  ->  LabelEntryLong_1_2
-   string suf = "";
-   int p = StringFind(line_name, "_", 0);
-// robust: nimm die letzten 2 "_<trade>_<pos>" Teile
-   string parts[];
-   int n = StringSplit(line_name, '_', parts);
-   if(n >= 3)
-      suf = "_" + parts[n-2] + "_" + parts[n-1];
-
-   if(suf != "")
-     {
-      if(StringFind(line_name, "Entry_Long_", 0) == 0)
-         ok = UI_DeleteObjectIfExists(LabelEntryLong  + suf) && ok;
-      if(StringFind(line_name, "SL_Long_", 0)    == 0)
-         ok = UI_DeleteObjectIfExists(LabelSLLong     + suf) && ok;
-      if(StringFind(line_name, "Entry_Short_",0) == 0)
-         ok = UI_DeleteObjectIfExists(LabelEntryShort + suf) && ok;
-      if(StringFind(line_name, "SL_Short_", 0)   == 0)
-         ok = UI_DeleteObjectIfExists(LabelSLShort    + suf) && ok;
-     }
-
-   return ok;
-  }
 
 
 

@@ -1,4 +1,13 @@
-﻿/**
+﻿//+------------------------------------------------------------------+
+//|                                                      ProjectName |
+//|                                      Copyright 2020, CompanyName |
+//|                                       http://www.companyname.net |
+//+------------------------------------------------------------------+
+#include "trade_pos_line_registry.mqh"
+
+extern CTradePosLineRegistry g_tradePosLines;
+
+/**
  * Beschreibung: Kapselt den kompletten Drag-State einer TradePos-Linie (Entry/SL je Trade/Pos),
  *               damit Discord/DB nur 1x pro Drag feuern und keine globalen g_tp_drag_* nötig sind.
  * Parameter:    none
@@ -9,15 +18,15 @@
 class CTradePosLineDragController
   {
 private:
-   bool   m_active;
-   string m_name;
-   string m_dir;        // "LONG"/"SHORT"
-   string m_kind;       // "entry"/"sl"
-   int    m_trade_no;
-   int    m_pos_no;
-   double m_old_price;
-   double m_last_price;
-   uint   m_last_redraw_ms;
+   bool              m_active;
+   string            m_name;
+   string            m_dir;        // "LONG"/"SHORT"
+   string            m_kind;       // "entry"/"sl"
+   int               m_trade_no;
+   int               m_pos_no;
+   double            m_old_price;
+   double            m_last_price;
+   uint              m_last_redraw_ms;
 
 public:
    /**
@@ -27,7 +36,7 @@ public:
     * Hinweise:     Reset() setzt alles in einen definierten Zustand.
     * Fehlerfälle:  keine
     */
-   CTradePosLineDragController()
+                     CTradePosLineDragController()
      {
       Reset();
      }
@@ -39,7 +48,7 @@ public:
     * Hinweise:     Für DebugTrace/Filter nutzbar.
     * Fehlerfälle:  keine
     */
-   bool IsActive() const { return m_active; }
+   bool              IsActive() const { return m_active; }
 
    /**
     * Beschreibung: Wird bei OBJECT_DRAG aufgerufen. Erkennt nur Entry/SL-TradePos-Linien und tracked den Drag.
@@ -48,7 +57,7 @@ public:
     * Hinweise:     Holt old_price aus DB (falls vorhanden), sonst nimmt Startpreis.
     * Fehlerfälle:  Parse schlägt fehl -> false (nicht unsere Linie).
     */
-   bool OnObjectDrag(const string obj_name)
+   bool              OnObjectDrag(const string obj_name)
      {
       string direction, kind;
       int trade_no, pos_no;
@@ -85,8 +94,10 @@ public:
          m_last_price = cur_price;
         }
 
-      // Tag live nachziehen
-      UI_CreateOrUpdateLineTag(obj_name);
+      CTradePosLine *L = g_tradePosLines.FindByLineName(obj_name);
+      if(L != NULL)
+         L.SyncTagToLine();
+
 
       // Redraw gedrosselt
       const uint now = GetTickCount();
@@ -106,7 +117,7 @@ public:
     * Hinweise:     OBJECT_CHANGE kommt nicht immer zuverlässig -> MouseUp-Fallback zusätzlich.
     * Fehlerfälle:  Objekt nicht mehr vorhanden -> Reset.
     */
-   bool OnObjectChange(const string obj_name)
+   bool              OnObjectChange(const string obj_name)
      {
       if(!m_active || obj_name != m_name)
          return false;
@@ -123,7 +134,7 @@ public:
     * Hinweise:     mouse_state==0 bedeutet MouseUp.
     * Fehlerfälle:  keine
     */
-   void OnMouseMoveFinalizeIfNeeded(const int mouse_state)
+   void              OnMouseMoveFinalizeIfNeeded(const int mouse_state)
      {
       if(mouse_state != 0)
          return;
@@ -141,7 +152,7 @@ private:
     * Hinweise:     Nach Reset ist IsActive()==false.
     * Fehlerfälle:  keine
     */
-   void Reset()
+   void              Reset()
      {
       m_active = false;
       m_name = "";
@@ -161,7 +172,7 @@ private:
     * Hinweise:     "changed" nutzt SYMBOL_POINT Toleranz.
     * Fehlerfälle:  ObjectFind schlägt fehl -> Reset.
     */
-   void Finalize()
+   void              Finalize()
      {
       if(!m_active || m_name == "")
         {
@@ -179,7 +190,12 @@ private:
       const double old_price = m_old_price;
 
       // UI Tag sauber final
-      UI_CreateOrUpdateLineTag(m_name);
+   // UI Tag sauber final
+CTradePosLine *L = g_tradePosLines.FindByLineName(m_name);
+if(L != NULL)
+   L.SyncTagToLine();
+
+
       UI_RequestRedraw();
 
       // DB persistieren
@@ -215,3 +231,4 @@ private:
 
 // Global (file-scope)
 static CTradePosLineDragController g_tp_drag;
+//+------------------------------------------------------------------+
