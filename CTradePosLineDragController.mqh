@@ -55,7 +55,7 @@ public:
 
       if(!UI_ParseTradePosFromName(obj_name, direction, trade_no, pos_no, kind))
          return false;
-      if(kind != "entry" && kind != "sl")
+      if(kind != "ENTRY" && kind != "SL")
          return false;
 
       const double cur_price = ObjectGetDouble(0, obj_name, OBJPROP_PRICE);
@@ -75,7 +75,7 @@ public:
          m_old_price = 0.0;
          DB_PositionRow row;
          if(g_DB.GetPosition(_Symbol, (ENUM_TIMEFRAMES)_Period, direction, trade_no, pos_no, row))
-            m_old_price = (kind == "entry") ? row.entry : row.sl;
+            m_old_price = (kind == "ENTRY") ? row.entry : row.sl;
          if(m_old_price <= 0.0)
             m_old_price = cur_price;
         }
@@ -189,9 +189,9 @@ private:
       const double pt = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
       const bool changed = (old_price <= 0.0) || (MathAbs(new_price - old_price) > pt * 0.25);
 
-      if(changed && (m_kind == "entry" || m_kind == "sl"))
+      if(changed && (m_kind == "ENTRY" || m_kind == "SL"))
         {
-         const string what = (m_kind == "entry") ? "Entry" : "SL";
+         const string what = (m_kind == "ENTRY") ? "ENTRY" : "SL";
          string msg = "@everyone\n";
          msg += StringFormat("**UPDATE:** %s %s Trade %d Pos %d (%s)\n",
                              _Symbol, TF_ToString((ENUM_TIMEFRAMES)_Period),

@@ -689,7 +689,7 @@ void OnChartEvent(const int id,         // Identifikator des Ereignisses
       const int my = (int)dparam;
       const int MouseState = (int)StringToInteger(sparam);
 
-   g_tp_drag.OnMouseMoveFinalizeIfNeeded(sparam);
+   g_tp_drag.OnMouseMoveFinalizeIfNeeded(MouseState);
       g_last_mouse_y = my;          // bleibt für anderes Zeug erhalten
       g_BaseLines.SetLastMouseY(my);
 
