@@ -134,7 +134,7 @@ public:
       m_x=10;
       m_y=40;
       m_w=440;
-      m_h=420;
+      m_h=300;
 
       m_pad=8;
       m_gap=6;
@@ -277,17 +277,17 @@ bool CTradesPanel::BuildStatic(const int x, const int y, const int w, const int 
 
 // --- Static UI erstellen ---
 // BG
-   if(!CreateRect(m_bg, m_x, m_y, m_w, m_h, m_hdr_border, clrBlack, 9990))
+   if(!CreateRect(m_bg, m_x, m_y, m_w, m_h, m_hdr_border, clrBlack, Z_PANEL_BG))
       return false;
 
 // Separator (Mitte)
-   if(!CreateRect(m_sep, xL + block_w, m_y, m_gap, m_h, clrDimGray, clrDimGray, 10002))
+   if(!CreateRect(m_sep, xL + block_w, m_y, m_gap, m_h, clrDimGray, clrDimGray, Z_PANEL_UI))
       return false;
 
 // Header-BGs (neutral)
-   if(!CreateRect(m_hdrL, xL, y1, block_w, m_hdr_h, m_hdr_border, m_hdr_bg, 10003))
+   if(!CreateRect(m_hdrL, xL, y1, block_w, m_hdr_h, m_hdr_border, m_hdr_bg, Z_PANEL_UI))
       return false;
-   if(!CreateRect(m_hdrR, xR, y1, block_w, m_hdr_h, m_hdr_border, m_hdr_bg, 10003))
+   if(!CreateRect(m_hdrR, xR, y1, block_w, m_hdr_h, m_hdr_border, m_hdr_bg, Z_PANEL_UI))
       return false;
 
 // Header-Labels

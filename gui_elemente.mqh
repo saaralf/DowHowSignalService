@@ -23,6 +23,40 @@
 #endif
 
 
+// Z-Order Konstanten
+#define Z_LINES      50
+#define Z_PANEL_BG   5000
+#define Z_PANEL_UI   5100
+
+// Panel nach vorne, Linien nach hinten (aber nicht "BACK" hinter Kerzen!)
+void UI_ApplyZOrder()
+  {
+   int total = ObjectsTotal(0, 0, -1);
+   for(int i=total-1; i>=0; --i)
+     {
+      string n = ObjectName(0, i, 0, -1);
+      if(n == "")
+         continue;
+
+      // 1) Basis-HL Linien + TradePos Linien => hinten
+      if(n == PR_HL || n == SL_HL || UI_IsTradePosLine(n))
+        {
+         ObjectSetInteger(0, n, OBJPROP_ZORDER, Z_LINES);
+         ObjectSetInteger(0, n, OBJPROP_BACK, false); // wichtig
+         continue;
+        }
+
+      // 2) Panel-Objekte (alles was mit TP_ beginnt) => vorne
+      if(StringFind(n, "TP_", 0) == 0)
+        {
+         // Hintergrund etwas niedriger als Buttons/Labels (optional)
+         int z = (n == "TP_BG" ? Z_PANEL_BG : Z_PANEL_UI);
+         ObjectSetInteger(0, n, OBJPROP_ZORDER, z);
+         ObjectSetInteger(0, n, OBJPROP_BACK, false);
+         continue;
+        }
+     }
+  }
 
 /**
  * Beschreibung: Aktualisiert Long-Labels nur wenn Entry/SL sich geändert haben.
@@ -331,7 +365,7 @@ bool createHL(string objName, datetime time1, double price1, color clr)
       // "Trefferfläche" & Ebenen
       UI_ObjSetIntSafe(0, objName, OBJPROP_WIDTH, 2);
       UI_ObjSetIntSafe(0, objName, OBJPROP_STYLE, STYLE_SOLID);
-      UI_ObjSetIntSafe(0, objName, OBJPROP_ZORDER, 10);
+      UI_ObjSetIntSafe(0, objName, OBJPROP_ZORDER, Z_PANEL_BG);
 
       return true;
      }

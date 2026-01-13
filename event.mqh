@@ -697,6 +697,7 @@ void OnChartEvent(const int id,
          g_BaseLines.ApplyRightAnchor();
          g_tradePosLines.SyncAllTags();
          UI_OnBaseLinesChanged(false);
+         UI_ApplyZOrder();   // <-- ergänzen
          handled = true;
         }
      } // if(!handled)
@@ -801,6 +802,7 @@ bool UI_CloseOnePositionAndNotify(const string action,
    g_tp.RequestRebuild();
 
    g_tp.ProcessRebuild();
+   UI_ApplyZOrder();       // <-- HIER
    return true;
   }
 
