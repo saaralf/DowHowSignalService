@@ -130,16 +130,6 @@ void DiscordSend()
       g_tp.RebuildRows();
       }
 
-      if(active_before > 0)
-      {
-         update_Text(TRNB, IntegerToString(active_before));
-         update_Text(POSNB, IntegerToString(pos_no+1));
-      }
-      else
-      {
-         update_Text(TRNB, IntegerToString(last_trade_nummer + 1));
-      }
-
       UI_UpdateNextTradePosUI();
 
    } while(false);
