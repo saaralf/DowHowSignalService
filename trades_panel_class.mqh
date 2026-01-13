@@ -720,11 +720,10 @@ bool CTradesPanel::BuildSide(const bool isLong, const DB_PositionRow &arr[], con
       string cName   = StringFormat("%s%d_%d", (isLong?m_prefLongCancel:m_prefShortCancel), trade_no, pos_no);
       string sName   = StringFormat("%s%d_%d", (isLong?m_prefLongHitSL:m_prefShortHitSL), trade_no, pos_no);
 
-      string txt = StringFormat("P%d  %s  E:%s SL:%s",
+      string txt = StringFormat("P%d  %s  ",
                                 pos_no,
-                                arr[i].status,
-                                DoubleToString(arr[i].entry, digits),
-                                DoubleToString(arr[i].sl, digits));
+                                arr[i].status
+                               );
 
       CreateButton(rowName, xBase, yTop + idx*m_row_h, col_w, m_row_h, txt, 8);
       CreateButton(cName, xBase + col_w + m_gap, yTop + idx*m_row_h, m_btnC_w, m_row_h, "C", 8);

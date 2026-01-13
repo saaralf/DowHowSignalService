@@ -546,11 +546,16 @@ void UI_SelectBaseLineExclusive(const string clicked_line)
      }
   }
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 void OnChartEvent(const int id,
                   const long &lparam,
                   const double &dparam,
                   const string &sparam)
   {
+   CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    if(id == CHARTEVENT_OBJECT_CLICK)
       PrintFormat("GLOBAL CLICK: %s", sparam);
 
@@ -559,18 +564,17 @@ void OnChartEvent(const int id,
       TP_DumpPanel();
      }
 
-   // 0) Router: Panel + SendClick etc.
+// 0) Router: Panel + SendClick etc.
    bool handled = false;
    if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
       handled = true;
 
-   // 1) Legacy / restliche Verarbeitung nur wenn Router NICHT handled hat
+// 1) Legacy / restliche Verarbeitung nur wenn Router NICHT handled hat
    if(!handled)
      {
       UI_DebugTraceEvent(id, lparam, dparam, sparam);
 
-      CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-      CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+
 
       // OBJECT_CLICK (Fallback)
       if(id == CHARTEVENT_OBJECT_CLICK)
@@ -682,14 +686,14 @@ void OnChartEvent(const int id,
         }
      } // if(!handled)
 
-   // ENDEDIT soll immer laufen (unabhängig davon, ob Router handled hat)
+// ENDEDIT soll immer laufen (unabhängig davon, ob Router handled hat)
    if(id == CHARTEVENT_OBJECT_ENDEDIT)
      {
       if(sparam == SabioEntry || sparam == SabioSL)
          UpdateSabioTP();
      }
 
-   // --- Post-Phase: MUSS IMMER laufen ---
+// --- Post-Phase: MUSS IMMER laufen ---
    static bool last_ui_direction_is_long = true;
    if(last_ui_direction_is_long != ui_direction_is_long)
      {
@@ -731,7 +735,7 @@ void UI_CloseOnePositionAndNotify(const string action,
 // 2) UI-Linien/Tags dieser Position entfernen (wie bisher)
    string suf_tp = "_" + IntegerToString(trade_no) + "_" + IntegerToString(pos_no);
 
- TradePosLines_DeleteTradePos(direction, trade_no, pos_no);
+   TradePosLines_DeleteTradePos(direction, trade_no, pos_no);
 
 
 
@@ -804,7 +808,7 @@ bool UI_CancelActiveTrade(const string direction)
      }
 
 // Linien/Tags entfernen
-TradePosLines_DeleteTradeByTradeNo(direction, trade_no);
+   TradePosLines_DeleteTradeByTradeNo(direction, trade_no);
 
 
 
@@ -1101,7 +1105,7 @@ void UI_OnBaseLinesChanged(const bool do_save)
   {
    UI_SyncBaseButtonsToLines();
    UI_UpdateBaseSignalTexts(); // Direction steckt im EntryButton-Text
-
+   UI_UpdateNextTradePosUI();      // <-- DAS fehlt dir beim SL-Drag
    if(do_save)
      {
       g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
