@@ -32,7 +32,7 @@
  * Fehlerfälle:  keine
  */
 void CreateLabelsLong_IfChanged()
-{
+  {
    static double last_entry = 0.0;
    static double last_sl    = 0.0;
 
@@ -43,7 +43,19 @@ void CreateLabelsLong_IfChanged()
    last_sl    = SL_Price;
 
    CreateLabelsLong();
-}
+  }
+// Entfernt die "Tag"-Labels an den Basis-HL-Linien PR_HL/SL_HL
+void UI_DeleteBaseHLTags()
+  {
+#ifdef LabelEntryLong
+   const string names[] = {LabelEntryLong, LabelSLLong, LabelEntryShort, LabelSLShort};
+   for(int i=0;i<ArraySize(names);i++)
+     {
+      if(ObjectFind(0, names[i]) >= 0)
+         ObjectDelete(0, names[i]);
+     }
+#endif
+  }
 
 /**
  * Beschreibung: Aktualisiert Short-Labels nur, wenn Entry/SL sich geändert haben.
@@ -53,7 +65,7 @@ void CreateLabelsLong_IfChanged()
  * Fehlerfälle:  Keine (CreateLabelsShort() loggt intern falls nötig)
  */
 void CreateLabelsShort_IfChanged()
-{
+  {
    static double last_entry = 0.0;
    static double last_sl    = 0.0;
 
@@ -65,7 +77,7 @@ void CreateLabelsShort_IfChanged()
    last_sl    = SL_Price;
 
    CreateLabelsShort();
-}
+  }
 
 
 
