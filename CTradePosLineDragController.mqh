@@ -221,7 +221,7 @@ if(L != NULL)
          else
             msg += StringFormat("**%s:** %s\n", what, DoubleToString(new_price, _Digits));
 
-         msg += "(Linie verschoben, Tag nachgezogen)\n";
+         msg += "Linie verschoben\n";
          g_Discord.SendMessage(_Symbol, msg);
         }
 

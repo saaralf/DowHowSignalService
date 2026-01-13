@@ -1,4 +1,9 @@
-﻿
+﻿//+------------------------------------------------------------------+
+//|                                                      ProjectName |
+//|                                      Copyright 2020, CompanyName |
+//|                                       http://www.companyname.net |
+//+------------------------------------------------------------------+
+
 
 //+------------------------------------------------------------------+
 //|                                                      ProjectName |
@@ -51,19 +56,6 @@ void DeletePosLines(const string direction, const int pos_no)
          ObjectDelete(0, Entry_Short + suf);
         }
   }
-
-/*
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-string FormatCloseSL_DB(const g_DB.PositionRow &p)
-  {
-   string msg = "@everyone\n";
-   msg += StringFormat("**Note:** %s Trade %d | Pos %d - has been stopped out\n",
-                       p.symbol, p.trade_no, p.pos_no);
-   return msg;
-  }
-*/
 
 
 //+------------------------------------------------------------------+
@@ -203,6 +195,7 @@ void UpdateSabioTP()
 //+------------------------------------------------------------------+
 void TPSLReached()
   {
+  bool any_closed=false;
    Cache_Ensure();
    int n = Cache_Size();
    if(n <= 0)
@@ -272,7 +265,9 @@ void TPSLReached()
             p.updated_at = TimeCurrent();
             g_DB.UpsertPosition(p);
             g_cache_rows[i] = p;
-            DeletePosLines("LONG", p.pos_no);
+         
+            UI_CloseOnePositionAndNotify("HIT_SL","LONG",p.trade_no,p.pos_no);
+            any_closed=true;
             Alert(_Symbol + " LONG Trade " + IntegerToString(p.trade_no) + " Pos" + IntegerToString(p.pos_no) + " stopped out");
             continue;
            }
@@ -289,7 +284,9 @@ void TPSLReached()
             p.updated_at = TimeCurrent();
             g_DB.UpsertPosition(p);
             g_cache_rows[i] = p;
-            DeletePosLines("SHORT", p.pos_no);
+         
+            UI_CloseOnePositionAndNotify("HIT_SL","SHORT",p.trade_no,p.pos_no);
+            any_closed=true;
             Alert(_Symbol + _Period +" SHORT: Trade " + IntegerToString(p.trade_no) + " Pos" + IntegerToString(p.pos_no) + " stopped out");
             continue;
            }
@@ -323,6 +320,9 @@ void TPSLReached()
 
    if(active_short_trade_no > 0 && !any_short_active)
       ClearActiveTrend("SHORT");
+
+   if(any_closed)
+      g_tp.RequestRebuild();
   }
 
 
@@ -369,11 +369,11 @@ void createEntryAndSLLinien()
 
 
 //+------------------------------------------------------------------+
-createHL(PR_HL, dt_prc, price_prc, EntryLine);
+   createHL(PR_HL, dt_prc, price_prc, EntryLine);
 
 
 
-createButton(EntryButton, "", xd3, yd3, xs3, ys3, PriceButton_font_color, PriceButton_bgcolor, InpFontSize, clrNONE, InpFont);
+   createButton(EntryButton, "", xd3, yd3, xs3, ys3, PriceButton_font_color, PriceButton_bgcolor, InpFontSize, clrNONE, InpFont);
 
 // SL Button
    xd5 = xd3;
@@ -413,7 +413,7 @@ createButton(EntryButton, "", xd3, yd3, xs3, ys3, PriceButton_font_color, PriceB
 //+------------------------------------------------------------------+
 
 
- createButton(SLButton, "", xd5, yd5, xs5, ys5, SLButton_font_color, SLButton_bgcolor, InpFontSize, clrNONE, InpFont);
+   createButton(SLButton, "", xd5, yd5, xs5, ys5, SLButton_font_color, SLButton_bgcolor, InpFontSize, clrNONE, InpFont);
    ObjectMove(0, SLButton, 0, dt_sl, price_sl);
 
 //+------------------------------------------------------------------+
@@ -490,79 +490,6 @@ bool UI_IsTradePosLine(const string name)
              StringFind(name, "Entry_Short_")== 0);
   }
 
-/*
-// Erzeugt/updated das Tag-Label für genau DIESE Linie
-bool UI_CreateOrUpdateLineTag(const string line_name)
-  {
-   if(ObjectFind(0, line_name) < 0)
-      return false;
-
-   const string tag_name = line_name + LINE_TAG_SUFFIX;
-   UI_Reg_Add(tag_name); // sicher, weil UI_Reg_Add unique prüft
-
-// >>> WICHTIG: Preis von DER Linie holen, nicht von PR_HL/SL_HL
-   const double price = ObjectGetDouble(0, line_name, OBJPROP_PRICE);
-
-// Farbe optional von der Linie übernehmen
-   const color  line_clr = (color)ObjectGetInteger(0, line_name, OBJPROP_COLOR);
-
-// y-Pixel aus Preis berechnen (x ignorieren), dann Label rechts anheften
-   int x_any = 0, y = 0;
-   ChartTimePriceToXY(0, 0, TimeCurrent(), price, x_any, y);
-
-   const int chart_w = (int)ChartGetInteger(0, CHART_WIDTH_IN_PIXELS, 0);
-   const int x = chart_w - 160;          // rechts im Chart, anpassen nach Geschmack
-   const int y_adj = y - 8;              // optische Zentrierung
-
-// Text hübsch machen: T/P aus Suffix ziehen
-   string parts[];
-   int n = StringSplit(line_name, '_', parts);
-   int trade_no = 0, pos_no = 0;
-   if(n >= 2)
-     {
-      trade_no = (int)StringToInteger(parts[n-2]);
-      pos_no   = (int)StringToInteger(parts[n-1]);
-     }
-
-   string kind = "";
-   if(StringFind(line_name, Entry_Long, 0) == 0)
-      kind = "ENTRY LONG";
-   if(StringFind(line_name, SL_Long, 0) == 0)
-      kind = "SL LONG";
-   if(StringFind(line_name, Entry_Short, 0) == 0)
-      kind = "ENTRY SHORT";
-   if(StringFind(line_name, SL_Short, 0) == 0)
-      kind = "SL SHORT";
-
-   const string txt = StringFormat("T%d P%d  %s  %s",
-                                   trade_no, pos_no, kind,
-                                   DoubleToString(price, _Digits));
-
-   if(ObjectFind(0, tag_name) < 0)
-     {
-      if(!ObjectCreate(0, tag_name, OBJ_LABEL, 0, 0, 0))
-         return false;
-
-      UI_Reg_Add(tag_name);
-
-      UI_ObjSetIntSafe(0, tag_name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-      UI_ObjSetIntSafe(0, tag_name, OBJPROP_FONTSIZE, 9);
-      UI_ObjSetIntSafe(0, tag_name, OBJPROP_COLOR, line_clr);
-
-      // Damit das Tag nicht “aus Versehen” gezogen wird:
-      UI_ObjSetIntSafe(0, tag_name, OBJPROP_SELECTABLE, false);
-      UI_ObjSetIntSafe(0, tag_name, OBJPROP_SELECTED,   false);
-      UI_ObjSetIntSafe(0, tag_name, OBJPROP_BACK,       false);
-      UI_ObjSetIntSafe(0, tag_name, OBJPROP_HIDDEN,       true);
-     }
-
-   UI_ObjSetIntSafe(0, tag_name, OBJPROP_XDISTANCE, x);
-   UI_ObjSetIntSafe(0, tag_name, OBJPROP_YDISTANCE, y_adj-5);
-   ObjectSetString(0,  tag_name, OBJPROP_TEXT,      txt);
-
-   return true;
-  }
-*/
 #ifndef LINE_TAG_SUFFIX
 #define LINE_TAG_SUFFIX "_TAG"
 #endif
@@ -577,7 +504,10 @@ bool UI_CreateOrUpdateLineTag(const string line_name)
  * Fehlerfälle:  - Linie nicht gefunden -> false
  *              - ChartTimePriceToXY failt -> false (Print mit GetLastError)
  */
- 
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 bool UI_LineTag_SyncToLine(const string line_name)
   {
    if(ObjectFind(0, line_name) < 0)
@@ -641,6 +571,5 @@ bool UI_LineTag_SyncToLine(const string line_name)
 
    return true;
   }
-
 
 //+------------------------------------------------------------------+

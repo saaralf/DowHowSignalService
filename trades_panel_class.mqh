@@ -158,8 +158,7 @@ public:
       m_hdrR="TP_HDR_SHORT_BG";
       m_lblL="TP_LBL_LONG";
       m_lblR="TP_LBL_SHORT";
-      m_btnActiveL="TP_BTN_ACTIVE_LONG";
-      m_btnActiveR="TP_BTN_ACTIVE_SHORT";
+
       m_btnCancelL="TP_BTN_CANCEL_LONG";
       m_btnCancelR="TP_BTN_CANCEL_SHORT";
 
@@ -261,13 +260,13 @@ bool CTradesPanel::BuildStatic(const int x, const int y, const int w, const int 
 // Header-Vertikal-Layout (einmalig)
    int y1 = m_y + m_pad;
    int y2 = y1 + m_hdr_h + 6;
-   int y3 = y2 + m_btn_h + 6;
+
 
    m_layout.col_w   = col_w;
    m_layout.block_w = block_w;
    m_layout.xL      = xL;
    m_layout.xR      = xR;
-   m_layout.yTop    = y3 + m_btn_h + 10;
+   m_layout.yTop    = y2 + m_btn_h + 10;
 
 // maxRows hängt von Höhe ab (für später)
    int yBottom = m_y + m_h - m_pad;
@@ -298,13 +297,10 @@ bool CTradesPanel::BuildStatic(const int x, const int y, const int w, const int 
       return false;
 
 // Header-Buttons erstellen (aber hidden)
-   CreateButton(m_btnActiveL, xL, y2, block_w, m_btn_h, "Active Trade", 9);
-   CreateButton(m_btnActiveR, xR, y2, block_w, m_btn_h, "Active Trade", 9);
-   CreateButton(m_btnCancelL, xL, y3, block_w, m_btn_h, "Cancel Trade", 9);
-   CreateButton(m_btnCancelR, xR, y3, block_w, m_btn_h, "Cancel Trade", 9);
+ 
+   CreateButton(m_btnCancelL, xL, y2, block_w, m_btn_h, "Cancel Trade", 9);
+   CreateButton(m_btnCancelR, xR, y2, block_w, m_btn_h, "Cancel Trade", 9);
 
-   SetButtonVisible(m_btnActiveL, false, "", clrBlack, clrBlack, clrBlack);
-   SetButtonVisible(m_btnActiveR, false, "", clrBlack, clrBlack, clrBlack);
    SetButtonVisible(m_btnCancelL, false, "", clrBlack, clrBlack, clrBlack);
    SetButtonVisible(m_btnCancelR, false, "", clrBlack, clrBlack, clrBlack);
 
@@ -487,9 +483,9 @@ void CTradesPanel::BuildRows()
    const int maxRows = m_layout.maxRows;
 
 // Header Buttons erstmal aus
-   SetButtonVisible(m_btnActiveL,false,"", clrBlack,clrBlack,clrBlack);
+ 
    SetButtonVisible(m_btnCancelL,false,"", clrBlack,clrBlack,clrBlack);
-   SetButtonVisible(m_btnActiveR,false,"", clrBlack,clrBlack,clrBlack);
+
    SetButtonVisible(m_btnCancelR,false,"", clrBlack,clrBlack,clrBlack);
 
 // DB laden
@@ -536,15 +532,13 @@ void CTradesPanel::BuildRows()
 // Header Buttons sichtbar schalten
    if(anyLong)
      {
-      SetButtonVisible(m_btnActiveL,true,"Active Trade",
-                       PriceButton_font_color, PriceButton_bgcolor, PriceButton_bgcolor);
+    
       SetButtonVisible(m_btnCancelL,true,"Cancel Trade",
                        SLButton_font_color, SLButton_bgcolor, SLButton_bgcolor);
      }
    if(anyShort)
      {
-      SetButtonVisible(m_btnActiveR,true,"Active Trade",
-                       PriceButton_font_color, PriceButton_bgcolor, PriceButton_bgcolor);
+    
       SetButtonVisible(m_btnCancelR,true,"Cancel Trade",
                        SLButton_font_color, SLButton_bgcolor, SLButton_bgcolor);
      }

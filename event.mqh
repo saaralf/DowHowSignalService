@@ -607,8 +607,12 @@ void OnChartEvent(const int id,
             if(sparam == PR_HL || sparam == SL_HL)
               {
                if(g_BaseLines.OnObjectDrag(sparam, dparam))
+                 {
+                  UI_OnBaseLinesChanged(false);   // <-- live: Direction + TRNB/POSNB aktualisieren
                   handled = true;
+                 }
               }
+
 #endif
 #endif
             if(!handled && UI_IsTradePosLine(sparam))
@@ -633,8 +637,12 @@ void OnChartEvent(const int id,
             if(sparam == PR_HL || sparam == SL_HL)
               {
                if(g_BaseLines.OnObjectChange(sparam))
+                 {
+                  UI_OnBaseLinesChanged(true);    // <-- finalize: inkl. SaveLinePrices
                   handled = true;
+                 }
               }
+
 #endif
 #endif
             if(!handled && UI_IsTradePosLine(sparam))
@@ -667,6 +675,12 @@ void OnChartEvent(const int id,
 
          if(g_BaseBtnDrag.OnMouseMove(mx, my, MouseState))
            {
+            // Button-Drag: live TRNB/POSNB updaten (SL <-> Entry kann Direction ändern)
+            if(g_BaseBtnDrag.IsDragging())
+               UI_OnBaseLinesChanged(false);   // live
+            else
+               UI_OnBaseLinesChanged(true);    // Drag wurde beendet -> speichern
+
             handled = true;
            }
          else
@@ -674,6 +688,7 @@ void OnChartEvent(const int id,
             g_BaseLines.OnMouseMove(mx, my, MouseState, g_BaseBtnDrag.IsDragging());
             handled = true;
            }
+
         }
 
       // CHART_CHANGE
@@ -709,10 +724,11 @@ void OnChartEvent(const int id,
 
 
 
+
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void UI_CloseOnePositionAndNotify(const string action,
+bool UI_CloseOnePositionAndNotify(const string action,
                                   const string direction,
                                   const int trade_no,
                                   const int pos_no)
@@ -729,7 +745,7 @@ void UI_CloseOnePositionAndNotify(const string action,
                                        act, has_pending, err))
      {
       CLogger::Add(LOG_LEVEL_WARNING, "HandlePositionAction failed: " + err);
-      return;
+      return false;
      }
 
 // 2) UI-Linien/Tags dieser Position entfernen (wie bisher)
@@ -782,6 +798,10 @@ void UI_CloseOnePositionAndNotify(const string action,
 // 4) UI Refresh
    UI_UpdateNextTradePosUI();
    UI_ProcessRedraw();
+   g_tp.RequestRebuild();
+
+   g_tp.ProcessRebuild();
+   return true;
   }
 
 
