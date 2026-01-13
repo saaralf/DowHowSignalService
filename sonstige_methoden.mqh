@@ -195,7 +195,7 @@ void UpdateSabioTP()
 //+------------------------------------------------------------------+
 void TPSLReached()
   {
-  bool any_closed=false;
+   bool any_closed=false;
    Cache_Ensure();
    int n = Cache_Size();
    if(n <= 0)
@@ -246,7 +246,8 @@ void TPSLReached()
             g_DB.UpsertPosition(p);
             g_cache_rows[i] = p;
             // Linien optisch aktivieren
-            g_TradeMgr.SetPosLinesSolid(p.direction, p.pos_no);
+            g_TradeMgr.SetPosLinesSolid(p.direction, p.trade_no, p.pos_no);
+
            }
         }
 
@@ -265,7 +266,7 @@ void TPSLReached()
             p.updated_at = TimeCurrent();
             g_DB.UpsertPosition(p);
             g_cache_rows[i] = p;
-         
+
             UI_CloseOnePositionAndNotify("HIT_SL","LONG",p.trade_no,p.pos_no);
             any_closed=true;
             Alert(_Symbol + " LONG Trade " + IntegerToString(p.trade_no) + " Pos" + IntegerToString(p.pos_no) + " stopped out");
@@ -284,7 +285,7 @@ void TPSLReached()
             p.updated_at = TimeCurrent();
             g_DB.UpsertPosition(p);
             g_cache_rows[i] = p;
-         
+
             UI_CloseOnePositionAndNotify("HIT_SL","SHORT",p.trade_no,p.pos_no);
             any_closed=true;
             Alert(_Symbol + _Period +" SHORT: Trade " + IntegerToString(p.trade_no) + " Pos" + IntegerToString(p.pos_no) + " stopped out");

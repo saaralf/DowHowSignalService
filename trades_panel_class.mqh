@@ -82,7 +82,7 @@ private:
 
    // Names (statisch)
    string            m_bg, m_sep, m_hdrL, m_hdrR, m_lblL, m_lblR;
-   string            m_btnActiveL, m_btnActiveR, m_btnCancelL, m_btnCancelR;
+   string            m_btnCancelL, m_btnCancelR;
 
    // Prefixes (Rows)
    string            m_prefLongTr, m_prefShortTr;
@@ -806,9 +806,7 @@ bool CTradesPanel::ParseTradePosFromButtonName(const string name,const string pr
 //+------------------------------------------------------------------+
 bool CTradesPanel::HandleHeaderClick(const string objName)
   {
-// Active Buttons: schlucken
-   if(objName == m_btnActiveL || objName == m_btnActiveR)
-      return true;
+
 
    if(objName == m_btnCancelL)
      {
