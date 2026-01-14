@@ -11,7 +11,7 @@
 #include "CChartEventRouter.mqh"
 
 #include "discord_client.mqh"
-#include "trade_manager.mqh"
+#include "CTradeManager.mqh"
 #include "CTradePosLineDragController.mqh"
 
 // ------------------------------

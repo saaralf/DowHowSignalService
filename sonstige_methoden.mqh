@@ -195,6 +195,8 @@ void UpdateSabioTP()
 //+------------------------------------------------------------------+
 void TPSLReached()
   {
+
+   bool any_opened=false;   // <-- NEU
    bool any_closed=false;
    Cache_Ensure();
    int n = Cache_Size();
@@ -241,13 +243,17 @@ void TPSLReached()
 
          if(entry_hit)
            {
-            p.status = "OPEN";
+            p.status     = "OPEN";
+            p.is_pending = 0;                 // <-- NEU (sonst bleibt DB-Feld pending=1)
             p.updated_at = TimeCurrent();
+
             g_DB.UpsertPosition(p);
             g_cache_rows[i] = p;
+
             // Linien optisch aktivieren
             g_TradeMgr.SetPosLinesSolid(p.direction, p.trade_no, p.pos_no);
 
+            any_opened = true;                // <-- NEU (Panel muss refreshen)
            }
         }
 
@@ -322,8 +328,8 @@ void TPSLReached()
    if(active_short_trade_no > 0 && !any_short_active)
       ClearActiveTrend("SHORT");
 
-   if(any_closed)
-      g_tp.RequestRebuild();
+if(any_closed || any_opened)
+   g_tp.RequestRebuild();
   }
 
 
