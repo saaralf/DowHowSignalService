@@ -10,7 +10,7 @@
 
 #include "CChartEventRouter.mqh"
 
-#include "discord_client.mqh"
+#include "CDiscordClient.mqh"
 #include "CTradeManager.mqh"
 #include "CTradePosLineDragController.mqh"
 

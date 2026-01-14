@@ -5,7 +5,7 @@
 
 #include "db_service.mqh"
 #include "trade_pos_line_registry.mqh"
-#include "discord_client.mqh"
+#include "CDiscordClient.mqh"
 #include "logger.mqh"
 #include "UI_ParseTradePosFromName.mqh"
 

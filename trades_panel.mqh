@@ -3,7 +3,7 @@
 #define __TRADES_PANEL_MQH__
 #include "db_service.mqh"
 #include "trade_pos_line_registry.mqh"
-#include "discord_client.mqh"
+#include "CDiscordClient.mqh"
 #define TP_BG "TP_BG"
 
 #define TP_LBL_LONG "TP_LBL_LONG"
