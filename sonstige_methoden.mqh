@@ -65,11 +65,11 @@ void ClearActiveTrend(const string direction)
   {
    if(direction == "LONG")
      {
-      active_long_trade_no = 0;
+      g_ui_state.active_trade_no_long = 0;
       is_long_trade = false;
       HitEntryPriceLong = false; // legacy-Flag, jetzt egal – aber sauber
 
-      g_DB.SetMetaInt(g_DB.Key("active_long_trade_no"), 0);
+      g_DB.SetMetaInt(g_DB.Key("g_ui_state.active_trade_no_long"), 0);
 
       if(ObjectFind(0, TP_BTN_ACTIVE_LONG) != -1)
         {
@@ -80,11 +80,11 @@ void ClearActiveTrend(const string direction)
    else
       if(direction == "SHORT")
         {
-         active_short_trade_no = 0;
+         g_ui_state.active_trade_no_short = 0;
          is_sell_trade = false;
          HitEntryPriceShort = false;
 
-         if(g_DB.SetMetaInt(g_DB.Key("active_short_trade_no"), 0))
+         if(g_DB.SetMetaInt(g_DB.Key("g_ui_state.active_trade_no_short"), 0))
            {
             if(ObjectFind(0, TP_BTN_ACTIVE_SHORT) != -1)
               {
@@ -110,7 +110,7 @@ void setzeTrade()
    /*
     if(!SendOnlyButton)
        {
-        if(ui_direction_is_long)
+     if(g_ui_state.is_long)
           {
            double lots = g_TradeMgr.CalcLots(_Symbol,_Period,Entry_Price - SL_Price);
            bool buy_ok = (!ShowTPButton)
@@ -214,13 +214,13 @@ void TPSLReached()
       // nur aktuell aktive TradeNo pro Richtung prüfen
       if(p.direction == "LONG")
         {
-         if(active_long_trade_no <= 0 || p.trade_no != active_long_trade_no)
+         if(g_ui_state.active_trade_no_long <= 0 || p.trade_no != g_ui_state.active_trade_no_long)
             continue;
         }
       else
          if(p.direction == "SHORT")
            {
-            if(active_short_trade_no <= 0 || p.trade_no != active_short_trade_no)
+            if(g_ui_state.active_trade_no_short <= 0 || p.trade_no != g_ui_state.active_trade_no_short)
                continue;
            }
          else
@@ -297,23 +297,23 @@ void TPSLReached()
       if(g_cache_rows[j].was_sent != 1)
          continue;
 
-      if(g_cache_rows[j].direction == "LONG" && active_long_trade_no > 0 && g_cache_rows[j].trade_no == active_long_trade_no)
+      if(g_cache_rows[j].direction == "LONG" && g_ui_state.active_trade_no_long > 0 && g_cache_rows[j].trade_no == g_ui_state.active_trade_no_long)
         {
          if(StatusIsActive(g_cache_rows[j].status))
             any_long_active = true;
         }
 
-      if(g_cache_rows[j].direction == "SHORT" && active_short_trade_no > 0 && g_cache_rows[j].trade_no == active_short_trade_no)
+      if(g_cache_rows[j].direction == "SHORT" && g_ui_state.active_trade_no_short > 0 && g_cache_rows[j].trade_no == g_ui_state.active_trade_no_short)
         {
          if(StatusIsActive(g_cache_rows[j].status))
             any_short_active = true;
         }
      }
 
-   if(active_long_trade_no > 0 && !any_long_active)
+   if(g_ui_state.active_trade_no_long > 0 && !any_long_active)
       ClearActiveTrend("LONG");
 
-   if(active_short_trade_no > 0 && !any_short_active)
+   if(g_ui_state.active_trade_no_short > 0 && !any_short_active)
       ClearActiveTrend("SHORT");
 
    if(any_closed || any_opened)

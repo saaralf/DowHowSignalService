@@ -797,7 +797,7 @@ bool UI_CloseOnePositionAndNotify(const string action,
      }
 
 // 4) UI Refresh
-   UI_UpdateNextTradePosUI();
+   g_ui.UpdateNextTradePosUI();
    UI_ProcessRedraw();
    g_tp.RequestRebuild();
 
@@ -814,7 +814,7 @@ bool UI_CloseOnePositionAndNotify(const string action,
 bool UI_CancelActiveTrade(const string direction)
   {
    const bool isLong = (direction == "LONG");
-   int trade_no = (isLong ? active_long_trade_no : active_short_trade_no);
+ int trade_no = (isLong ? g_ui_state.active_trade_no_long : g_ui_state.active_trade_no_short);
 
    if(trade_no <= 0)
      {
@@ -837,10 +837,10 @@ bool UI_CancelActiveTrade(const string direction)
 // Runtime + Meta zurücksetzen (damit OnInit NICHT reaktiviert)
    if(isLong)
      {
-      if(active_long_trade_no == trade_no)
+      if(g_ui_state.active_trade_no_long == trade_no)
         {
-         active_long_trade_no = 0;
-         g_DB.SetMetaInt(g_DB.Key("active_long_trade_no"), 0);
+         g_ui_state.active_trade_no_long = 0;
+         g_DB.SetMetaInt(g_DB.Key("g_ui_state.active_trade_no_long"), 0);
         }
       is_long_trade     = false;
       HitEntryPriceLong = false;
@@ -856,10 +856,10 @@ bool UI_CancelActiveTrade(const string direction)
      }
    else
      {
-      if(active_short_trade_no == trade_no)
+      if(g_ui_state.active_trade_no_short == trade_no)
         {
-         active_short_trade_no = 0;
-         g_DB.SetMetaInt(g_DB.Key("active_short_trade_no"), 0);
+         g_ui_state.active_trade_no_short = 0;
+         g_DB.SetMetaInt(g_DB.Key("g_ui_state.active_trade_no_short"), 0);
         }
 
       is_sell_trade         = false;
@@ -876,7 +876,7 @@ bool UI_CancelActiveTrade(const string direction)
         }
      }
 
-   UI_UpdateNextTradePosUI();
+   g_ui.UpdateNextTradePosUI();
    g_tp.RebuildRows();
 
    ChartRedraw(0);
@@ -940,7 +940,7 @@ g_ui_state.is_long = (sl < entry);
    lots = NormalizeDouble(lots, 2);
 
 // Entry-Button Text: zeigt Direction + Preis + Lot
-   string entry_txt = (ui_direction_is_long ? "Buy Stop @ " : "Sell Stop @ ");
+string entry_txt = (g_ui_state.is_long ? "Buy Stop @ " : "Sell Stop @ ");
    entry_txt += DoubleToString(entry, _Digits) + " | Lot: " + DoubleToString(lots, 2);
 
 // SL-Button Text: zeigt SL-Preis + Distanz in Points
@@ -971,7 +971,7 @@ g_ui_state.is_long = (sl < entry);
 
 // OPTIONAL: Falls du irgendwo ein Direction-Label/Button hast
    if(opt_direction_object_name != "" && ObjectFind(0, opt_direction_object_name) >= 0)
-      update_Text(opt_direction_object_name, (ui_direction_is_long ? "BUY" : "SELL"));
+     update_Text(opt_direction_object_name, (g_ui_state.is_long ? "BUY" : "SELL"));
   }
 
 
@@ -1028,7 +1028,7 @@ void UI_SyncBaseButtonsToLines()
 
          //Auch SL Button und der SLSabio muss verschoben werden
          if(ObjectFind(0, SLButton) >= 0)
-            if(ui_direction_is_long)
+            if(g_ui_state.is_long)
               {
                UI_ObjSetIntSafe(0, SLButton, OBJPROP_YDISTANCE, baseY-entrySLBtnDistance);
                if(ObjectFind(0, SabioSL) >= 0)
@@ -1126,7 +1126,7 @@ void UI_OnBaseLinesChanged(const bool do_save)
   {
    UI_SyncBaseButtonsToLines();
    UI_UpdateBaseSignalTexts(); // Direction steckt im EntryButton-Text
-   UI_UpdateNextTradePosUI();      // <-- DAS fehlt dir beim SL-Drag
+   g_ui.UpdateNextTradePosUI();      // <-- DAS fehlt dir beim SL-Drag
    if(do_save)
      {
       g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);

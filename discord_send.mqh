@@ -136,7 +136,7 @@ void DiscordSend()
       g_tp.RebuildRows();
       g_TradeMgr.RestoreTradePosLines(_Symbol, (ENUM_TIMEFRAMES)_Period);
       ChartRedraw(0);
-      UI_UpdateNextTradePosUI();
+      g_ui.UpdateNextTradePosUI();
 
      }
    while(false);
