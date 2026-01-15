@@ -8,7 +8,7 @@
 #define __DISCORD_SEND__
 
 #include "trades_panel.mqh"
-
+#include "ui_state.mqh"
 
 
 
@@ -33,7 +33,7 @@ void DiscordSend()
       ObjectGetString(0, TRNB, OBJPROP_TEXT, 0, tradenummer_string);
       int trade_no_input = (int)StringToInteger(tradenummer_string);
 
-      bool isLong = ui_direction_is_long;
+    bool isLong = g_ui_state.is_long;
       string direction = (isLong ? "LONG" : "SHORT");
 
       // --- Basis-Validierung (Preis vs. Markt)
@@ -60,7 +60,7 @@ void DiscordSend()
       string sabE = (Sabioedit ? ObjectGetString(0, SabioEntry, OBJPROP_TEXT, 0) : "kein Sabio");
       string sabS = (Sabioedit ? ObjectGetString(0, SabioSL,    OBJPROP_TEXT, 0) : "kein Sabio");
 
-      int active_before = (isLong ? active_long_trade_no : active_short_trade_no);
+      int active_before = (isLong ? g_ui_state.active_trade_no_long  : g_ui_state.active_trade_no_short);
 
       // Call TradeManager (dein neuer Flow)
       int eff_trade_no=trade_no_input, pos_no=0;
@@ -74,7 +74,7 @@ void DiscordSend()
                                         trade_no_input,Entry_Price,SL_Price,
                                         sabE,sabS,
                                         last_trade_nummer,
-                                        active_long_trade_no,
+                                         g_ui_state.active_trade_no_long,
                                         is_long_trade,
                                         eff_trade_no,pos_no,starting_new_trade,
                                         row,err);
@@ -83,7 +83,7 @@ void DiscordSend()
                                         trade_no_input,Entry_Price,SL_Price,
                                         sabE,sabS,
                                         last_trade_nummer,
-                                        active_short_trade_no,
+                                         g_ui_state.active_trade_no_short,
                                         is_sell_trade,
                                         eff_trade_no,pos_no,starting_new_trade,
                                         row,err);

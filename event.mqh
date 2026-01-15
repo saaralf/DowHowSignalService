@@ -7,7 +7,7 @@
 #define __EVENTHANDLER__
 
 #include "CSendButtonController.mqh"
-
+#include "ui_state.mqh"
 #include "CChartEventRouter.mqh"
 
 #include "CDiscordClient.mqh"
@@ -710,12 +710,12 @@ void OnChartEvent(const int id,
      }
 
 // --- Post-Phase: MUSS IMMER laufen ---
-   static bool last_ui_direction_is_long = true;
-   if(last_ui_direction_is_long != ui_direction_is_long)
-     {
-      last_ui_direction_is_long = ui_direction_is_long;
-      TP_RebuildRows();
-     }
+static bool last_is_long = true;
+if(last_is_long != g_ui_state.is_long)
+{
+   last_is_long = g_ui_state.is_long;
+   TP_RebuildRows();
+}
 
    UI_ProcessRedraw();
    g_tp.ProcessRebuild();
@@ -761,10 +761,10 @@ bool UI_CloseOnePositionAndNotify(const string action,
      {
       if(direction == "LONG")
         {
-         if(active_long_trade_no == trade_no)
+         if(g_ui_state.active_trade_no_long == trade_no)
            {
-            active_long_trade_no = 0;
-            g_DB.SetMetaInt(g_DB.Key("active_long_trade_no"), 0);
+            g_ui_state.active_trade_no_long = 0;
+            g_DB.SetMetaInt(g_DB.Key("g_ui_state.active_trade_no_long"), 0);
            }
 
          is_long_trade     = false;
@@ -778,10 +778,10 @@ bool UI_CloseOnePositionAndNotify(const string action,
         }
       else
         {
-         if(active_short_trade_no == trade_no)
+         if(g_ui_state.active_trade_no_short == trade_no)
            {
-            active_short_trade_no = 0;
-            g_DB.SetMetaInt(g_DB.Key("active_short_trade_no"), 0);
+            g_ui_state.active_trade_no_short = 0;
+            g_DB.SetMetaInt(g_DB.Key("g_ui_state.active_trade_no_short"), 0);
            }
 
          is_sell_trade         = false;
@@ -931,8 +931,7 @@ void UI_UpdateBaseSignalTexts(const string opt_direction_object_name = "")
       return;
 
 // Direction: SL über Entry => SHORT, sonst LONG
-   ui_direction_is_long = (sl < entry);
-
+g_ui_state.is_long = (sl < entry);
 // Distanz robust positiv (für Lots/Risk)
    const double dist = MathAbs(entry - sl);
 
