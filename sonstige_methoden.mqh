@@ -243,18 +243,20 @@ void TPSLReached()
 
          if(entry_hit)
            {
-            p.status     = "OPEN";
-            p.is_pending = 0;                 // <-- NEU (sonst bleibt DB-Feld pending=1)
-            p.updated_at = TimeCurrent();
-
-            g_DB.UpsertPosition(p);
-            g_cache_rows[i] = p;
-
-            // Linien optisch aktivieren
-            g_TradeMgr.SetPosLinesSolid(p.direction, p.trade_no, p.pos_no);
-
-            any_opened = true;                // <-- NEU (Panel muss refreshen)
+            string err_open;
+            if(g_TradeMgr.MarkPositionOpen(_Symbol,(ENUM_TIMEFRAMES)_Period,p.direction,p.trade_no,p.pos_no,err_open))
+              {
+               // lokale Kopie updaten, damit dieselbe Tick-Iteration korrekt weiterläuft
+               p.status     = "OPEN";
+               p.is_pending = 0;
+               any_opened   = true;           // Panel muss refreshen
+              }
+            else
+              {
+               Print("TPSLReached: MarkPositionOpen failed: ", err_open);
+              }
            }
+
         }
 
       // ---- SL/TP nur wenn OPEN
@@ -266,13 +268,6 @@ void TPSLReached()
         {
          if(p.sl > 0.0 && (CurrentBidPrice <= p.sl))
            {
-            g_Discord.SendMessage(_Symbol,g_Discord.FormatCloseSL_DB(p));
-            p.status = "CLOSED_SL";
-            p.is_pending = 0;
-            p.updated_at = TimeCurrent();
-            g_DB.UpsertPosition(p);
-            g_cache_rows[i] = p;
-
             UI_CloseOnePositionAndNotify("HIT_SL","LONG",p.trade_no,p.pos_no);
             any_closed=true;
             Alert(_Symbol + " LONG Trade " + IntegerToString(p.trade_no) + " Pos" + IntegerToString(p.pos_no) + " stopped out");
@@ -285,13 +280,6 @@ void TPSLReached()
         {
          if(p.sl > 0.0 && (CurrentAskPrice >= p.sl))
            {
-            g_Discord.SendMessage(_Symbol,g_Discord.FormatCloseSL_DB(p));
-            p.status = "CLOSED_SL";
-            p.is_pending = 0;
-            p.updated_at = TimeCurrent();
-            g_DB.UpsertPosition(p);
-            g_cache_rows[i] = p;
-
             UI_CloseOnePositionAndNotify("HIT_SL","SHORT",p.trade_no,p.pos_no);
             any_closed=true;
             Alert(_Symbol + _Period +" SHORT: Trade " + IntegerToString(p.trade_no) + " Pos" + IntegerToString(p.pos_no) + " stopped out");
@@ -328,8 +316,8 @@ void TPSLReached()
    if(active_short_trade_no > 0 && !any_short_active)
       ClearActiveTrend("SHORT");
 
-if(any_closed || any_opened)
-   g_tp.RequestRebuild();
+   if(any_closed || any_opened)
+      g_tp.RequestRebuild();
   }
 
 
