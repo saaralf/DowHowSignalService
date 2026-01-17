@@ -192,6 +192,8 @@ static string g_base_btn_drag_line_name= "";
 static int    g_base_btn_drag_offset_y = 0;   // Cursor-Offset innerhalb des Buttons (top->cursor)
 static int    g_base_btn_drag_btn_ysize = 0;  // Button-Höhe (für bottom-y -> price)
 static bool   g_base_btn_prev_left_down = false;
+static string g_base_edit_active = ""; // "", TRNB oder POSNB wenn User gerade tippt
+
 // --- OPTIONAL: Gekoppelter Drag (Abstand Entry<->SL bleibt konstant) ---
 
 // Letzte bekannte Maus-Y aus CHARTEVENT_MOUSE_MOVE (Fallback für Objekt-Drag)
@@ -211,7 +213,7 @@ static int  g_dx_trnb    = 0;
 static int  g_dx_posnb   = 0;
 static int  g_dx_sabEnt  = 0;
 static int  g_dx_sabSL   = 0;
-
+static bool g_sabio_user_override = false; // sobald User Sabio editiert -> keine Auto-Texte mehr
 /**
  * Beschreibung: Merkt die aktuellen X-Offsets der Base-UI relativ zum EntryButton.
  * Parameter:    force - true: immer neu erfassen (z.B. nach Rebuild), false: nur beim ersten Mal
@@ -556,6 +558,17 @@ void OnChartEvent(const int id,
   {
    CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+
+// --- Track: User tippt gerade in TRNB/POSNB -> Auto-Updates dürfen nicht überschreiben
+   if(id == CHARTEVENT_OBJECT_CLICK)
+     {
+      if(sparam == TRNB || sparam == POSNB)
+        {
+         g_ui_state.manual_tradepos = true;   // sperrt UpdateNextTradePosUI()
+        }
+     }
+
+
    if(id == CHARTEVENT_OBJECT_CLICK)
       PrintFormat("GLOBAL CLICK: %s", sparam);
 
@@ -702,21 +715,57 @@ void OnChartEvent(const int id,
         }
      } // if(!handled)
 
+
 // ENDEDIT soll immer laufen (unabhängig davon, ob Router handled hat)
    if(id == CHARTEVENT_OBJECT_ENDEDIT)
      {
-      if(sparam == SabioEntry || sparam == SabioSL)
-         UpdateSabioTP();
+      // TRNB: Anwender kann die nächste TradeNo setzen (pro Symbol/TF).
+      // Wir setzen dafür last_trade_no = (TRNB-1), damit UpdateNextTradePosUI() stabil bleibt
+      // und SendSignalDraft() die Nummer nicht wieder überschreibt.
+      if(sparam == TRNB)
+   {
+      string s="";
+      ObjectGetString(0, TRNB, OBJPROP_TEXT, 0, s);
+      int user_trade_no = UI_ExtractIntDigits(s);
+
+      // Nur wenn kein aktiver Trade läuft: Startnummer annehmen
+      if(user_trade_no > 0 && g_ui_state.ActiveTradeNo() <= 0)
+      {
+         g_ui_state.last_trade_no = user_trade_no - 1;
+
+         // WICHTIG: pro Symbol/TF speichern
+         g_DB.SetMetaInt(
+            g_DB.KeyFor(_Symbol, (ENUM_TIMEFRAMES)_Period, "g_ui_state.last_trade_no"),
+            g_ui_state.last_trade_no
+         );
+      }
+
+      // Editing ist vorbei -> Auto-Updates wieder erlauben
+      g_ui_state.manual_tradepos = false;
+
+      // UI konsistent setzen (TRNB wird dann zu user_trade_no)
+      g_ui.UpdateNextTradePosUI();
+   }
+   else if(sparam == POSNB)
+   {
+      // Editing ist vorbei -> Auto-Updates wieder erlauben
+      g_ui_state.manual_tradepos = false;
+      // optional: kein UpdateNextTradePosUI(), sonst überschreibst du POSNB wieder
+   }
+      // SabioEntry/SabioSL sind Freitext (Discord/DB) -> keine Berechnung/Parsing hier
      }
 
 // --- Post-Phase: MUSS IMMER laufen ---
-static bool last_is_long = true;
-if(last_is_long != g_ui_state.is_long)
-{
-   last_is_long = g_ui_state.is_long;
-   TP_RebuildRows();
-}
+   static bool last_is_long = true;
+   if(last_is_long != g_ui_state.is_long)
+     {
+      last_is_long = g_ui_state.is_long;
+      TP_RebuildRows();
+     }
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
    UI_ProcessRedraw();
    g_tp.ProcessRebuild();
   }
@@ -724,6 +773,22 @@ if(last_is_long != g_ui_state.is_long)
 
 
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+int UI_ExtractIntDigits(const string text)
+  {
+   string digits = "";
+   for(int i=0; i<StringLen(text); i++)
+     {
+      ushort c = StringGetCharacter(text, i);
+      if(c >= '0' && c <= '9')
+         digits += (string)CharToString((uchar)c);
+     }
+   if(digits == "")
+      return 0;
+   return (int)StringToInteger(digits);
+  }
 
 
 //+------------------------------------------------------------------+
@@ -814,7 +879,7 @@ bool UI_CloseOnePositionAndNotify(const string action,
 bool UI_CancelActiveTrade(const string direction)
   {
    const bool isLong = (direction == "LONG");
- int trade_no = (isLong ? g_ui_state.active_trade_no_long : g_ui_state.active_trade_no_short);
+   int trade_no = (isLong ? g_ui_state.active_trade_no_long : g_ui_state.active_trade_no_short);
 
    if(trade_no <= 0)
      {
@@ -923,15 +988,14 @@ bool UI_GetBaseEntrySL(double &out_entry, double &out_sl)
  * Rückgabewert: void
  * Hinweise:     Sabio-Texts werden hier zentral gepflegt, damit MouseMove keine Sonderlogik mehr braucht.
  * Fehlerfälle:  Fehlende Objekte werden übersprungen; bei fehlenden Linien wird abgebrochen (Print im Log).
- */
-void UI_UpdateBaseSignalTexts(const string opt_direction_object_name = "")
+ */void UI_UpdateBaseSignalTexts(const string opt_direction_object_name = "")
   {
    double entry = 0.0, sl = 0.0;
    if(!UI_GetBaseEntrySL(entry, sl))
       return;
 
 // Direction: SL über Entry => SHORT, sonst LONG
-g_ui_state.is_long = (sl < entry);
+   g_ui_state.is_long = (sl < entry);
 // Distanz robust positiv (für Lots/Risk)
    const double dist = MathAbs(entry - sl);
 
@@ -940,7 +1004,7 @@ g_ui_state.is_long = (sl < entry);
    lots = NormalizeDouble(lots, 2);
 
 // Entry-Button Text: zeigt Direction + Preis + Lot
-string entry_txt = (g_ui_state.is_long ? "Buy Stop @ " : "Sell Stop @ ");
+   string entry_txt = (g_ui_state.is_long ? "Buy Stop @ " : "Sell Stop @ ");
    entry_txt += DoubleToString(entry, _Digits) + " | Lot: " + DoubleToString(lots, 2);
 
 // SL-Button Text: zeigt SL-Preis + Distanz in Points
@@ -952,27 +1016,21 @@ string entry_txt = (g_ui_state.is_long ? "Buy Stop @ " : "Sell Stop @ ");
    if(ObjectFind(0, SLButton)    >= 0)
       update_Text(SLButton,    sl_txt);
 
-// Sabio-Texts zentral pflegen (damit MouseMove nicht doppelt rechnet)
-   if(ObjectFind(0, SabioEntry) >= 0)
+// SabioEntry/SabioSL: Freitext (Prop-Firma / Signal-Kunden)
+// Nur wenn SabioPrices aktiv ist, auto-fill mit Basispreisen.
+// Ansonsten Nutzer-Text NICHT überschreiben.
+   if(SabioPrices)
      {
-      if(SabioPrices)
+      if(ObjectFind(0, SabioEntry) >= 0)
          update_Text(SabioEntry, "SABIO Entry: " + DoubleToString(entry, _Digits));
-      else
-         update_Text(SabioEntry, "SABIO ENTRY: ");
-     }
-
-   if(ObjectFind(0, SabioSL) >= 0)
-     {
-      if(SabioPrices)
+      if(ObjectFind(0, SabioSL) >= 0)
          update_Text(SabioSL, "SABIO SL: " + DoubleToString(sl, _Digits));
-      else
-         update_Text(SabioSL, "SABIO SL: ");
      }
-
 // OPTIONAL: Falls du irgendwo ein Direction-Label/Button hast
    if(opt_direction_object_name != "" && ObjectFind(0, opt_direction_object_name) >= 0)
-     update_Text(opt_direction_object_name, (g_ui_state.is_long ? "BUY" : "SELL"));
+      update_Text(opt_direction_object_name, (g_ui_state.is_long ? "BUY" : "SELL"));
   }
+
 
 
 /**
@@ -1126,14 +1184,17 @@ void UI_OnBaseLinesChanged(const bool do_save)
   {
    UI_SyncBaseButtonsToLines();
    UI_UpdateBaseSignalTexts(); // Direction steckt im EntryButton-Text
-   g_ui.UpdateNextTradePosUI();      // <-- DAS fehlt dir beim SL-Drag
+
+// TRNB/POSNB nicht überschreiben, wenn User gerade tippt
+   if(g_base_edit_active != TRNB && g_base_edit_active != POSNB)
+      g_ui.UpdateNextTradePosUI();
+
    if(do_save)
      {
       g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
       Print(__FUNCTION__, ": finalized + saved base line prices");
      }
 
-// Redraw throttlen: Drag kann sonst ruckeln
    static uint last_redraw_ms = 0;
    uint now = GetTickCount();
    if(do_save || (now - last_redraw_ms > 50))
@@ -1142,7 +1203,6 @@ void UI_OnBaseLinesChanged(const bool do_save)
       last_redraw_ms = now;
      }
   }
-
 
 
 // ------------------------------------------------------------------

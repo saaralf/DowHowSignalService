@@ -503,7 +503,7 @@ void SabioEdit()
    UI_ObjSetIntSafe(0, SabioEntry, OBJPROP_XSIZE, 280);
    UI_ObjSetIntSafe(0, SabioEntry, OBJPROP_YSIZE, 30);
 //--- den Text setzen
-   ObjectSetString(0, SabioEntry, OBJPROP_TEXT, "SABIO ENTRY: " + Get_Price_s(PR_HL));
+   ObjectSetString(0, SabioEntry, OBJPROP_TEXT, "SABIO Entry: " + Get_Price_s(PR_HL));
 //--- Schriftgröße setzen
    UI_ObjSetIntSafe(0, SabioEntry, OBJPROP_BGCOLOR, clrWhite);
    UI_ObjSetIntSafe(0, SabioEntry, OBJPROP_COLOR, clrBlack);

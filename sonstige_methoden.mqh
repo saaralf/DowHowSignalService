@@ -154,41 +154,9 @@ void setzeTrade()
        */
   }
 
-//+------------------------------------------------------------------+
-//| Sabio TP berechnen                                                                 |
-//+------------------------------------------------------------------+
-void UpdateSabioTP()
-  {
-   if(Entry_Price > CurrentAskPrice)
-     {
-      string EntryPriceString = ObjectGetString(0, SabioEntry, OBJPROP_TEXT, 0);
-      int Ergebnis = StringReplace(EntryPriceString, "SABIO ENTRY:", "");
-      double SabioEntryPrice = (double)EntryPriceString;
-      string SabioSLPriceString = ObjectGetString(0, SabioSL, OBJPROP_TEXT, 0);
-      int ErgebnisSL = StringReplace(SabioSLPriceString, "SABIO SL:", "");
-      double SabioSLPrice = (double)SabioSLPriceString;
-     }
-
-   if(Entry_Price < CurrentBidPrice)
-     {
-      string EntryPriceString = ObjectGetString(0, SabioEntry, OBJPROP_TEXT, 0);
-      int Ergebnis = StringReplace(EntryPriceString, "SABIO ENTRY:", "");
-      double SabioEntryPrice = (double)EntryPriceString;
-      string SabioSLPriceString = ObjectGetString(0, SabioSL, OBJPROP_TEXT, 0);
-      int ErgebnisSL = StringReplace(SabioSLPriceString, "SABIO SL:", "");
-
-      double SabioSLPrice = (double)SabioSLPriceString;
-     }
-  }
-
-//+------------------------------------------------------------------+
-//| Tradelinien Short löschen                                                                 |
-//+------------------------------------------------------------------+
 
 
 
-
-//+------------------------------------------------------------------+
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -342,6 +310,48 @@ bool SetPriceOnObject(const string name, const double price)
    return ObjectMove(0, name, 0, t, price);
   }
 
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+class CEntryAndSLButtons
+  {
+private:
+   int my_xd3       ;
+   int my_yd3        ;
+   int my_xs3        ;
+   int my_ys3        ;
+   datetime          my_dt_tp;
+   datetime          my_dt_sl;
+   datetime          my_dt_prc;
+   double            my_price_tp;
+   double            my_price_sl;
+   double            my_price_prc;
+   int my_window    ;
+   int my_chart_id ;
+
+   bool              setChartXYToTimePrice();
+
+
+public:
+                     CEntryAndSLButtons()
+     {
+      my_xd3 =getChartWidthInPixels() -DistancefromRight-10;
+      my_yd3 =getChartHeightInPixels()/2;
+      datetime my_dt_tp = iTime(_Symbol, 0, 0);
+      datetime my_dt_sl = iTime(_Symbol, 0, 0);
+      datetime my_dt_prc = iTime(_Symbol, 0, 0);
+      double my_price_tp = iClose(_Symbol, 0, 0);
+      double my_price_sl = iClose(_Symbol, 0, 0);
+      double my_price_prc = iClose(_Symbol, 0, 0);
+      my_window  =0  ;
+      my_chart_id=0;
+     };
+                    ~CEntryAndSLButtons();
+
+
+
+  };
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
