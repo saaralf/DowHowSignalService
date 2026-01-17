@@ -3,7 +3,7 @@
 #ifndef __TRADES_PANEL_CLASS_MQH__
 #define __TRADES_PANEL_CLASS_MQH__
 
-#include "db_service.mqh"
+#include "CDBService.mqh"
 #include "trade_pos_line_registry.mqh"
 #include "CDiscordClient.mqh"
 #include "logger.mqh"

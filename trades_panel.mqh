@@ -1,7 +1,7 @@
 ﻿//======================== trades_panel.mqh ========================
 #ifndef __TRADES_PANEL_MQH__
 #define __TRADES_PANEL_MQH__
-#include "db_service.mqh"
+#include "CDBService.mqh"
 #include "trade_pos_line_registry.mqh"
 #include "CDiscordClient.mqh"
 #define TP_BG "TP_BG"
