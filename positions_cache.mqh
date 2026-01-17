@@ -19,7 +19,8 @@ int Cache_Load(const string symbol, ENUM_TIMEFRAMES tf)
    g_cache_symbol = symbol;
    g_cache_tf     = tf;
    g_cache_ready  = true;
-   return DB_LoadPositions(symbol, tf, g_cache_rows);
+   return   g_DB.LoadPositions(symbol, tf, g_cache_rows);
+   
 }
 
 bool Cache_Ensure()

@@ -6,19 +6,18 @@
 #include "db_state.mqh"
 #include <Trade/Trade.mqh>
 #include "config.mqh"
-CConfig g_Config;
+//CConfig g_Config;
 // Strategy Parameters
-input group "===== Discord Settings ====="
-input color MessageColor = clrBlue;                 // Color for Discord messages
 
 
 
-CJAVal g_config;
+
+//CJAVal g_config;
 
 
 
 // Neue Variablen
-string Webhook_System=g_Config.GetWebhook("system");
+//string Webhook_System=g_Config.GetWebhook("system");
 
 
 // Wenn der Broker seltsame Namen für die Symbole hat, dann muss dieser in den Eigenschaften angegeben werden
@@ -26,14 +25,14 @@ string Webhook_System=g_Config.GetWebhook("system");
 
 
 
-bool isWebRequestEnabled = false;
-datetime lastMessageTime = 0;
+//bool isWebRequestEnabled = false;
+//datetime lastMessageTime = 0;
 
 // Discord webhook URL - Replace with your webhook URL
-string discord_webhook = Webhook_System;
-string discord_webhook_test = "https://discord.com/api/webhooks/1328803943068860416/O7dsN4wcNk-vSA9sQQx1ZFzZUAhx8NsPe4JFPxQ4MuQtiOx1BWepkXqSz00ZkCrqiDHw";
+//string discord_webhook = Webhook_System;
+//string discord_webhook_test = "https://discord.com/api/webhooks/1328803943068860416/O7dsN4wcNk-vSA9sQQx1ZFzZUAhx8NsPe4JFPxQ4MuQtiOx1BWepkXqSz00ZkCrqiDHw";
 
-
+/*
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -100,7 +99,6 @@ bool checkDiscord()
   
    return true;
   }
-
 //+------------------------------------------------------------------+
 //| Function to escape JSON string                                     |
 //+------------------------------------------------------------------+
@@ -114,6 +112,7 @@ string EscapeJSON(string text)
    StringReplace(escaped, "\t", "\\t");
    return escaped;
   }
+
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -151,7 +150,7 @@ bool SendDiscordMessageTest(string message, bool isError = false)
    return SendDiscordMessage(message,  false);
 
   }
-
+*/
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -172,7 +171,7 @@ string getPeriodText()
 
 
   }
-
+/*
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -249,7 +248,7 @@ bool SendDiscordMessage(string message, bool isError = false)
       
    return false;
   }
-
+*/
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -365,7 +364,7 @@ string FormatTradeMessageRow(const DB_PositionRow &row, const string order_type 
    return msg;
   }
 
-
+/*
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -467,6 +466,7 @@ void SendScreenShot(string symbol,int _period, int ScreenWidth = 1912, int Scree
    Sleep(5);
    return;
   }
+  */
 //+------------------------------------------------------------------+
 
 
