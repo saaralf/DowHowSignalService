@@ -47,7 +47,8 @@ private:
    bool              m_anchor_inited;
    int               m_ref_x, m_ref_w;
    int               m_dx_slbtn, m_dx_send, m_dx_trnb, m_dx_posnb, m_dx_sabE, m_dx_sabS;
-
+   bool              m_trnb_editing;
+   bool              m_posnb_editing;
    bool              GetBaseEntrySL(double &entry, double &sl);
    string            DirectionFromLines();
 public:
@@ -66,6 +67,7 @@ public:
      {
       // später: Objekte löschen
      }
+   void              CreateDefaults();
    void              OnBaseLinesChanged(const bool do_save);
    void              CVirtualTradeGUI::SetObjectXClamped(const string name, const int x_left, const int chart_w);
    void              ApplyRightAnchor(const int right_margin_px, const int shift_px);
@@ -215,15 +217,34 @@ bool CVirtualTradeGUI::GetDraft(VT_Draft &out)
 //+------------------------------------------------------------------+
 void CVirtualTradeGUI::UpdateTradePosTexts()
   {
-   VT_Draft d;
-   if(!GetDraft(d))
+// wenn User gerade tippt: TRNB/POSNB nicht überschreiben
+   if(m_trnb_editing || m_posnb_editing)
       return;
 
-   if(ObjectFind(m_chart, TRNB) >= 0)
-      update_Text(TRNB, IntegerToString(d.trade_no));
+   double e=0,s=0;
+   if(!GetBaseEntrySL(e,s))
+      return;
 
-   if(ObjectFind(m_chart, POSNB) >= 0)
-      update_Text(POSNB, IntegerToString(d.pos_no));
+   string dir = (s < e ? "LONG" : "SHORT");
+
+   int active_trade = 0;
+   m_tm.TM_GetActiveTradeNo(m_symbol, m_tf, dir, active_trade);
+
+   if(active_trade > 0)
+     {
+      int next_pos = 1;
+      m_tm.TM_GetNextPosNo(m_symbol, m_tf, dir, active_trade, next_pos);
+      update_Text(TRNB, IntegerToString(active_trade));
+      update_Text(POSNB, IntegerToString(next_pos));
+      return;
+     }
+
+   int last_trade = 0;
+   m_tm.TM_GetLastTradeNo(m_symbol, m_tf, last_trade);
+
+   int next_trade = (last_trade > 0 ? last_trade + 1 : 1);
+   update_Text(TRNB, IntegerToString(next_trade));
+   update_Text(POSNB, "1");
   }
 
 //+------------------------------------------------------------------+
@@ -412,6 +433,93 @@ void CVirtualTradeGUI::OnBaseLinesChanged(const bool do_save)
 
    ChartRedraw(m_chart);
   }
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CVirtualTradeGUI::CreateDefaults()
+{
+// 1) PR_HL + SL_HL erstellen
+
+ xd3 = getChartWidthInPixels() -DistancefromRight-10;
+ yd3 = getChartHeightInPixels()/2;
+ xs3 = 280;
+ ys3= 30;
+ datetime dt_tp = iTime(_Symbol, 0, 0), dt_sl = iTime(_Symbol, 0, 0), dt_prc = iTime(_Symbol, 0, 0);
+ double price_tp = iClose(_Symbol, 0, 0), price_sl = iClose(_Symbol, 0, 0), price_prc = iClose(_Symbol, 0, 0);
+ int window = 0;
+
+ ChartXYToTimePrice(0, xd3, yd3 + ys3, window, dt_prc, price_prc);
+ ChartXYToTimePrice(0, xd5, yd5 + ys5, window, dt_sl, price_sl);
+
+ createHLine(PR_HL, price_prc,color_EntryLine);
+ SetPriceOnObject(PR_HL, price_prc);
+
+
+//+------------------------------------------------------------------+
+ createHL(PR_HL, dt_prc, price_prc, EntryLine);
+
+
+
+ createButton(EntryButton, "", xd3, yd3, xs3, ys3, PriceButton_font_color, PriceButton_bgcolor, InpFontSize, clrNONE, InpFont);
+
+// SL Button
+ xd5 = xd3;
+ yd5 = yd3 + 100;
+ xs5 = xs3;
+ ys5 = 30;
+
+ ChartXYToTimePrice(0, xd5, yd5 + ys5, window, dt_sl, price_sl);
+
+ createHL(SL_HL, dt_sl, price_sl, color_SLLine);
+
+ ObjectMove(0, EntryButton, 0, dt_prc, price_prc);
+
+
+
+// 2) Buttons/Edits erstellen
+
+
+//   DrawHL();
+ if(Sabioedit)
+   {
+    SabioEdit();
+   }
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+ SendButton();
+ if(!SendOnlyButton)
+   {
+    ObjectSetString(0, SENDTRADEBTN, OBJPROP_TEXT, "T & S"); // label
+    UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_BGCOLOR, TSButton_bgcolor);
+    ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_COLOR, TSButton_font_color);
+   }
+
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+
+
+ createButton(SLButton, "", xd5, yd5, xs5, ys5, SLButton_font_color, SLButton_bgcolor, InpFontSize, clrNONE, InpFont);
+ ObjectMove(0, SLButton, 0, dt_sl, price_sl);
+// 3) Defaults setzen
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+ update_Text(EntryButton, "Buy Stop @ " + Get_Price_s(PR_HL) + " | Lot: " + DoubleToString(NormalizeDouble(g_TradeMgr.calcLots(_Symbol,_Period,SL_Price - Entry_Price), 2), 2));
+ update_Text(SLButton, "SL: " + DoubleToString(((Get_Price_d(PR_HL) - Get_Price_d(SL_HL)) / _Point), 0) + " Points | " + Get_Price_s(SL_HL));
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+ ChartSetInteger(0, CHART_EVENT_MOUSE_MOVE, true);
+ ChartRedraw(0);
+
+// 4) ApplyRightAnchor + OnBaseLinesChanged(false)
+}
 
 #endif __CVIRTUALTRADEGUI_MQH__
 //+------------------------------------------------------------------+
