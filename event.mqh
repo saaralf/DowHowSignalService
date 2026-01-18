@@ -78,12 +78,10 @@ void OnChartEvent(const int id,
             handled = true;
            }
          else
+
            {
-            if(sparam == PR_HL || sparam == SL_HL)
-              {
-               UI_SelectBaseLineExclusive(sparam);
-               g_base_last_clicked_line = sparam;
-              }
+            if(g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam))
+               handled = true;
            }
         }
 
@@ -96,19 +94,9 @@ void OnChartEvent(const int id,
            }
          else
            {
-#ifdef PR_HL
-#ifdef SL_HL
-            if(sparam == PR_HL || sparam == SL_HL)
-              {
-               if(g_BaseLines.OnObjectDrag(sparam, dparam))
-                 {
-                  g_vgui.OnBaseLinesChanged(false);
-                  handled = true;
-                 }
-              }
-
-#endif
-#endif
+            // Base-UI (PR_HL/SL_HL) Drag
+            if(g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam))
+               handled = true;
             if(!handled && UI_IsTradePosLine(sparam))
               {
                UI_RequestRedrawThrottled(15);
@@ -126,20 +114,9 @@ void OnChartEvent(const int id,
            }
          else
            {
-#ifdef PR_HL
-#ifdef SL_HL
-            if(sparam == PR_HL || sparam == SL_HL)
-              {
-               if(g_BaseLines.OnObjectChange(sparam))
-                 {
-                  g_vgui.OnBaseLinesChanged(true);   // finalize + save
-                  handled = true;
-                 }
-              }
+            if(g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam))
+               handled = true;
 
-
-#endif
-#endif
             if(!handled && UI_IsTradePosLine(sparam))
               {
                UI_RequestRedrawThrottled(15);
@@ -163,27 +140,12 @@ void OnChartEvent(const int id,
          const int my = (int)dparam;
          const int MouseState = (int)StringToInteger(sparam);
 
+         // TradePosLine finalize muss bleiben
          g_tp_drag.OnMouseMoveFinalizeIfNeeded(MouseState);
 
-         g_last_mouse_y = my;
-         g_BaseLines.SetLastMouseY(my);
-
-         if(g_BaseBtnDrag.OnMouseMove(mx, my, MouseState))
-           {
-            // Button-Drag: live TRNB/POSNB updaten (SL <-> Entry kann Direction ändern)
-            if(g_BaseBtnDrag.IsDragging())
-               g_vgui.OnBaseLinesChanged(false);  // live
-            else
-               g_vgui.OnBaseLinesChanged(true);   // finalize + save
-
-            handled = true;
-           }
-         else
-           {
-            g_BaseLines.OnMouseMove(mx, my, MouseState, g_BaseBtnDrag.IsDragging());
-            handled = true;
-           }
-
+         // Base UI (Buttons + PR_HL/SL_HL Coupling)
+         g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam);
+         handled = true;
         }
 
       // CHART_CHANGE
@@ -196,6 +158,12 @@ void OnChartEvent(const int id,
 
          // Base UI danach konsistent setzen
          g_vgui.OnBaseLinesChanged(false);
+         if(g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam))
+            handled = true;
+
+         g_tradePosLines.SyncAllTags();
+         UI_ApplyZOrder();
+         handled = true;
 
          UI_ApplyZOrder();
          handled = true;
@@ -358,8 +326,9 @@ void UI_DebugTraceEvent(const int id, const long &lparam, const double &dparam, 
    if(!InpDebugEventTrace)
       return;
 // MouseMove nur loggen, wenn gerade ein Drag aktiv ist (sonst Spam)
-   const bool baseDrag = g_BaseLines.IsDragging();
-   const bool btnDrag  = g_BaseBtnDrag.IsDragging();
+
+   const bool baseDrag = g_vgui.BaseLines()->IsDragging();
+   const bool btnDrag  = g_vgui.BaseBtnDrag()->IsDragging();
 
    if(id == CHARTEVENT_MOUSE_MOVE && !(btnDrag || baseDrag))
       return;

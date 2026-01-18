@@ -9,16 +9,36 @@
 #include "CTradeManager.mqh"
 #include "logger.mqh"
 
+#ifndef SL_HL
 #define SL_HL "SL_HL"
+#endif
+#ifndef PR_HL
 #define PR_HL "PR_HL"
+#endif
+#ifndef TRNB
 #define TRNB "EingabeTrade"
+#endif
+#ifndef SabioEntry
 #define SabioEntry "SabioEntry"
+#endif
+#ifndef SabioSL
 #define SabioSL "SabioSL"
+#endif
+#ifndef EntryButton
 #define EntryButton "EntryButton"
+#endif
+#ifndef SLButton
 #define SLButton "SLButton"
+#endif
+#ifndef SENDTRADEBTN
 #define SENDTRADEBTN "SendOnlyButton"
-
+#endif
+#ifndef POSNB
 #define POSNB "EingabePos"
+#endif
+
+#include "ta_controllers.mqh"
+
 
 struct VT_Draft
   {
@@ -51,99 +71,182 @@ private:
    bool              m_posnb_editing;
    bool              GetBaseEntrySL(double &entry, double &sl);
    string            DirectionFromLines();
+   CBaseLinesController        m_baseLines;
+   CBaseButtonsDragController  m_baseBtnDrag;
+
 public:
                      CVirtualTradeGUI() : m_tm(NULL), m_symbol(""), m_tf(PERIOD_CURRENT), m_chart(0) {m_edit_tradepos=false; m_edit_obj="";}
+   CBaseLinesController*       BaseLines()       { return &m_baseLines; }
+   CBaseButtonsDragController* BaseBtnDrag()     { return &m_baseBtnDrag; }
 
-   bool              Init(CTradeManager *tm, const string symbol, const ENUM_TIMEFRAMES tf)
-     {
-      m_tm = tm;
-      m_symbol = symbol;
-      m_tf = tf;
-      m_chart = ChartID();
-      return (m_tm != NULL && CheckPointer(m_tm) != POINTER_INVALID);
-     }
-
+   bool              Init(CTradeManager *tm, const string symbol, const ENUM_TIMEFRAMES tf);
    void              Destroy()
      {
       // später: Objekte löschen
      }
+   // Base-UI Eventhandling (wie vorher in event.mqh)
+   bool              HandleBaseUIEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
+   bool              OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
    void              CreateDefaults();
    void              OnBaseLinesChanged(const bool do_save);
-   void              CVirtualTradeGUI::SetObjectXClamped(const string name, const int x_left, const int chart_w);
+   void              SetObjectXClamped(const string name, const int x_left, const int chart_w);
    void              ApplyRightAnchor(const int right_margin_px, const int shift_px);
-   bool              CaptureAnchorBaseline(const bool force=false);
+   bool              CaptureAnchorBaseline(const bool force);
    void              SyncBaseControlsToLines();
    void              UpdateEntrySLButtonTexts();
    bool              GetDraft(VT_Draft &out);
    void              UpdateTradePosTexts();
-   int               ExtractIntDigits(const string text)
+   int               ExtractIntDigits(const string text);
+   void              ApplyTRNBOverrideFromUser();
+
+
+
+  };
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool              CVirtualTradeGUI::Init(CTradeManager *tm, const string symbol, const ENUM_TIMEFRAMES tf)
+  {
+   m_tm = tm;
+   m_symbol = symbol;
+   m_tf = tf;
+   m_chart = ChartID();
+   m_baseBtnDrag.Bind(&m_baseLines);
+
+   m_anchor_inited=false;
+   m_trnb_editing=false;
+   m_posnb_editing=false;
+
+   return (m_tm != NULL && CheckPointer(m_tm) != POINTER_INVALID);
+
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+int              CVirtualTradeGUI::ExtractIntDigits(const string text)
+  {
+   string d="";
+   for(int i=0;i<StringLen(text);i++)
      {
-      string d="";
-      for(int i=0;i<StringLen(text);i++)
-        {
-         ushort c = StringGetCharacter(text,i);
-         if(c>='0' && c<='9')
-            d += CharToString((uchar)c);
-        }
-      if(d=="")
-         return 0;
-      return (int)StringToInteger(d);
+      ushort c = StringGetCharacter(text,i);
+      if(c>='0' && c<='9')
+         d += CharToString((uchar)c);
      }
+   if(d=="")
+      return 0;
+   return (int)StringToInteger(d);
+  }
+// ------------------------------------------------------------------
+// CVirtualTradeGUI: Base-UI Eventhandling (aus event.mqh in die Klasse gezogen)
+// ------------------------------------------------------------------
+bool CVirtualTradeGUI::HandleBaseUIEvent(const int id,
+                                         const long &lparam,
+                                         const double &dparam,
+                                         const string &sparam)
+{
+   // BaseLine click -> exklusiv selektieren (ohne globale Variablen)
+   if(id == CHARTEVENT_OBJECT_CLICK)
+   {
+      if(sparam == PR_HL || sparam == SL_HL)
+      {
+         // lokal: clicked selektieren, other deselektieren
+         const string other = (sparam == PR_HL ? SL_HL : PR_HL);
 
-   void              ApplyTRNBOverrideFromUser()
-     {
-      if(ObjectFind(m_chart, TRNB) < 0)
-         return;
+         if(ObjectFind(0, sparam) >= 0) ObjectSetInteger(0, sparam, OBJPROP_SELECTED, true);
+         if(ObjectFind(0, other)  >= 0) ObjectSetInteger(0, other,  OBJPROP_SELECTED, false);
 
-      string s = ObjectGetString(m_chart, TRNB, OBJPROP_TEXT);
-      int user_trade_no = ExtractIntDigits(s);
-      if(user_trade_no <= 0)
-         return;
+         return true;
+      }
+   }
 
-      // Nur wenn kein aktiver Trade in dieser Direction läuft
-      string dir = DirectionFromLines();
-      int active_trade=0;
-      m_tm.TM_GetActiveTradeNo(m_symbol, m_tf, dir, active_trade);
-      if(active_trade > 0)
-         return;
+   // BaseLine drag -> live sync
+   if(id == CHARTEVENT_OBJECT_DRAG)
+   {
+      if(sparam == PR_HL || sparam == SL_HL)
+      {
+         if(m_baseLines.OnObjectDrag(sparam, dparam))
+         {
+            OnBaseLinesChanged(false);
+            return true;
+         }
+      }
+   }
 
-      // Startnummer setzen: last_trade_no = user_trade_no-1
-      m_tm.TM_SetLastTradeNo(m_symbol, m_tf, user_trade_no - 1);
-     }
-   bool              OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
-     {
-      // Klick in TRNB/POSNB -> Sperre
-      if(id == CHARTEVENT_OBJECT_CLICK)
-        {
-         if(sparam == TRNB || sparam == POSNB)
-           {
-            m_edit_tradepos = true;
-            m_edit_obj = sparam;
-           }
+   // BaseLine change -> finalize + save
+   if(id == CHARTEVENT_OBJECT_CHANGE)
+   {
+      if(sparam == PR_HL || sparam == SL_HL)
+      {
+         if(m_baseLines.OnObjectChange(sparam))
+         {
+            OnBaseLinesChanged(true);
+            return true;
+         }
+      }
+   }
+
+   // Buttons drag + BaseLines mouse coupling
+   if(id == CHARTEVENT_MOUSE_MOVE)
+   {
+      const int mx = (int)lparam;
+      const int my = (int)dparam;
+      const int MouseState = (int)StringToInteger(sparam);
+
+      m_baseLines.SetLastMouseY(my);
+
+      if(m_baseBtnDrag.OnMouseMove(mx, my, MouseState))
+      {
+         if(m_baseBtnDrag.IsDragging())
+            OnBaseLinesChanged(false);
          else
-           {
-            m_edit_tradepos = false;
-            m_edit_obj = "";
-           }
-         return false;
-        }
+            OnBaseLinesChanged(true);
 
-      // ENDEDIT TRNB -> übernehmen
-      if(id == CHARTEVENT_OBJECT_ENDEDIT && sparam == TRNB)
+         return true;
+      }
+
+      m_baseLines.OnMouseMove(mx, my, MouseState, m_baseBtnDrag.IsDragging());
+      return true;
+   }
+
+   // CHART_CHANGE NICHT hier (weil InpBaseUI_* in event.mqh steht)
+   return false;
+}
+
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool            CVirtualTradeGUI::OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
+  {
+// Klick in TRNB/POSNB -> Sperre
+   if(id == CHARTEVENT_OBJECT_CLICK)
+     {
+      if(sparam == TRNB || sparam == POSNB)
         {
-         ApplyTRNBOverrideFromUser();
+         m_edit_tradepos = true;
+         m_edit_obj = sparam;
+        }
+      else
+        {
          m_edit_tradepos = false;
          m_edit_obj = "";
-         UpdateTradePosTexts();
-         ChartRedraw(m_chart);
-         return true;
         }
-
       return false;
      }
 
-  };
+// ENDEDIT TRNB -> übernehmen
+   if(id == CHARTEVENT_OBJECT_ENDEDIT && sparam == TRNB)
+     {
+      ApplyTRNBOverrideFromUser();
+      m_edit_tradepos = false;
+      m_edit_obj = "";
+      UpdateTradePosTexts();
+      ChartRedraw(m_chart);
+      return true;
+     }
 
+   return false;
+  }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -184,14 +287,14 @@ bool CVirtualTradeGUI::GetDraft(VT_Draft &out)
    out.direction   = (s < e ? "LONG" : "SHORT");
 
    int active_trade = 0;
-   m_tm.TM_GetActiveTradeNo(m_symbol, m_tf, out.direction, active_trade);
+   m_tm->TM_GetActiveTradeNo(m_symbol, m_tf, out.direction, active_trade);
 
    if(active_trade > 0)
      {
       out.trade_no = active_trade;
 
       int next_pos = 1;
-      m_tm.TM_GetNextPosNo(m_symbol, m_tf, out.direction, active_trade, next_pos);
+      m_tm->TM_GetNextPosNo(m_symbol, m_tf, out.direction, active_trade, next_pos);
       if(next_pos < 1)
          next_pos = 1;
 
@@ -200,7 +303,7 @@ bool CVirtualTradeGUI::GetDraft(VT_Draft &out)
    else
      {
       int last_trade = 0;
-      m_tm.TM_GetLastTradeNo(m_symbol, m_tf, last_trade);
+      m_tm->TM_GetLastTradeNo(m_symbol, m_tf, last_trade);
 
       out.trade_no = (last_trade > 0 ? last_trade + 1 : 1);
       out.pos_no   = 1;
@@ -228,19 +331,19 @@ void CVirtualTradeGUI::UpdateTradePosTexts()
    string dir = (s < e ? "LONG" : "SHORT");
 
    int active_trade = 0;
-   m_tm.TM_GetActiveTradeNo(m_symbol, m_tf, dir, active_trade);
+   m_tm->TM_GetActiveTradeNo(m_symbol, m_tf, dir, active_trade);
 
    if(active_trade > 0)
      {
       int next_pos = 1;
-      m_tm.TM_GetNextPosNo(m_symbol, m_tf, dir, active_trade, next_pos);
+      m_tm->TM_GetNextPosNo(m_symbol, m_tf, dir, active_trade, next_pos);
       update_Text(TRNB, IntegerToString(active_trade));
       update_Text(POSNB, IntegerToString(next_pos));
       return;
      }
 
    int last_trade = 0;
-   m_tm.TM_GetLastTradeNo(m_symbol, m_tf, last_trade);
+   m_tm->TM_GetLastTradeNo(m_symbol, m_tf, last_trade);
 
    int next_trade = (last_trade > 0 ? last_trade + 1 : 1);
    update_Text(TRNB, IntegerToString(next_trade));
@@ -261,7 +364,7 @@ void CVirtualTradeGUI::UpdateEntrySLButtonTexts()
 
    double lots = 0.0;
    if(m_tm != NULL && CheckPointer(m_tm)!=POINTER_INVALID)
-      lots = m_tm.calcLots(m_symbol, m_tf, dist);
+      lots = m_tm->calcLots(m_symbol, m_tf, dist);
    lots = NormalizeDouble(lots, 2);
 
    string entry_txt = (is_long ? "Buy Stop @ " : "Sell Stop @ ");
@@ -429,7 +532,7 @@ void CVirtualTradeGUI::OnBaseLinesChanged(const bool do_save)
    UpdateTradePosTexts(); // TRNB/POSNB aus TradeManager + Direction
 
    if(do_save && m_tm != NULL && CheckPointer(m_tm)!=POINTER_INVALID)
-      m_tm.SaveLinePrices(m_symbol, m_tf);
+      m_tm->SaveLinePrices(m_symbol, m_tf);
 
    ChartRedraw(m_chart);
   }
@@ -438,42 +541,42 @@ void CVirtualTradeGUI::OnBaseLinesChanged(const bool do_save)
 //|                                                                  |
 //+------------------------------------------------------------------+
 void CVirtualTradeGUI::CreateDefaults()
-{
+  {
 // 1) PR_HL + SL_HL erstellen
 
- xd3 = getChartWidthInPixels() -DistancefromRight-10;
- yd3 = getChartHeightInPixels()/2;
- xs3 = 280;
- ys3= 30;
- datetime dt_tp = iTime(_Symbol, 0, 0), dt_sl = iTime(_Symbol, 0, 0), dt_prc = iTime(_Symbol, 0, 0);
- double price_tp = iClose(_Symbol, 0, 0), price_sl = iClose(_Symbol, 0, 0), price_prc = iClose(_Symbol, 0, 0);
- int window = 0;
+   int   xd3 = getChartWidthInPixels() -DistancefromRight-10;
+   int   yd3 = getChartHeightInPixels()/2;
+   int  xs3 = 280;
+   int  ys3= 30;
+   datetime dt_tp = iTime(_Symbol, 0, 0), dt_sl = iTime(_Symbol, 0, 0), dt_prc = iTime(_Symbol, 0, 0);
+   double price_tp = iClose(_Symbol, 0, 0), price_sl = iClose(_Symbol, 0, 0), price_prc = iClose(_Symbol, 0, 0);
+   int window = 0;
 
- ChartXYToTimePrice(0, xd3, yd3 + ys3, window, dt_prc, price_prc);
- ChartXYToTimePrice(0, xd5, yd5 + ys5, window, dt_sl, price_sl);
+   ChartXYToTimePrice(0, xd3, yd3 + ys3, window, dt_prc, price_prc);
 
- createHLine(PR_HL, price_prc,color_EntryLine);
- SetPriceOnObject(PR_HL, price_prc);
+
+   createHLine(PR_HL, price_prc,color_EntryLine);
+   SetPriceOnObject(PR_HL, price_prc);
 
 
 //+------------------------------------------------------------------+
- createHL(PR_HL, dt_prc, price_prc, EntryLine);
+//createHL(PR_HL, dt_prc, price_prc, EntryLine);
 
 
 
- createButton(EntryButton, "", xd3, yd3, xs3, ys3, PriceButton_font_color, PriceButton_bgcolor, InpFontSize, clrNONE, InpFont);
+   createButton(EntryButton, "", xd3, yd3, xs3, ys3, PriceButton_font_color, PriceButton_bgcolor, InpFontSize, clrNONE, InpFont);
 
 // SL Button
- xd5 = xd3;
- yd5 = yd3 + 100;
- xs5 = xs3;
- ys5 = 30;
+   int xd5 = xd3;
+   int yd5 = yd3 + 100;
+   int xs5 = xs3;
+   int ys5 = 30;
 
- ChartXYToTimePrice(0, xd5, yd5 + ys5, window, dt_sl, price_sl);
+   ChartXYToTimePrice(0, xd5, yd5 + ys5, window, dt_sl, price_sl);
 
- createHL(SL_HL, dt_sl, price_sl, color_SLLine);
+   createHL(SL_HL, dt_sl, price_sl, color_SLLine);
 
- ObjectMove(0, EntryButton, 0, dt_prc, price_prc);
+   ObjectMove(0, EntryButton, 0, dt_prc, price_prc);
 
 
 
@@ -481,21 +584,21 @@ void CVirtualTradeGUI::CreateDefaults()
 
 
 //   DrawHL();
- if(Sabioedit)
-   {
-    SabioEdit();
-   }
+   if(Sabioedit)
+     {
+      SabioEdit();
+     }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
- SendButton();
- if(!SendOnlyButton)
-   {
-    ObjectSetString(0, SENDTRADEBTN, OBJPROP_TEXT, "T & S"); // label
-    UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_BGCOLOR, TSButton_bgcolor);
-    ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_COLOR, TSButton_font_color);
-   }
+   SendButton();
+   if(!SendOnlyButton)
+     {
+      ObjectSetString(0, SENDTRADEBTN, OBJPROP_TEXT, "T & S"); // label
+      UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_BGCOLOR, TSButton_bgcolor);
+      ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_COLOR, TSButton_font_color);
+     }
 
 
 //+------------------------------------------------------------------+
@@ -503,23 +606,45 @@ void CVirtualTradeGUI::CreateDefaults()
 //+------------------------------------------------------------------+
 
 
- createButton(SLButton, "", xd5, yd5, xs5, ys5, SLButton_font_color, SLButton_bgcolor, InpFontSize, clrNONE, InpFont);
- ObjectMove(0, SLButton, 0, dt_sl, price_sl);
+   createButton(SLButton, "", xd5, yd5, xs5, ys5, SLButton_font_color, SLButton_bgcolor, InpFontSize, clrNONE, InpFont);
+   ObjectMove(0, SLButton, 0, dt_sl, price_sl);
 // 3) Defaults setzen
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
- update_Text(EntryButton, "Buy Stop @ " + Get_Price_s(PR_HL) + " | Lot: " + DoubleToString(NormalizeDouble(g_TradeMgr.calcLots(_Symbol,_Period,SL_Price - Entry_Price), 2), 2));
- update_Text(SLButton, "SL: " + DoubleToString(((Get_Price_d(PR_HL) - Get_Price_d(SL_HL)) / _Point), 0) + " Points | " + Get_Price_s(SL_HL));
+   update_Text(EntryButton, "Buy Stop @ " + Get_Price_s(PR_HL) + " | Lot: " + DoubleToString(NormalizeDouble(g_TradeMgr.calcLots(_Symbol,_Period,SL_Price - Entry_Price), 2), 2));
+   update_Text(SLButton, "SL: " + DoubleToString(((Get_Price_d(PR_HL) - Get_Price_d(SL_HL)) / _Point), 0) + " Points | " + Get_Price_s(SL_HL));
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
- ChartSetInteger(0, CHART_EVENT_MOUSE_MOVE, true);
- ChartRedraw(0);
+   ChartSetInteger(0, CHART_EVENT_MOUSE_MOVE, true);
+   ChartRedraw(0);
 
 // 4) ApplyRightAnchor + OnBaseLinesChanged(false)
-}
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void               CVirtualTradeGUI::ApplyTRNBOverrideFromUser()
+  {
+   if(ObjectFind(m_chart, TRNB) < 0)
+      return;
 
+   string s = ObjectGetString(m_chart, TRNB, OBJPROP_TEXT);
+   int user_trade_no = ExtractIntDigits(s);
+   if(user_trade_no <= 0)
+      return;
+
+// Nur wenn kein aktiver Trade in dieser Direction läuft
+   string dir = DirectionFromLines();
+   int active_trade=0;
+   m_tm->TM_GetActiveTradeNo(m_symbol, m_tf, dir, active_trade);
+   if(active_trade > 0)
+      return;
+
+// Startnummer setzen: last_trade_no = user_trade_no-1
+   m_tm->TM_SetLastTradeNo(m_symbol, m_tf, user_trade_no - 1);
+  }
 #endif __CVIRTUALTRADEGUI_MQH__
 //+------------------------------------------------------------------+
