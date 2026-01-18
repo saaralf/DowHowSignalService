@@ -327,8 +327,8 @@ void UI_DebugTraceEvent(const int id, const long &lparam, const double &dparam, 
       return;
 // MouseMove nur loggen, wenn gerade ein Drag aktiv ist (sonst Spam)
 
-   const bool baseDrag = g_vgui.BaseLines()->IsDragging();
-   const bool btnDrag  = g_vgui.BaseBtnDrag()->IsDragging();
+   const bool baseDrag = g_vgui.BaseLines().IsDragging();
+   const bool btnDrag  = g_vgui.BaseBtnDrag().IsDragging();
 
    if(id == CHARTEVENT_MOUSE_MOVE && !(btnDrag || baseDrag))
       return;

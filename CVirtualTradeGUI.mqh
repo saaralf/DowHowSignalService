@@ -5,37 +5,10 @@
 //+------------------------------------------------------------------+
 #ifndef __CVIRTUALTRADEGUI_MQH__
 #define __CVIRTUALTRADEGUI_MQH__
-
+#include "ui_names.mqh"
 #include "CTradeManager.mqh"
 #include "logger.mqh"
 
-#ifndef SL_HL
-#define SL_HL "SL_HL"
-#endif
-#ifndef PR_HL
-#define PR_HL "PR_HL"
-#endif
-#ifndef TRNB
-#define TRNB "EingabeTrade"
-#endif
-#ifndef SabioEntry
-#define SabioEntry "SabioEntry"
-#endif
-#ifndef SabioSL
-#define SabioSL "SabioSL"
-#endif
-#ifndef EntryButton
-#define EntryButton "EntryButton"
-#endif
-#ifndef SLButton
-#define SLButton "SLButton"
-#endif
-#ifndef SENDTRADEBTN
-#define SENDTRADEBTN "SendOnlyButton"
-#endif
-#ifndef POSNB
-#define POSNB "EingabePos"
-#endif
 
 #include "ta_controllers.mqh"
 
@@ -76,9 +49,13 @@ private:
 
 public:
                      CVirtualTradeGUI() : m_tm(NULL), m_symbol(""), m_tf(PERIOD_CURRENT), m_chart(0) {m_edit_tradepos=false; m_edit_obj="";}
-   CBaseLinesController*       BaseLines()       { return &m_baseLines; }
-   CBaseButtonsDragController* BaseBtnDrag()     { return &m_baseBtnDrag; }
 
+   CBaseLinesController*       BaseLines()   { return m_baseLines; }
+   CBaseButtonsDragController* BaseBtnDrag() { return m_baseBtnDrag; }
+  
+
+   
+   
    bool              Init(CTradeManager *tm, const string symbol, const ENUM_TIMEFRAMES tf);
    void              Destroy()
      {
@@ -140,54 +117,56 @@ int              CVirtualTradeGUI::ExtractIntDigits(const string text)
 // CVirtualTradeGUI: Base-UI Eventhandling (aus event.mqh in die Klasse gezogen)
 // ------------------------------------------------------------------
 bool CVirtualTradeGUI::HandleBaseUIEvent(const int id,
-                                         const long &lparam,
-                                         const double &dparam,
-                                         const string &sparam)
-{
-   // BaseLine click -> exklusiv selektieren (ohne globale Variablen)
+      const long &lparam,
+      const double &dparam,
+      const string &sparam)
+  {
+// BaseLine click -> exklusiv selektieren (ohne globale Variablen)
    if(id == CHARTEVENT_OBJECT_CLICK)
-   {
+     {
       if(sparam == PR_HL || sparam == SL_HL)
-      {
+        {
          // lokal: clicked selektieren, other deselektieren
          const string other = (sparam == PR_HL ? SL_HL : PR_HL);
 
-         if(ObjectFind(0, sparam) >= 0) ObjectSetInteger(0, sparam, OBJPROP_SELECTED, true);
-         if(ObjectFind(0, other)  >= 0) ObjectSetInteger(0, other,  OBJPROP_SELECTED, false);
+         if(ObjectFind(0, sparam) >= 0)
+            ObjectSetInteger(0, sparam, OBJPROP_SELECTED, true);
+         if(ObjectFind(0, other)  >= 0)
+            ObjectSetInteger(0, other,  OBJPROP_SELECTED, false);
 
          return true;
-      }
-   }
+        }
+     }
 
-   // BaseLine drag -> live sync
+// BaseLine drag -> live sync
    if(id == CHARTEVENT_OBJECT_DRAG)
-   {
+     {
       if(sparam == PR_HL || sparam == SL_HL)
-      {
+        {
          if(m_baseLines.OnObjectDrag(sparam, dparam))
-         {
+           {
             OnBaseLinesChanged(false);
             return true;
-         }
-      }
-   }
+           }
+        }
+     }
 
-   // BaseLine change -> finalize + save
+// BaseLine change -> finalize + save
    if(id == CHARTEVENT_OBJECT_CHANGE)
-   {
+     {
       if(sparam == PR_HL || sparam == SL_HL)
-      {
+        {
          if(m_baseLines.OnObjectChange(sparam))
-         {
+           {
             OnBaseLinesChanged(true);
             return true;
-         }
-      }
-   }
+           }
+        }
+     }
 
-   // Buttons drag + BaseLines mouse coupling
+// Buttons drag + BaseLines mouse coupling
    if(id == CHARTEVENT_MOUSE_MOVE)
-   {
+     {
       const int mx = (int)lparam;
       const int my = (int)dparam;
       const int MouseState = (int)StringToInteger(sparam);
@@ -195,22 +174,22 @@ bool CVirtualTradeGUI::HandleBaseUIEvent(const int id,
       m_baseLines.SetLastMouseY(my);
 
       if(m_baseBtnDrag.OnMouseMove(mx, my, MouseState))
-      {
+        {
          if(m_baseBtnDrag.IsDragging())
             OnBaseLinesChanged(false);
          else
             OnBaseLinesChanged(true);
 
          return true;
-      }
+        }
 
       m_baseLines.OnMouseMove(mx, my, MouseState, m_baseBtnDrag.IsDragging());
       return true;
-   }
+     }
 
-   // CHART_CHANGE NICHT hier (weil InpBaseUI_* in event.mqh steht)
+// CHART_CHANGE NICHT hier (weil InpBaseUI_* in event.mqh steht)
    return false;
-}
+  }
 
 
 //+------------------------------------------------------------------+
@@ -287,14 +266,14 @@ bool CVirtualTradeGUI::GetDraft(VT_Draft &out)
    out.direction   = (s < e ? "LONG" : "SHORT");
 
    int active_trade = 0;
-   m_tm->TM_GetActiveTradeNo(m_symbol, m_tf, out.direction, active_trade);
+   m_tm.TM_GetActiveTradeNo(m_symbol, m_tf, out.direction, active_trade);
 
    if(active_trade > 0)
      {
       out.trade_no = active_trade;
 
       int next_pos = 1;
-      m_tm->TM_GetNextPosNo(m_symbol, m_tf, out.direction, active_trade, next_pos);
+      m_tm.TM_GetNextPosNo(m_symbol, m_tf, out.direction, active_trade, next_pos);
       if(next_pos < 1)
          next_pos = 1;
 
@@ -303,7 +282,7 @@ bool CVirtualTradeGUI::GetDraft(VT_Draft &out)
    else
      {
       int last_trade = 0;
-      m_tm->TM_GetLastTradeNo(m_symbol, m_tf, last_trade);
+      m_tm.TM_GetLastTradeNo(m_symbol, m_tf, last_trade);
 
       out.trade_no = (last_trade > 0 ? last_trade + 1 : 1);
       out.pos_no   = 1;
@@ -331,19 +310,19 @@ void CVirtualTradeGUI::UpdateTradePosTexts()
    string dir = (s < e ? "LONG" : "SHORT");
 
    int active_trade = 0;
-   m_tm->TM_GetActiveTradeNo(m_symbol, m_tf, dir, active_trade);
+   m_tm.TM_GetActiveTradeNo(m_symbol, m_tf, dir, active_trade);
 
    if(active_trade > 0)
      {
       int next_pos = 1;
-      m_tm->TM_GetNextPosNo(m_symbol, m_tf, dir, active_trade, next_pos);
+      m_tm.TM_GetNextPosNo(m_symbol, m_tf, dir, active_trade, next_pos);
       update_Text(TRNB, IntegerToString(active_trade));
       update_Text(POSNB, IntegerToString(next_pos));
       return;
      }
 
    int last_trade = 0;
-   m_tm->TM_GetLastTradeNo(m_symbol, m_tf, last_trade);
+   m_tm.TM_GetLastTradeNo(m_symbol, m_tf, last_trade);
 
    int next_trade = (last_trade > 0 ? last_trade + 1 : 1);
    update_Text(TRNB, IntegerToString(next_trade));
@@ -364,7 +343,7 @@ void CVirtualTradeGUI::UpdateEntrySLButtonTexts()
 
    double lots = 0.0;
    if(m_tm != NULL && CheckPointer(m_tm)!=POINTER_INVALID)
-      lots = m_tm->calcLots(m_symbol, m_tf, dist);
+      lots = m_tm.calcLots(m_symbol, m_tf, dist);
    lots = NormalizeDouble(lots, 2);
 
    string entry_txt = (is_long ? "Buy Stop @ " : "Sell Stop @ ");
@@ -532,7 +511,7 @@ void CVirtualTradeGUI::OnBaseLinesChanged(const bool do_save)
    UpdateTradePosTexts(); // TRNB/POSNB aus TradeManager + Direction
 
    if(do_save && m_tm != NULL && CheckPointer(m_tm)!=POINTER_INVALID)
-      m_tm->SaveLinePrices(m_symbol, m_tf);
+      m_tm.SaveLinePrices(m_symbol, m_tf);
 
    ChartRedraw(m_chart);
   }
@@ -639,12 +618,12 @@ void               CVirtualTradeGUI::ApplyTRNBOverrideFromUser()
 // Nur wenn kein aktiver Trade in dieser Direction läuft
    string dir = DirectionFromLines();
    int active_trade=0;
-   m_tm->TM_GetActiveTradeNo(m_symbol, m_tf, dir, active_trade);
+   m_tm.TM_GetActiveTradeNo(m_symbol, m_tf, dir, active_trade);
    if(active_trade > 0)
       return;
 
 // Startnummer setzen: last_trade_no = user_trade_no-1
-   m_tm->TM_SetLastTradeNo(m_symbol, m_tf, user_trade_no - 1);
+   m_tm.TM_SetLastTradeNo(m_symbol, m_tf, user_trade_no - 1);
   }
 #endif __CVIRTUALTRADEGUI_MQH__
 //+------------------------------------------------------------------+

@@ -163,7 +163,7 @@ int getChartWidthInPixels(const long chart_ID = 0)
  *               val  - Text
  * Rückgabewert: bool - true wenn gesetzt, sonst false
  * Hinweise:     Für OBJ_BUTTON/OBJ_LABEL/OBJ_EDIT etc. nutzbar.
- * Fehlerfälle:  ObjectSetString==false -> Print/CLogger mit GetLastError
+ * Fehlerfälle:  ObjectSetString==false . Print/CLogger mit GetLastError
  */
 bool update_Text(const string name, const string val)
   {
@@ -196,7 +196,7 @@ bool CreateEntryAndSLLines(string objName, datetime time1, double price1, color 
   {
    ResetLastError();
 
-// existiert schon? -> nur updaten
+// existiert schon? . nur updaten
    if(ObjectFind(0, objName) >= 0)
      {
       ObjectSetDouble(0, objName, OBJPROP_PRICE, price1);
@@ -341,7 +341,7 @@ bool createButton(string objName, string text, int xD, int yD, int xS, int yS, c
  *               clr     - Linienfarbe
  * Rückgabewert: true bei Erfolg, sonst false
  * Hinweise:     Setzt explizit Selectable/Zorder/Width, damit die Linie sicher anklickbar/dragbar ist.
- * Fehlerfälle:  ObjectCreate/ObjectSet* schlägt fehl -> Log via CLogger + GetLastError()
+ * Fehlerfälle:  ObjectCreate/ObjectSet* schlägt fehl . Log via CLogger + GetLastError()
  */
 bool createHL(string objName, datetime time1, double price1, color clr)
   {
@@ -591,7 +591,7 @@ int UI_TradeLists_TopY()
  *               value - Wert
  * Rückgabewert: bool - true wenn gesetzt, sonst false
  * Hinweise:     Verhindert stilles Scheitern (z.B. bei gelöschten Objekten).
- * Fehlerfälle:  ObjectSetInteger==false -> Print + GetLastError
+ * Fehlerfälle:  ObjectSetInteger==false . Print + GetLastError
  */
 bool UI_ObjSetIntSafe(const int chartID, const string name, const ENUM_OBJECT_PROPERTY_INTEGER prop, const long value)
   {
