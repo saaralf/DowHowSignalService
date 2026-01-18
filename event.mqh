@@ -559,6 +559,12 @@ void OnChartEvent(const int id,
    CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
 
+   if(g_vgui.OnChartEvent(id, lparam, dparam, sparam))
+     {
+      UI_ProcessRedraw();  // falls du globales throttling behalten willst
+      return;
+     }
+
 // --- Track: User tippt gerade in TRNB/POSNB -> Auto-Updates dürfen nicht überschreiben
    if(id == CHARTEVENT_OBJECT_CLICK)
      {
@@ -621,7 +627,7 @@ void OnChartEvent(const int id,
               {
                if(g_BaseLines.OnObjectDrag(sparam, dparam))
                  {
-                  UI_OnBaseLinesChanged(false);   // <-- live: Direction + TRNB/POSNB aktualisieren
+                  g_vgui.OnBaseLinesChanged(false);
                   handled = true;
                  }
               }
@@ -651,7 +657,7 @@ void OnChartEvent(const int id,
               {
                if(g_BaseLines.OnObjectChange(sparam))
                  {
-                  UI_OnBaseLinesChanged(true);    // <-- finalize: inkl. SaveLinePrices
+                  g_vgui.OnBaseLinesChanged(false);
                   handled = true;
                  }
               }
@@ -707,7 +713,8 @@ void OnChartEvent(const int id,
       // CHART_CHANGE
       if(!handled && id == CHARTEVENT_CHART_CHANGE)
         {
-         g_BaseLines.ApplyRightAnchor();
+         g_vgui.ApplyRightAnchor(InpBaseUI_RightMarginPx, InpBaseUI_RightShiftPx);
+         g_vgui.OnBaseLinesChanged(false);
          g_tradePosLines.SyncAllTags();
          UI_OnBaseLinesChanged(false);
          UI_ApplyZOrder();   // <-- ergänzen
@@ -723,35 +730,36 @@ void OnChartEvent(const int id,
       // Wir setzen dafür last_trade_no = (TRNB-1), damit UpdateNextTradePosUI() stabil bleibt
       // und SendSignalDraft() die Nummer nicht wieder überschreibt.
       if(sparam == TRNB)
-   {
-      string s="";
-      ObjectGetString(0, TRNB, OBJPROP_TEXT, 0, s);
-      int user_trade_no = UI_ExtractIntDigits(s);
+        {
+         string s="";
+         ObjectGetString(0, TRNB, OBJPROP_TEXT, 0, s);
+         int user_trade_no = UI_ExtractIntDigits(s);
 
-      // Nur wenn kein aktiver Trade läuft: Startnummer annehmen
-      if(user_trade_no > 0 && g_ui_state.ActiveTradeNo() <= 0)
-      {
-         g_ui_state.last_trade_no = user_trade_no - 1;
+         // Nur wenn kein aktiver Trade läuft: Startnummer annehmen
+         if(user_trade_no > 0 && g_ui_state.ActiveTradeNo() <= 0)
+           {
+            g_ui_state.last_trade_no = user_trade_no - 1;
 
-         // WICHTIG: pro Symbol/TF speichern
-         g_DB.SetMetaInt(
-            g_DB.KeyFor(_Symbol, (ENUM_TIMEFRAMES)_Period, "g_ui_state.last_trade_no"),
-            g_ui_state.last_trade_no
-         );
-      }
+            // WICHTIG: pro Symbol/TF speichern
+            g_DB.SetMetaInt(
+               g_DB.KeyFor(_Symbol, (ENUM_TIMEFRAMES)_Period, "g_ui_state.last_trade_no"),
+               g_ui_state.last_trade_no
+            );
+           }
 
-      // Editing ist vorbei -> Auto-Updates wieder erlauben
-      g_ui_state.manual_tradepos = false;
+         // Editing ist vorbei -> Auto-Updates wieder erlauben
+         g_ui_state.manual_tradepos = false;
 
-      // UI konsistent setzen (TRNB wird dann zu user_trade_no)
-      g_ui.UpdateNextTradePosUI();
-   }
-   else if(sparam == POSNB)
-   {
-      // Editing ist vorbei -> Auto-Updates wieder erlauben
-      g_ui_state.manual_tradepos = false;
-      // optional: kein UpdateNextTradePosUI(), sonst überschreibst du POSNB wieder
-   }
+         // UI konsistent setzen (TRNB wird dann zu user_trade_no)
+         g_ui.UpdateNextTradePosUI();
+        }
+      else
+         if(sparam == POSNB)
+           {
+            // Editing ist vorbei -> Auto-Updates wieder erlauben
+            g_ui_state.manual_tradepos = false;
+            // optional: kein UpdateNextTradePosUI(), sonst überschreibst du POSNB wieder
+           }
       // SabioEntry/SabioSL sind Freitext (Discord/DB) -> keine Berechnung/Parsing hier
      }
 
