@@ -1,629 +1,1213 @@
-﻿//+------------------------------------------------------------------+
-//|                                                      ProjectName |
-//|                                      Copyright 2020, CompanyName |
-//|                                       http://www.companyname.net |
-//+------------------------------------------------------------------+
+﻿// CVirtualTradeGUI.mqh
 #ifndef __CVIRTUALTRADEGUI_MQH__
 #define __CVIRTUALTRADEGUI_MQH__
+
 #include "ui_names.mqh"
-#include "CTradeManager.mqh"
-#include "logger.mqh"
-
-
 #include "ta_controllers.mqh"
+#include "CTradeManager.mqh"
 
-
+// ------------------------------------------------------------
+// Draft struct (optional, falls du es später nutzt)
+// ------------------------------------------------------------
 struct VT_Draft
   {
    string            direction;     // "LONG" / "SHORT"
-   int               trade_no;       // nächste TradeNo
-   int               pos_no;         // nächste PosNo
-   double            entry_price;    // PR_HL Preis
-   double            sl_price;       // SL_HL Preis
-   string            sabio_entry;    // Freitext
-   string            sabio_sl;       // Freitext
+   int               trade_no;
+   int               pos_no;
+   double            entry_price;
+   double            sl_price;
+   string            sabio_entry;
+   string            sabio_sl;
   };
 
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
+// ------------------------------------------------------------
+// CVirtualTradeGUI
+// ------------------------------------------------------------
 class CVirtualTradeGUI
   {
 private:
-   CTradeManager     *m_tm;
-   string             m_symbol;
-   ENUM_TIMEFRAMES    m_tf;
-   long               m_chart;
-   bool              m_edit_tradepos;
-   string            m_edit_obj;
-   bool              m_anchor_inited;
-   int               m_ref_x, m_ref_w;
-   int               m_dx_slbtn, m_dx_send, m_dx_trnb, m_dx_posnb, m_dx_sabE, m_dx_sabS;
-   bool              m_trnb_editing;
-   bool              m_posnb_editing;
-   bool              GetBaseEntrySL(double &entry, double &sl);
-   string            DirectionFromLines();
+   CTradeManager      *m_tm;
+   string              m_symbol;
+   ENUM_TIMEFRAMES     m_tf;
+   long                m_chart;
+
+   // Edit state
+   bool                m_trnb_editing;
+   bool                m_posnb_editing;
+   string              m_edit_obj;
+
+   // Right anchor baseline
+   bool                m_anchor_inited;
+   int                 m_ref_x, m_ref_w;
+   int                 m_dx_slbtn, m_dx_send, m_dx_trnb, m_dx_posnb, m_dx_sabE, m_dx_sabS;
+   // --- Smooth Drag State (wie früher in OnChartEvent) ---
+
+   int               m_downMouseX;
+
+
+   // gespeicherte Start-Ys (mlbDownYD_*)
+   int               m_downY_entryBtn;
+   int               m_downY_slBtn;
+   int               m_downY_sendBtn;
+   int               m_downY_trnb;
+   int               m_downY_posnb;
+   int               m_downY_sabEntry;
+   int               m_downY_sabSL;
+   // --- Smooth drag state (line-master) ---
+   int               m_prevMouseState;
+
+   bool              m_drag_entry_group;   // EntryButton gedrückt -> beide Linien bewegen
+   bool              m_drag_sl_only;       // SLButton gedrückt -> nur SL
+
+   int               m_downMouseY;
+   int               m_grabOffEntry;       // MausOffset innerhalb EntryButton
+   int               m_grabOffSL;          // MausOffset innerhalb SLButton
+
+   double            m_downEntryPrice;
+   double            m_downSLPrice;
+   double            m_priceDiffSL;        // SL - Entry (Preisabstand)
+   double            m_lastEntryPrice;     // fürs "line changed?" Sabio update
+   double            m_lastSLPrice;
+   // --- Line-drag state (für smooth follow) ---
+   bool              m_drag_pr_line;
+   bool              m_drag_sl_line;
+   double            m_drag_diff_sl;     // SL - Entry beim Start (für PR_HL drag)
+
+   // Controllers
    CBaseLinesController        m_baseLines;
    CBaseButtonsDragController  m_baseBtnDrag;
 
-public:
-                     CVirtualTradeGUI() : m_tm(NULL), m_symbol(""), m_tf(PERIOD_CURRENT), m_chart(0) {m_edit_tradepos=false; m_edit_obj="";}
+private:
+   // --------- Mini helpers (ohne Abhängigkeit zu alten gui_elemente.mqh) ----------
+   bool              ObjExists(const string name) const { return (ObjectFind(m_chart, name) >= 0); }
+  void SetYMoveSafe(const string name, const int y)
+{
+   if(ObjectFind(m_chart, name) < 0)
+      return;
 
-   CBaseLinesController*       BaseLines()   { return m_baseLines; }
-   CBaseButtonsDragController* BaseBtnDrag() { return m_baseBtnDrag; }
-  
+   // WICHTIG: Bei OBJ_EDIT niemals SELECTED toggeln, das killt den Edit-Fokus/Caret.
+   long type = ObjectGetInteger(m_chart, name, OBJPROP_TYPE);
+   if(type == OBJ_EDIT)
+   {
+      ObjectSetInteger(m_chart, name, OBJPROP_YDISTANCE, y);
+      return;
+   }
 
-   
-   
-   bool              Init(CTradeManager *tm, const string symbol, const ENUM_TIMEFRAMES tf);
-   void              Destroy()
+   // Für andere Objekte einfach bewegen (ohne Selection-Fummelei)
+   ObjectSetInteger(m_chart, name, OBJPROP_YDISTANCE, y);
+}
+
+
+
+   void              LineDrag_Begin(const int mx, const int my)
      {
-      // später: Objekte löschen
+      // Nur starten, wenn Maus wirklich "auf" einer Linie ist
+      bool hit_pr = HitTestLinePx(PR_HL, mx, my, 6);
+      bool hit_sl = HitTestLinePx(SL_HL, mx, my, 6);
+
+      // PR hat Priorität, falls beide nah
+      m_drag_pr_line = hit_pr;
+      m_drag_sl_line = (!m_drag_pr_line && hit_sl);
+
+      if(!(m_drag_pr_line || m_drag_sl_line))
+         return;
+
+      ChartSetInteger(m_chart, CHART_MOUSE_SCROLL, false);
+
+      // Startpreise + diff merken
+      double e=0.0, s=0.0;
+      if(GetBaseEntrySL(e, s))
+         m_drag_diff_sl = (s - e);
      }
-   // Base-UI Eventhandling (wie vorher in event.mqh)
-   bool              HandleBaseUIEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
-   bool              OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
-   void              CreateDefaults();
-   void              OnBaseLinesChanged(const bool do_save);
-   void              SetObjectXClamped(const string name, const int x_left, const int chart_w);
-   void              ApplyRightAnchor(const int right_margin_px, const int shift_px);
-   bool              CaptureAnchorBaseline(const bool force);
-   void              SyncBaseControlsToLines();
-   void              UpdateEntrySLButtonTexts();
-   bool              GetDraft(VT_Draft &out);
-   void              UpdateTradePosTexts();
-   int               ExtractIntDigits(const string text);
-   void              ApplyTRNBOverrideFromUser();
 
-
-
-  };
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-bool              CVirtualTradeGUI::Init(CTradeManager *tm, const string symbol, const ENUM_TIMEFRAMES tf)
-  {
-   m_tm = tm;
-   m_symbol = symbol;
-   m_tf = tf;
-   m_chart = ChartID();
-   m_baseBtnDrag.Bind(&m_baseLines);
-
-   m_anchor_inited=false;
-   m_trnb_editing=false;
-   m_posnb_editing=false;
-
-   return (m_tm != NULL && CheckPointer(m_tm) != POINTER_INVALID);
-
-  }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-int              CVirtualTradeGUI::ExtractIntDigits(const string text)
-  {
-   string d="";
-   for(int i=0;i<StringLen(text);i++)
+   void              LineDrag_Update(const int mx, const int my)
      {
-      ushort c = StringGetCharacter(text,i);
-      if(c>='0' && c<='9')
-         d += CharToString((uchar)c);
-     }
-   if(d=="")
-      return 0;
-   return (int)StringToInteger(d);
-  }
-// ------------------------------------------------------------------
-// CVirtualTradeGUI: Base-UI Eventhandling (aus event.mqh in die Klasse gezogen)
-// ------------------------------------------------------------------
-bool CVirtualTradeGUI::HandleBaseUIEvent(const int id,
-      const long &lparam,
-      const double &dparam,
-      const string &sparam)
-  {
-// BaseLine click -> exklusiv selektieren (ohne globale Variablen)
-   if(id == CHARTEVENT_OBJECT_CLICK)
-     {
-      if(sparam == PR_HL || sparam == SL_HL)
+      if(!(m_drag_pr_line || m_drag_sl_line))
+         return;
+
+      double p=0.0;
+      if(!PriceFromMouse(mx, my, p))
+         return;
+
+      if(m_drag_pr_line)
         {
-         // lokal: clicked selektieren, other deselektieren
-         const string other = (sparam == PR_HL ? SL_HL : PR_HL);
+         // Entry folgt Maus, SL bleibt im gleichen Abstand
+         double new_entry = p;
+         double new_sl    = VT_NormalizeToTick(new_entry + m_drag_diff_sl);
 
-         if(ObjectFind(0, sparam) >= 0)
-            ObjectSetInteger(0, sparam, OBJPROP_SELECTED, true);
-         if(ObjectFind(0, other)  >= 0)
-            ObjectSetInteger(0, other,  OBJPROP_SELECTED, false);
+         ObjectSetDouble(m_chart, PR_HL, OBJPROP_PRICE, new_entry);
+         ObjectSetDouble(m_chart, SL_HL, OBJPROP_PRICE, new_sl);
 
-         return true;
-        }
-     }
-
-// BaseLine drag -> live sync
-   if(id == CHARTEVENT_OBJECT_DRAG)
-     {
-      if(sparam == PR_HL || sparam == SL_HL)
-        {
-         if(m_baseLines.OnObjectDrag(sparam, dparam))
-           {
-            OnBaseLinesChanged(false);
-            return true;
-           }
-        }
-     }
-
-// BaseLine change -> finalize + save
-   if(id == CHARTEVENT_OBJECT_CHANGE)
-     {
-      if(sparam == PR_HL || sparam == SL_HL)
-        {
-         if(m_baseLines.OnObjectChange(sparam))
-           {
-            OnBaseLinesChanged(true);
-            return true;
-           }
-        }
-     }
-
-// Buttons drag + BaseLines mouse coupling
-   if(id == CHARTEVENT_MOUSE_MOVE)
-     {
-      const int mx = (int)lparam;
-      const int my = (int)dparam;
-      const int MouseState = (int)StringToInteger(sparam);
-
-      m_baseLines.SetLastMouseY(my);
-
-      if(m_baseBtnDrag.OnMouseMove(mx, my, MouseState))
-        {
-         if(m_baseBtnDrag.IsDragging())
-            OnBaseLinesChanged(false);
-         else
-            OnBaseLinesChanged(true);
-
-         return true;
+         OnBaseLinesChanged(false);   // live -> Buttons/Text/Lot laufen mit
+         return;
         }
 
-      m_baseLines.OnMouseMove(mx, my, MouseState, m_baseBtnDrag.IsDragging());
+      if(m_drag_sl_line)
+        {
+         // SL folgt Maus
+         ObjectSetDouble(m_chart, SL_HL, OBJPROP_PRICE, p);
+
+         OnBaseLinesChanged(false);   // live -> Lot/Text aktualisiert
+         return;
+        }
+     }
+void SetYKeepSelection(const string name, const int y)
+{
+   if(ObjectFind(m_chart, name) < 0)
+      return;
+
+   long type = ObjectGetInteger(m_chart, name, OBJPROP_TYPE);
+
+   // Für Edit-Felder: NUR bewegen. KEIN Selected togglen, sonst verliert MT5 den Caret/Fokus.
+   if(type == OBJ_EDIT)
+   {
+      ObjectSetInteger(m_chart, name, OBJPROP_YDISTANCE, y);
+      return;
+   }
+
+   // Für Buttons/sonstige Objekte: einfach bewegen (auch hier ohne Selected-Rewrite ist am stabilsten)
+   ObjectSetInteger(m_chart, name, OBJPROP_YDISTANCE, y);
+}
+
+   void              LineDrag_End()
+     {
+      if(!(m_drag_pr_line || m_drag_sl_line))
+         return;
+
+      m_drag_pr_line = false;
+      m_drag_sl_line = false;
+
+      ChartSetInteger(m_chart, CHART_MOUSE_SCROLL, true);
+
+      OnBaseLinesChanged(true); // final
+     }
+
+   bool              HitTestLinePx(const string line_name, const int mx, const int my, const int tol_px=6) const
+     {
+      if(ObjectFind(m_chart, line_name) < 0)
+         return false;
+
+      double price = ObjectGetDouble(m_chart, line_name, OBJPROP_PRICE);
+
+      int x=0, y=0;
+      datetime t = VT_VisibleTime();
+      if(!ChartTimePriceToXY(m_chart, 0, t, price, x, y))
+         return false;
+
+      return (MathAbs(my - y) <= tol_px);
+     }
+
+   bool              PriceFromMouse(const int mx, const int my, double &out_price) const
+     {
+      datetime t=0;
+      int window=0;
+      double p=0.0;
+      if(!ChartXYToTimePrice(m_chart, mx, my, window, t, p))
+         return false;
+
+      out_price = VT_NormalizeToTick(p);
       return true;
      }
 
-// CHART_CHANGE NICHT hier (weil InpBaseUI_* in event.mqh steht)
-   return false;
-  }
-
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-bool            CVirtualTradeGUI::OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
-  {
-// Klick in TRNB/POSNB -> Sperre
-   if(id == CHARTEVENT_OBJECT_CLICK)
+   void              Drag_Begin(const int mx, const int my)
      {
-      if(sparam == TRNB || sparam == POSNB)
+      m_drag_entry_group = HitTest(EntryButton, mx, my);
+      m_drag_sl_only     = (!m_drag_entry_group && HitTest(SLButton, mx, my));
+
+      if(!(m_drag_entry_group || m_drag_sl_only))
+         return;
+
+      ChartSetInteger(m_chart, CHART_MOUSE_SCROLL, false);
+
+      m_downMouseY = my;
+
+      // Grab-Offset speichern (damit es “smooth” bleibt)
+      int x,y,w,h;
+      if(m_drag_entry_group && GetBox(EntryButton, x,y,w,h))
+         m_grabOffEntry = (my - y);
+      if(m_drag_sl_only && GetBox(SLButton, x,y,w,h))
+         m_grabOffSL = (my - y);
+
+      // Startpreise sichern
+      double e=0.0,s=0.0;
+      if(GetBaseEntrySL(e,s))
         {
-         m_edit_tradepos = true;
-         m_edit_obj = sparam;
+         m_downEntryPrice = e;
+         m_downSLPrice    = s;
+         m_priceDiffSL    = (s - e);      // SL bleibt relativ zu Entry gleich (Preisabstand)
         }
+     }
+
+   void              Drag_Update(const int mx, const int my)
+     {
+      if(!(m_drag_entry_group || m_drag_sl_only))
+         return;
+
+      double new_entry = 0.0;
+      double new_sl    = 0.0;
+
+      // ENTRY-GROUP: neue Entry aus Maus -> SL = Entry + diff
+      if(m_drag_entry_group)
+        {
+         int x,y,w,h;
+         if(!GetBox(EntryButton, x,y,w,h))
+            return;
+
+         int target_top = my - m_grabOffEntry;
+
+         if(!PriceFromButtonTopY(EntryButton, target_top, new_entry))
+            return;
+
+         new_sl = VT_NormalizeToTick(new_entry + m_priceDiffSL);
+
+         ObjectSetDouble(m_chart, PR_HL, OBJPROP_PRICE, new_entry);
+         ObjectSetDouble(m_chart, SL_HL, OBJPROP_PRICE, new_sl);
+
+         OnBaseLinesChanged(false); // live refresh: Buttons folgen Lines, Texte/Lot aktualisieren
+         return;
+        }
+
+      // SL-ONLY: neue SL aus Maus
+      if(m_drag_sl_only)
+        {
+         int x,y,w,h;
+         if(!GetBox(SLButton, x,y,w,h))
+            return;
+
+         int target_top = my - m_grabOffSL;
+
+         if(!PriceFromButtonTopY(SLButton, target_top, new_sl))
+            return;
+
+         ObjectSetDouble(m_chart, SL_HL, OBJPROP_PRICE, new_sl);
+
+         OnBaseLinesChanged(false); // Lot im Entry wird neu berechnet
+         return;
+        }
+     }
+
+   void              Drag_End()
+     {
+      if(!(m_drag_entry_group || m_drag_sl_only))
+         return;
+
+      m_drag_entry_group = false;
+      m_drag_sl_only     = false;
+
+      ChartSetInteger(m_chart, CHART_MOUSE_SCROLL, true);
+
+      OnBaseLinesChanged(true); // final + persist
+     }
+
+
+
+   bool              GetBox(const string name, int &x, int &y, int &w, int &h) const
+     {
+      if(ObjectFind(m_chart, name) < 0)
+         return false;
+      x = (int)ObjectGetInteger(m_chart, name, OBJPROP_XDISTANCE);
+      y = (int)ObjectGetInteger(m_chart, name, OBJPROP_YDISTANCE);
+      w = (int)ObjectGetInteger(m_chart, name, OBJPROP_XSIZE);
+      h = (int)ObjectGetInteger(m_chart, name, OBJPROP_YSIZE);
+      return true;
+     }
+
+   bool              HitTest(const string name, const int mx, const int my) const
+     {
+      int x,y,w,h;
+      if(!GetBox(name,x,y,w,h))
+         return false;
+      return (mx>=x && mx<=x+w && my>=y && my<=y+h);
+     }
+
+   void              SetY(const string name, const int y)
+     {
+      if(ObjectFind(m_chart, name) < 0)
+         return;
+      ObjectSetInteger(m_chart, name, OBJPROP_YDISTANCE, y);
+     }
+
+
+   // Preis ermitteln, wenn Button-Top bei target_top_y wäre (wie früher: bottom edge)
+   bool              PriceFromButtonTopY(const string btn_name, const int target_top_y, double &out_price) const
+     {
+      int x,y,w,h;
+      if(!GetBox(btn_name, x, y, w, h))
+         return false;
+
+      datetime t=0;
+      int window=0;
+      double p=0.0;
+
+      // bottom edge: target_top_y + h
+      if(!ChartXYToTimePrice(m_chart, x + w/2, target_top_y + h, window, t, p))
+         return false;
+
+      out_price = VT_NormalizeToTick(p);
+      return true;
+     }
+   string            TrimCopy(const string s) const
+     {
+      string t=s;
+      StringTrimLeft(t);
+      StringTrimRight(t);
+      return t;
+     }
+
+   void              SetSabioFromLinePrice(const string obj, const string prefix, const double price)
+     {
+      if(ObjectFind(m_chart, obj) < 0)
+         return;
+      ObjectSetString(m_chart, obj, OBJPROP_TEXT,
+                      prefix + DoubleToString(VT_NormalizeToTick(price), VT_Digits()));
+     }
+
+   // Wird beim Send genutzt: wenn User nur Prefix oder leer -> fallback Preis
+   string            GetSabioTextForSend(const string obj, const string prefix, const double fallback_price) const
+     {
+      if(ObjectFind(m_chart, obj) < 0)
+         return prefix + DoubleToString(VT_NormalizeToTick(fallback_price), VT_Digits());
+
+      string t = TrimCopy(ObjectGetString(m_chart, obj, OBJPROP_TEXT));
+      if(t == "" || t == prefix)
+         return prefix + DoubleToString(VT_NormalizeToTick(fallback_price), VT_Digits());
+
+      // Prefix sicherstellen
+      if(StringFind(t, prefix, 0) != 0)
+         t = prefix + t;
+
+      return t;
+     }
+
+
+   void              NormalizeSabioEdit(const string obj, const string prefix)
+     {
+      if(ObjectFind(m_chart, obj) < 0)
+         return;
+
+      string s = ObjectGetString(m_chart, obj, OBJPROP_TEXT);
+      string t = s;
+      StringTrimLeft(t);
+      StringTrimRight(t);
+
+      if(t == "")
+        {
+         ObjectSetString(m_chart, obj, OBJPROP_TEXT, prefix);
+         return;
+        }
+
+      // Prefix entfernen, falls vorhanden
+      if(StringFind(t, prefix, 0) == 0)
+         t = StringSubstr(t, StringLen(prefix));
+
+      StringTrimLeft(t);
+      StringTrimRight(t);
+
+      // wenn User nur Prefix gelassen hat
+      if(t == "")
+        {
+         ObjectSetString(m_chart, obj, OBJPROP_TEXT, prefix);
+         return;
+        }
+
+      // Zahl am Ende extrahieren (Komma->Punkt erlauben)
+      StringReplace(t, ",", ".");
+
+      // Wenn der User "0.67030" tippt -> wir machen "SABIO Entry: 0.67030"
+      double v = StringToDouble(t);
+      bool looks_like_number = (v != 0.0 || t == "0" || t == "0.0" || t == "0.00");
+
+      if(looks_like_number)
+         ObjectSetString(m_chart, obj, OBJPROP_TEXT, prefix + DoubleToString(VT_NormalizeToTick(v), VT_Digits()));
+      else
+         ObjectSetString(m_chart, obj, OBJPROP_TEXT, prefix + t); // fallback: Text behalten
+     }
+
+   void              EnsureSabioPrefixIfMissing(const string obj, const string prefix)
+     {
+      if(ObjectFind(m_chart, obj) < 0)
+         return;
+
+      string s = ObjectGetString(m_chart, obj, OBJPROP_TEXT);
+      string t = s;
+      StringTrimLeft(t);
+      StringTrimRight(t);
+
+      if(t == "")
+        {
+         ObjectSetString(m_chart, obj, OBJPROP_TEXT, prefix);
+         return;
+        }
+
+      if(StringFind(t, prefix, 0) != 0)
+        {
+         // Prefix fehlt -> davor setzen, aber existierenden Inhalt behalten
+         ObjectSetString(m_chart, obj, OBJPROP_TEXT, prefix + t);
+        }
+     }
+
+
+   void              EnsureSabioTextWithPrice(const string obj_name,
+         const string prefix,
+         const double price,
+         const bool allow_overwrite_when_has_value)
+     {
+      if(ObjectFind(m_chart, obj_name) < 0)
+         return;
+
+      string cur = ObjectGetString(m_chart, obj_name, OBJPROP_TEXT);
+
+      // Wenn User tippt: niemals überschreiben
+      if(m_edit_obj == obj_name)
+         return;
+
+      // Zieltext
+      string target = prefix + DoubleToString(price, VT_Digits());
+
+      // Wenn Feld leer oder nur prefix => setzen
+      string t = cur;
+      StringTrimLeft(t);
+      StringTrimRight(t);
+
+      bool only_prefix = (StringFind(t, prefix, 0) == 0 && StringLen(t) <= StringLen(prefix) + 1);
+
+      if(t == "" || only_prefix)
+        {
+         ObjectSetString(m_chart, obj_name, OBJPROP_TEXT, target);
+         return;
+        }
+
+      // Optional: wenn du IMMER auf Preis syncen willst (auch wenn User was drin hat)
+      if(allow_overwrite_when_has_value)
+         ObjectSetString(m_chart, obj_name, OBJPROP_TEXT, target);
+     }
+
+
+   void              SetText(const string name, const string txt)
+     {
+      if(ObjectFind(m_chart, name) < 0)
+         return;
+      ObjectSetString(m_chart, name, OBJPROP_TEXT, txt);
+     }
+
+   string            GetText(const string name) const
+     {
+      if(ObjectFind(m_chart, name) < 0)
+         return "";
+      return ObjectGetString(m_chart, name, OBJPROP_TEXT);
+     }
+
+   bool              EnsureHLine(const string name, const double price, const color clr, const ENUM_LINE_STYLE style)
+     {
+      if(ObjectFind(m_chart, name) < 0)
+        {
+         if(!ObjectCreate(m_chart, name, OBJ_HLINE, 0, 0, price))
+            return false;
+        }
+      ObjectSetInteger(m_chart, name, OBJPROP_SELECTABLE, true);
+      ObjectSetInteger(m_chart, name, OBJPROP_SELECTED,   false);
+      ObjectSetInteger(m_chart, name, OBJPROP_HIDDEN,     false);
+      ObjectSetInteger(m_chart, name, OBJPROP_BACK,       false);
+      ObjectSetInteger(m_chart, name, OBJPROP_ZORDER,     10);
+      ObjectSetInteger(m_chart, name, OBJPROP_COLOR,      clr);
+      ObjectSetInteger(m_chart, name, OBJPROP_STYLE,      style);
+      ObjectSetDouble(m_chart, name, OBJPROP_PRICE,      VT_NormalizeToTick(price));
+      return true;
+     }
+
+   bool              EnsureButton(const string name, const int x, const int y, const int w, const int h,
+                                  const string txt,
+                                  const color font_clr, const color bg_clr)
+     {
+      if(ObjectFind(m_chart, name) < 0)
+        {
+         if(!ObjectCreate(m_chart, name, OBJ_BUTTON, 0, 0, 0))
+            return false;
+        }
+      ObjectSetInteger(m_chart, name, OBJPROP_CORNER,     CORNER_LEFT_UPPER);
+      ObjectSetInteger(m_chart, name, OBJPROP_XDISTANCE,  x);
+      ObjectSetInteger(m_chart, name, OBJPROP_YDISTANCE,  y);
+      ObjectSetInteger(m_chart, name, OBJPROP_XSIZE,      w);
+      ObjectSetInteger(m_chart, name, OBJPROP_YSIZE,      h);
+      ObjectSetInteger(m_chart, name, OBJPROP_SELECTABLE, true);
+      ObjectSetInteger(m_chart, name, OBJPROP_HIDDEN,     false);
+      ObjectSetInteger(m_chart, name, OBJPROP_BGCOLOR,    bg_clr);
+      ObjectSetInteger(m_chart, name, OBJPROP_COLOR,      font_clr);
+      ObjectSetInteger(m_chart, name, OBJPROP_ZORDER,     100);
+      ObjectSetString(m_chart, name, OBJPROP_TEXT,       txt);
+      ObjectSetInteger(m_chart, name, OBJPROP_FONTSIZE,   InpFontSize);
+      ObjectSetString(m_chart, name, OBJPROP_FONT,       InpFont);
+      return true;
+     }
+
+
+   bool              EnsureEdit(const string name, const int x, const int y, const int w, const int h,
+                                const string txt,
+                                const color font_clr, const color bg_clr)
+     {
+      if(ObjectFind(m_chart, name) < 0)
+        {
+         if(!ObjectCreate(m_chart, name, OBJ_EDIT, 0, 0, 0))
+            return false;
+        }
+
+      ObjectSetInteger(m_chart, name, OBJPROP_CORNER,     CORNER_LEFT_UPPER);
+      ObjectSetInteger(m_chart, name, OBJPROP_XDISTANCE,  x);
+      ObjectSetInteger(m_chart, name, OBJPROP_YDISTANCE,  y);
+      ObjectSetInteger(m_chart, name, OBJPROP_XSIZE,      w);
+      ObjectSetInteger(m_chart, name, OBJPROP_YSIZE,      h);
+
+      ObjectSetInteger(m_chart, name, OBJPROP_HIDDEN,     false);
+      ObjectSetInteger(m_chart, name, OBJPROP_SELECTABLE, true);
+      ObjectSetInteger(m_chart, name, OBJPROP_SELECTED,   false);
+
+      // WICHTIG: editierbar
+      ObjectSetInteger(m_chart, name, OBJPROP_READONLY,   false);
+
+      ObjectSetInteger(m_chart, name, OBJPROP_BGCOLOR,    bg_clr);
+      ObjectSetInteger(m_chart, name, OBJPROP_COLOR,      font_clr);
+      ObjectSetInteger(m_chart, name, OBJPROP_ZORDER,     120);
+      ObjectSetInteger(m_chart, name, OBJPROP_FONTSIZE,   9);
+      ObjectSetString(m_chart, name, OBJPROP_FONT,       "Arial");
+
+      // Text nur setzen, wenn leer oder neu – damit wir User-Eingaben nicht jedes Mal überschreiben
+      string cur = ObjectGetString(m_chart, name, OBJPROP_TEXT);
+      if(cur == "" || ObjectFind(m_chart, name) < 0)
+         ObjectSetString(m_chart, name, OBJPROP_TEXT, txt);
       else
         {
-         m_edit_tradepos = false;
-         m_edit_obj = "";
+         // wenn txt explizit gesetzt werden soll (z.B. Prefix), und cur leer ist:
+         if(cur == "" && txt != "")
+            ObjectSetString(m_chart, name, OBJPROP_TEXT, txt);
         }
-      return false;
-     }
 
-// ENDEDIT TRNB -> übernehmen
-   if(id == CHARTEVENT_OBJECT_ENDEDIT && sparam == TRNB)
-     {
-      ApplyTRNBOverrideFromUser();
-      m_edit_tradepos = false;
-      m_edit_obj = "";
-      UpdateTradePosTexts();
-      ChartRedraw(m_chart);
       return true;
      }
 
-   return false;
-  }
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-bool CVirtualTradeGUI::GetBaseEntrySL(double &entry, double &sl)
-  {
-   entry = 0.0;
-   sl = 0.0;
-   if(ObjectFind(m_chart, PR_HL) < 0 || ObjectFind(m_chart, SL_HL) < 0)
-      return false;
-
-   entry = ObjectGetDouble(m_chart, PR_HL, OBJPROP_PRICE);
-   sl    = ObjectGetDouble(m_chart, SL_HL, OBJPROP_PRICE);
-   return (entry > 0.0 && sl > 0.0);
-  }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-string CVirtualTradeGUI::DirectionFromLines()
-  {
-   double e=0,s=0;
-   if(!GetBaseEntrySL(e,s))
-      return "LONG"; // fallback
-   return (s < e ? "LONG" : "SHORT");
-  }
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-bool CVirtualTradeGUI::GetDraft(VT_Draft &out)
-  {
-   double e=0,s=0;
-   if(!GetBaseEntrySL(e,s))
-      return false;
-
-   out.entry_price = e;
-   out.sl_price    = s;
-   out.direction   = (s < e ? "LONG" : "SHORT");
-
-   int active_trade = 0;
-   m_tm.TM_GetActiveTradeNo(m_symbol, m_tf, out.direction, active_trade);
-
-   if(active_trade > 0)
+   bool              GetBaseEntrySL(double &entry, double &sl) const
      {
-      out.trade_no = active_trade;
-
-      int next_pos = 1;
-      m_tm.TM_GetNextPosNo(m_symbol, m_tf, out.direction, active_trade, next_pos);
-      if(next_pos < 1)
-         next_pos = 1;
-
-      out.pos_no = next_pos;
+      entry = 0.0;
+      sl = 0.0;
+      if(ObjectFind(m_chart, PR_HL) < 0 || ObjectFind(m_chart, SL_HL) < 0)
+         return false;
+      entry = ObjectGetDouble(m_chart, PR_HL, OBJPROP_PRICE);
+      sl    = ObjectGetDouble(m_chart, SL_HL, OBJPROP_PRICE);
+      return (entry > 0.0 && sl > 0.0);
      }
-   else
+
+   string            DirectionFromLines() const
      {
+      double e=0,s=0;
+      if(!GetBaseEntrySL(e,s))
+         return "LONG";
+      return (s < e ? "LONG" : "SHORT");
+     }
+
+   int               ExtractIntDigits(const string text) const
+     {
+      string d="";
+      for(int i=0;i<StringLen(text);i++)
+        {
+         ushort c = StringGetCharacter(text,i);
+         if(c>='0' && c<='9')
+            d += CharToString((uchar)c);
+        }
+      if(d=="")
+         return 0;
+      return (int)StringToInteger(d);
+     }
+
+public:
+                     CVirtualTradeGUI()
+     {
+      m_tm = NULL;
+      m_symbol = "";
+      m_tf = PERIOD_CURRENT;
+      m_chart = 0;
+
+      m_trnb_editing=false;
+      m_posnb_editing=false;
+      m_edit_obj="";
+
+      m_anchor_inited=false;
+      m_ref_x=0;
+      m_ref_w=0;
+      m_dx_slbtn=0;
+      m_dx_send=0;
+      m_dx_trnb=0;
+      m_dx_posnb=0;
+      m_dx_sabE=0;
+      m_dx_sabS=0;
+      m_prevMouseState   = 0;
+      m_drag_entry_group = false;
+      m_drag_sl_only     = false;
+      m_downMouseX       = 0;
+      m_downMouseY       = 0;
+
+      m_downY_entryBtn = 0;
+      m_downY_slBtn    = 0;
+      m_downY_sendBtn  = 0;
+      m_downY_trnb     = 0;
+      m_downY_posnb    = 0;
+      m_downY_sabEntry = 0;
+      m_downY_sabSL    = 0;
+      m_prevMouseState   = 0;
+      m_drag_entry_group = false;
+      m_drag_sl_only     = false;
+
+      m_downMouseY   = 0;
+      m_grabOffEntry = 0;
+      m_grabOffSL    = 0;
+
+      m_downEntryPrice = 0.0;
+      m_downSLPrice    = 0.0;
+      m_priceDiffSL    = 0.0;
+
+      m_lastEntryPrice  = 0.0;
+      m_lastSLPrice     = 0.0;
+      m_drag_pr_line = false;
+      m_drag_sl_line = false;
+      m_drag_diff_sl = 0.0;
+
+     }
+
+   // Zugriff (Pointer; Return-Referenz ist in MQL5 als Return-Typ nicht erlaubt)
+   CBaseLinesController*       BaseLines()   { return &m_baseLines; }
+   CBaseButtonsDragController* BaseBtnDrag() { return &m_baseBtnDrag; }
+
+   bool              Init(CTradeManager *tm, const string symbol, const ENUM_TIMEFRAMES tf)
+     {
+      m_tm = tm;
+      m_symbol = symbol;
+      m_tf = tf;
+      m_chart = ChartID();
+
+      // Controller binden
+      m_baseLines.BindChart(m_chart);
+      m_baseBtnDrag.BindChart(m_chart);
+      m_baseBtnDrag.Bind(&m_baseLines);
+
+      return (m_tm != NULL && CheckPointer(m_tm) != POINTER_INVALID);
+     }
+
+   // Optional: Base UI entfernen
+   void              Destroy()
+     {
+      ObjectDelete(m_chart, PR_HL);
+      ObjectDelete(m_chart, SL_HL);
+
+      ObjectDelete(m_chart, EntryButton);
+      ObjectDelete(m_chart, SLButton);
+      ObjectDelete(m_chart, SENDTRADEBTN);
+
+      ObjectDelete(m_chart, TRNB);
+      ObjectDelete(m_chart, POSNB);
+      ObjectDelete(m_chart, SabioEntry);
+      ObjectDelete(m_chart, SabioSL);
+     }
+
+   // ------------------------------------------------------------------
+   // Neu: CreateDefaults ohne legacy createHL/createButton/...
+   // ------------------------------------------------------------------
+   void              CreateDefaults()
+     {
+      const int w = VT_GetChartWidthPx(m_chart);
+      const int h = VT_GetChartHeightPx(m_chart);
+
+      const int btn_w = 260;
+      const int btn_h = 30;
+      const int edit_w = 80;
+      const int edit_h = 30;
+
+      const int sab_h  = 30;
+
+      const int right_margin = 30;
+      const int x_entry = (w > 0 ? MathMax(0, w - right_margin - btn_w) : 20);
+
+      // Y-Anker Mitte
+      int y_mid = (h > 0 ? (h/2) : 200);
+      int y_sl  = y_mid + 100;
+      if(h > 0)
+        {
+         if(y_sl > h-40)
+            y_sl = h-40;
+         if(y_mid > h-140)
+            y_mid = h-140;
+         if(y_mid < 40)
+            y_mid = 40;
+        }
+
+      // Preis aus XY holen
+      datetime t=0;
+      double p_entry=0.0, p_sl=0.0;
+      int window=0;
+
+      // Entry-Preis
+      if(!ChartXYToTimePrice(m_chart, x_entry + btn_w/2, y_mid, window, t, p_entry))
+         p_entry = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+
+      // SL-Preis
+      if(!ChartXYToTimePrice(m_chart, x_entry + btn_w/2, y_sl, window, t, p_sl))
+         p_sl = p_entry - 50*_Point;
+
+      p_entry = VT_NormalizeToTick(p_entry);
+      p_sl    = VT_NormalizeToTick(p_sl);
+
+      // Linien
+      EnsureHLine(PR_HL, p_entry, clrDeepSkyBlue, STYLE_SOLID);
+      EnsureHLine(SL_HL, p_sl,    clrTomato,      STYLE_SOLID);
+
+      // X-Layout links von EntryButton
+      const int gap = 8;
+      const int send_w = 100;
+      const int pos_w= send_w/2;
+      const int trnb_w= send_w/2;
+      int x_send = x_entry - send_w;
+      int x_pos  = x_entry - 50;
+      int x_trnb = x_pos - trnb_w;
+
+      int x_sabE =  x_entry;
+
+      if(x_sabE < 0)
+         x_sabE = 0;
+      if(x_pos  < 0)
+         x_pos  = 0;
+      if(x_trnb < 0)
+         x_trnb = 0;
+      if(x_send < 0)
+         x_send = 0;
+
+      // Buttons + Edits
+      EnsureButton(EntryButton, x_entry, y_mid, btn_w, btn_h, "Entry", PriceButton_font_color, PriceButton_bgcolor);
+      EnsureButton(SLButton,    x_entry, y_sl,  btn_w, btn_h, "SL",    SLButton_font_color, SLButton_bgcolor);
+
+      EnsureButton(SENDTRADEBTN, x_send, y_mid, send_w, btn_h, "SEND", SendOnlyButton_font_color, SendOnlyButton_bgcolor);
+
+      EnsureEdit(TRNB, x_trnb, y_mid + btn_h, edit_w, edit_h, "1", clrBlack, clrWhite);
+      EnsureEdit(POSNB, x_pos,  y_mid + btn_h, edit_w, edit_h, "1", clrBlack, clrWhite);
+
+      EnsureEdit(SabioEntry, x_sabE, y_mid + btn_h, btn_w, sab_h, "SABIO Entry: ", clrBlack, clrWhite);
+      EnsureEdit(SabioSL,    x_sabE, y_sl  + btn_h, btn_w, sab_h, "SABIO SL: ",    clrBlack, clrWhite);
+      EnsureSabioTextWithPrice(SabioEntry, "SABIO Entry: ", p_entry, true);
+      EnsureSabioTextWithPrice(SabioSL,    "SABIO SL: ",    p_sl,    true);
+      // MouseMove aktivieren
+      ChartSetInteger(m_chart, CHART_EVENT_MOUSE_MOVE, true);
+
+      // Baseline + Sync
+      CaptureAnchorBaseline(true);
+      ApplyRightAnchor(30, 0);
+      OnBaseLinesChanged(false);
+     }
+
+   // ------------------------------------------------------------------
+   // Base UI Eventhandling (Linien/Buttons Drag) + Re-Anchor
+   // ------------------------------------------------------------------
+   bool              HandleBaseUIEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
+     {
+      // Linien Drag/Change
+      if(id == CHARTEVENT_OBJECT_CHANGE && (sparam == PR_HL || sparam == SL_HL))
+        {
+         OnBaseLinesChanged(true);
+         return true;
+        }
+
+      // OBJECT_DRAG ignorieren, weil wir smooth über MOUSE_MOVE fahren
+      if(id == CHARTEVENT_OBJECT_DRAG && (sparam == PR_HL || sparam == SL_HL))
+         return true;
+
+      if(id == CHARTEVENT_OBJECT_DRAG && sparam == SL_HL)
+        {
+         OnBaseLinesChanged(false);
+         return true;
+        }
+
+      if(id == CHARTEVENT_OBJECT_CHANGE && sparam == SL_HL)
+        {
+         OnBaseLinesChanged(true);
+         return true;
+        }
+
+      if(id == CHARTEVENT_MOUSE_MOVE)
+        {
+         const int mx = (int)lparam;
+         const int my = (int)dparam;
+         const int ms = (int)StringToInteger(sparam); // 0/1
+
+         // MouseDown edge
+         if(m_prevMouseState == 0 && ms == 1)
+           {
+            // 1) zuerst Button-Drag versuchen
+            Drag_Begin(mx, my);
+
+            // 2) wenn kein Button-Drag -> Line-Drag versuchen
+            if(!(m_drag_entry_group || m_drag_sl_only))
+               LineDrag_Begin(mx, my);
+           }
+
+         // Dragging (Buttons)
+         if(ms == 1 && (m_drag_entry_group || m_drag_sl_only))
+           {
+            Drag_Update(mx, my);
+            m_prevMouseState = ms;
+            return true;
+           }
+
+         // Dragging (Lines)
+         if(ms == 1 && (m_drag_pr_line || m_drag_sl_line))
+           {
+            LineDrag_Update(mx, my);
+            m_prevMouseState = ms;
+            return true;
+           }
+
+         // MouseUp
+         if(ms == 0)
+           {
+            if(m_drag_entry_group || m_drag_sl_only)
+               Drag_End();
+
+            if(m_drag_pr_line || m_drag_sl_line)
+               LineDrag_End();
+           }
+
+         m_prevMouseState = ms;
+         return false;
+        }
+
+
+
+      // Chart resize -> right anchor re-apply
+      if(id == CHARTEVENT_CHART_CHANGE)
+        {
+         ApplyRightAnchor(30, 0);
+         OnBaseLinesChanged(false);
+         return true;
+        }
+
+      return false;
+     }
+
+   // TRNB/POSNB Edit handling (klein, damit Autoupdate nicht "drüber schreibt")
+   bool              OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
+     {
+      if(id == CHARTEVENT_OBJECT_CLICK)
+        {
+         if(sparam == TRNB)
+           {
+            m_trnb_editing = true;
+            m_posnb_editing = false;
+            m_edit_obj = TRNB;
+            return false;
+           }
+         if(sparam == POSNB)
+           {
+            m_posnb_editing = true;
+            m_trnb_editing = false;
+            m_edit_obj = POSNB;
+            return false;
+           }
+
+         if(sparam == SabioEntry)
+           {
+            m_trnb_editing = false;
+            m_posnb_editing = false;
+            m_edit_obj = SabioEntry;
+
+            // WICHTIG: nur wenn leer / ohne Prefix -> Prefix setzen, sonst Cursor nicht "resetten"
+            EnsureSabioPrefixIfMissing(SabioEntry, "SABIO Entry: ");
+            return false; // default editing soll passieren
+           }
+
+         if(sparam == SabioSL)
+           {
+            m_trnb_editing = false;
+            m_posnb_editing = false;
+            m_edit_obj = SabioSL;
+
+            EnsureSabioPrefixIfMissing(SabioSL, "SABIO SL: ");
+            return false;
+           }
+
+         // Klick woanders -> alle Edit-Modi aus
+         m_trnb_editing = false;
+         m_posnb_editing = false;
+         m_edit_obj = "";
+         return false;
+        }
+
+      if(id == CHARTEVENT_OBJECT_ENDEDIT)
+        {
+         if(sparam == TRNB)
+           {
+            ApplyTRNBOverrideFromUser();
+            m_trnb_editing = false;
+            m_edit_obj = "";
+            UpdateTradePosTexts();
+            ChartRedraw(m_chart);
+            return true;
+           }
+
+         if(sparam == POSNB)
+           {
+            m_posnb_editing = false;
+            m_edit_obj = "";
+            UpdateTradePosTexts();
+            ChartRedraw(m_chart);
+            return true;
+           }
+
+         if(sparam == SabioEntry)
+           {
+            NormalizeSabioEdit(SabioEntry, "SABIO Entry: ");
+            m_edit_obj = "";
+            ChartRedraw(m_chart);
+            return true;
+           }
+
+         if(sparam == SabioSL)
+           {
+            NormalizeSabioEdit(SabioSL, "SABIO SL: ");
+            m_edit_obj = "";
+            ChartRedraw(m_chart);
+            return true;
+           }
+        }
+
+      return false;
+     }
+
+
+
+   // ------------------------------------------------------------------
+   // Sync + Text Updates
+   // ------------------------------------------------------------------
+   void              SyncBaseControlsToLines()
+     {
+      double entry=0.0, sl=0.0;
+      if(!GetBaseEntrySL(entry, sl))
+         return;
+
+      datetime t = VT_VisibleTime();
+      int x=0,y=0;
+
+      // Entry line -> EntryButton row
+      if(ObjectFind(m_chart, EntryButton) >= 0 && ChartTimePriceToXY(m_chart, 0, t, entry, x, y))
+        {
+         int ys = (int)ObjectGetInteger(m_chart, EntryButton, OBJPROP_YSIZE);
+         int top = y - (ys/2);
+         if(top < 0)
+            top = 0;
+
+         ObjectSetInteger(m_chart, EntryButton, OBJPROP_YDISTANCE, top);
+
+         if(ObjectFind(m_chart, SENDTRADEBTN) >= 0)
+            ObjectSetInteger(m_chart, SENDTRADEBTN, OBJPROP_YDISTANCE, top);
+
+         // Edits (unter Entry-Button)
+         const int y2 = top + ys + 4;
+         if(ObjectFind(m_chart, TRNB) >= 0)
+            SetYKeepSelection(TRNB, y2);
+         if(ObjectFind(m_chart, POSNB) >= 0)
+            SetYKeepSelection(POSNB, y2);
+         if(ObjectFind(m_chart, SabioEntry) >= 0)
+            SetYKeepSelection(SabioEntry, y2);
+
+        }
+
+      // SL line -> SLButton row
+      if(ObjectFind(m_chart, SLButton) >= 0 && ChartTimePriceToXY(m_chart, 0, t, sl, x, y))
+        {
+         int ys = (int)ObjectGetInteger(m_chart, SLButton, OBJPROP_YSIZE);
+         int top = y - (ys/2);
+         if(top < 0)
+            top = 0;
+
+         ObjectSetInteger(m_chart, SLButton, OBJPROP_YDISTANCE, top);
+
+         const int y2 = top + ys + 4;
+         if(ObjectFind(m_chart, SabioSL) >= 0)
+            SetYKeepSelection(SabioSL, y2);
+
+        }
+     }
+
+   void              UpdateEntrySLButtonTexts()
+     {
+      double entry=0.0, sl=0.0;
+      if(!GetBaseEntrySL(entry, sl))
+         return;
+
+      const bool is_long = (sl < entry);
+      const double dist = MathAbs(entry - sl);
+      const double dist_points = dist / _Point;
+
+      double lots = 0.0;
+      if(m_tm != NULL && CheckPointer(m_tm) != POINTER_INVALID)
+         lots = m_tm.calcLots(m_symbol, m_tf, dist);
+      lots = NormalizeDouble(lots, 2);
+
+      string entry_txt = (is_long ? "Buy Stop @ " : "Sell Stop @ ");
+      entry_txt += DoubleToString(entry, VT_Digits()) + " | Lot: " + DoubleToString(lots, 2);
+
+      string sl_txt = "SL: " + DoubleToString(dist_points, 0) + " pts | " + DoubleToString(sl, VT_Digits());
+
+      if(ObjectFind(m_chart, EntryButton) >= 0)
+         SetText(EntryButton, entry_txt);
+      if(ObjectFind(m_chart, SLButton) >= 0)
+         SetText(SLButton, sl_txt);
+     }
+
+
+   void              UpdateTradePosTexts()
+     {
+      if(m_trnb_editing || m_posnb_editing)
+         return;
+
+      if(m_tm == NULL || CheckPointer(m_tm) == POINTER_INVALID)
+         return;
+
+      string dir = DirectionFromLines();
+
+      int active_trade = 0;
+      m_tm.TM_GetActiveTradeNo(m_symbol, m_tf, dir, active_trade);
+
+      if(active_trade > 0)
+        {
+         int next_pos = 1;
+         m_tm.TM_GetNextPosNo(m_symbol, m_tf, dir, active_trade, next_pos);
+         if(next_pos < 1)
+            next_pos = 1;
+
+         SetText(TRNB, IntegerToString(active_trade));
+         SetText(POSNB, IntegerToString(next_pos));
+         return;
+        }
+
       int last_trade = 0;
       m_tm.TM_GetLastTradeNo(m_symbol, m_tf, last_trade);
 
-      out.trade_no = (last_trade > 0 ? last_trade + 1 : 1);
-      out.pos_no   = 1;
+      int next_trade = (last_trade > 0 ? last_trade + 1 : 1);
+      SetText(TRNB, IntegerToString(next_trade));
+      SetText(POSNB, "1");
      }
 
-// Sabio Freitext (nur lesen)
-   out.sabio_entry = (ObjectFind(m_chart, SabioEntry) >= 0 ? ObjectGetString(m_chart, SabioEntry, OBJPROP_TEXT) : "");
-   out.sabio_sl    = (ObjectFind(m_chart, SabioSL)    >= 0 ? ObjectGetString(m_chart, SabioSL,    OBJPROP_TEXT) : "");
-
-   return true;
-  }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void CVirtualTradeGUI::UpdateTradePosTexts()
-  {
-// wenn User gerade tippt: TRNB/POSNB nicht überschreiben
-   if(m_trnb_editing || m_posnb_editing)
-      return;
-
-   double e=0,s=0;
-   if(!GetBaseEntrySL(e,s))
-      return;
-
-   string dir = (s < e ? "LONG" : "SHORT");
-
-   int active_trade = 0;
-   m_tm.TM_GetActiveTradeNo(m_symbol, m_tf, dir, active_trade);
-
-   if(active_trade > 0)
+   void              OnBaseLinesChanged(const bool do_save)
      {
-      int next_pos = 1;
-      m_tm.TM_GetNextPosNo(m_symbol, m_tf, dir, active_trade, next_pos);
-      update_Text(TRNB, IntegerToString(active_trade));
-      update_Text(POSNB, IntegerToString(next_pos));
-      return;
+      SyncBaseControlsToLines();
+      UpdateEntrySLButtonTexts();
+      UpdateTradePosTexts();
+
+      // --- Sabio: immer wieder auf Linien-Preis setzen, außer gerade aktiv editiert ---
+      double entry=0.0, sl=0.0;
+      if(GetBaseEntrySL(entry, sl))
+        {
+         bool entry_changed = (m_lastEntryPrice == 0.0 || MathAbs(entry - m_lastEntryPrice) > (_Point*0.1));
+         bool sl_changed    = (m_lastSLPrice    == 0.0 || MathAbs(sl    - m_lastSLPrice)    > (_Point*0.1));
+
+         if(entry_changed)
+            m_lastEntryPrice = entry;
+         if(sl_changed)
+            m_lastSLPrice = sl;
+
+         // Nur bei echter Preisänderung syncen -> schützt User-Text bis wirklich bewegt wird
+         if(entry_changed && m_edit_obj != SabioEntry)
+            SetSabioFromLinePrice(SabioEntry, "SABIO Entry: ", entry);
+
+         if(sl_changed && m_edit_obj != SabioSL)
+            SetSabioFromLinePrice(SabioSL, "SABIO SL: ", sl);
+        }
+
+
+      ChartRedraw(m_chart);
      }
 
-   int last_trade = 0;
-   m_tm.TM_GetLastTradeNo(m_symbol, m_tf, last_trade);
 
-   int next_trade = (last_trade > 0 ? last_trade + 1 : 1);
-   update_Text(TRNB, IntegerToString(next_trade));
-   update_Text(POSNB, "1");
-  }
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void CVirtualTradeGUI::UpdateEntrySLButtonTexts()
-  {
-   double entry=0.0, sl=0.0;
-   if(!GetBaseEntrySL(entry, sl))
-      return;
-
-   const bool is_long = (sl < entry);
-   const double dist = MathAbs(entry - sl);
-
-   double lots = 0.0;
-   if(m_tm != NULL && CheckPointer(m_tm)!=POINTER_INVALID)
-      lots = m_tm.calcLots(m_symbol, m_tf, dist);
-   lots = NormalizeDouble(lots, 2);
-
-   string entry_txt = (is_long ? "Buy Stop @ " : "Sell Stop @ ");
-   entry_txt += DoubleToString(entry, _Digits) + " | Lot: " + DoubleToString(lots, 2);
-
-   string sl_txt = "SL: " + DoubleToString(dist/_Point, 0) + " Points | " + DoubleToString(sl, _Digits);
-
-   if(ObjectFind(m_chart, EntryButton) >= 0)
-      update_Text(EntryButton, entry_txt);
-   if(ObjectFind(m_chart, SLButton)    >= 0)
-      update_Text(SLButton,    sl_txt);
-
-// Sabio: Freitext NICHT überschreiben (wenn du Auto-Fill willst, nur wenn SabioPrices==true)
-   if(SabioPrices)
+   // ------------------------------------------------------------------
+   // Right anchor (X-Positions)
+   // ------------------------------------------------------------------
+   bool              CaptureAnchorBaseline(const bool force=false)
      {
-      if(ObjectFind(m_chart, SabioEntry) >= 0)
-         update_Text(SabioEntry, "SABIO Entry: " + DoubleToString(entry, _Digits));
-      if(ObjectFind(m_chart, SabioSL)    >= 0)
-         update_Text(SabioSL,    "SABIO SL: " + DoubleToString(sl, _Digits));
-     }
-  }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void  CVirtualTradeGUI::SyncBaseControlsToLines()
-  {
-   double entry=0.0, sl=0.0;
-   if(!GetBaseEntrySL(entry, sl))
-      return;
+      if(m_anchor_inited && !force)
+         return true;
 
-   datetime t = iTime(m_symbol, m_tf, 0);
-   int x=0,y=0;
+      if(ObjectFind(m_chart, EntryButton) < 0)
+         return false;
 
-   const bool is_long = (sl < entry);
+      m_ref_x = (int)ObjectGetInteger(m_chart, EntryButton, OBJPROP_XDISTANCE);
+      m_ref_w = (int)ObjectGetInteger(m_chart, EntryButton, OBJPROP_XSIZE);
+      if(m_ref_w <= 0)
+         m_ref_w = 200;
 
-// ENTRY: EntryButton + Send + TRNB + POSNB + SabioEntry
-   if(ObjectFind(m_chart, EntryButton) >= 0 && ChartTimePriceToXY(m_chart, 0, t, entry, x, y))
-     {
-      int ysize_entry = (int)ObjectGetInteger(m_chart, EntryButton, OBJPROP_YSIZE);
-      int baseY = y - ysize_entry;
-
-      UI_ObjSetIntSafe(m_chart, EntryButton,  OBJPROP_YDISTANCE, baseY);
-
+      if(ObjectFind(m_chart, SLButton) >= 0)
+         m_dx_slbtn = (int)ObjectGetInteger(m_chart, SLButton, OBJPROP_XDISTANCE) - m_ref_x;
       if(ObjectFind(m_chart, SENDTRADEBTN) >= 0)
-         UI_ObjSetIntSafe(m_chart, SENDTRADEBTN, OBJPROP_YDISTANCE, baseY);
-
-      // Edits: 30px unter EntryButton (aber nicht überschreiben wenn gerade getippt wird)
-      if(ObjectFind(m_chart, TRNB) >= 0 && m_edit_obj != TRNB)
-         UI_ObjSetIntSafe(m_chart, TRNB, OBJPROP_YDISTANCE, baseY + 30);
-
-      if(ObjectFind(m_chart, POSNB) >= 0 && m_edit_obj != POSNB)
-         UI_ObjSetIntSafe(m_chart, POSNB, OBJPROP_YDISTANCE, baseY + 30);
-
+         m_dx_send  = (int)ObjectGetInteger(m_chart, SENDTRADEBTN, OBJPROP_XDISTANCE) - m_ref_x;
+      if(ObjectFind(m_chart, TRNB) >= 0)
+         m_dx_trnb  = (int)ObjectGetInteger(m_chart, TRNB, OBJPROP_XDISTANCE) - m_ref_x;
+      if(ObjectFind(m_chart, POSNB) >= 0)
+         m_dx_posnb = (int)ObjectGetInteger(m_chart, POSNB, OBJPROP_XDISTANCE) - m_ref_x;
       if(ObjectFind(m_chart, SabioEntry) >= 0)
-         UI_ObjSetIntSafe(m_chart, SabioEntry, OBJPROP_YDISTANCE, baseY + 30);
-
-      // Optional: SLButton Abstand vom EntryButton beibehalten, wenn du das willst.
-      // Wenn du SL nur rein aus SL_HL setzen willst, lass diesen Block weg.
-     }
-
-// SL: SLButton + SabioSL
-   if(ObjectFind(m_chart, SLButton) >= 0 && ChartTimePriceToXY(m_chart, 0, t, sl, x, y))
-     {
-      int ysize_sl = (int)ObjectGetInteger(m_chart, SLButton, OBJPROP_YSIZE);
-      int baseY = y - ysize_sl;
-
-      UI_ObjSetIntSafe(m_chart, SLButton, OBJPROP_YDISTANCE, baseY);
-
+         m_dx_sabE  = (int)ObjectGetInteger(m_chart, SabioEntry, OBJPROP_XDISTANCE) - m_ref_x;
       if(ObjectFind(m_chart, SabioSL) >= 0)
-         UI_ObjSetIntSafe(m_chart, SabioSL, OBJPROP_YDISTANCE, baseY + 30);
-     }
-  }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-bool CVirtualTradeGUI::CaptureAnchorBaseline(const bool force=false)
-  {
-   if(m_anchor_inited && !force)
+         m_dx_sabS  = (int)ObjectGetInteger(m_chart, SabioSL, OBJPROP_XDISTANCE) - m_ref_x;
+
+      m_anchor_inited = true;
       return true;
-   if(ObjectFind(m_chart, EntryButton) < 0)
-      return false;
-
-   m_ref_x = (int)ObjectGetInteger(m_chart, EntryButton, OBJPROP_XDISTANCE);
-   m_ref_w = (int)ObjectGetInteger(m_chart, EntryButton, OBJPROP_XSIZE);
-   if(m_ref_w <= 0)
-      m_ref_w = 200;
-
-   if(ObjectFind(m_chart, SLButton) >= 0)
-      m_dx_slbtn = (int)ObjectGetInteger(m_chart, SLButton, OBJPROP_XDISTANCE) - m_ref_x;
-   if(ObjectFind(m_chart, SENDTRADEBTN) >= 0)
-      m_dx_send  = (int)ObjectGetInteger(m_chart, SENDTRADEBTN, OBJPROP_XDISTANCE) - m_ref_x;
-   if(ObjectFind(m_chart, TRNB) >= 0)
-      m_dx_trnb  = (int)ObjectGetInteger(m_chart, TRNB, OBJPROP_XDISTANCE) - m_ref_x;
-   if(ObjectFind(m_chart, POSNB) >= 0)
-      m_dx_posnb = (int)ObjectGetInteger(m_chart, POSNB, OBJPROP_XDISTANCE) - m_ref_x;
-   if(ObjectFind(m_chart, SabioEntry) >= 0)
-      m_dx_sabE  = (int)ObjectGetInteger(m_chart, SabioEntry, OBJPROP_XDISTANCE) - m_ref_x;
-   if(ObjectFind(m_chart, SabioSL) >= 0)
-      m_dx_sabS  = (int)ObjectGetInteger(m_chart, SabioSL, OBJPROP_XDISTANCE) - m_ref_x;
-
-   m_anchor_inited = true;
-   return true;
-  }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void CVirtualTradeGUI::SetObjectXClamped(const string name, const int x_left, const int chart_w)
-  {
-   if(ObjectFind(m_chart, name) < 0)
-      return;
-   UI_ObjSetIntSafe(m_chart, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-
-   int xs = (int)ObjectGetInteger(m_chart, name, OBJPROP_XSIZE);
-   if(xs < 0)
-      xs = 0;
-
-   int xx = x_left;
-   if(xx < 0)
-      xx = 0;
-   if(chart_w > 0 && xs > 0 && xx > (chart_w - xs))
-      xx = (chart_w - xs);
-   if(xx < 0)
-      xx = 0;
-
-   UI_ObjSetIntSafe(m_chart, name, OBJPROP_XDISTANCE, xx);
-  }
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void CVirtualTradeGUI::ApplyRightAnchor(const int right_margin_px, const int shift_px)
-  {
-   if(!CaptureAnchorBaseline(false))
-      return;
-
-   long w=0;
-   if(!ChartGetInteger(m_chart, CHART_WIDTH_IN_PIXELS, 0, w) || w <= 0)
-      return;
-
-   int entry_w = (ObjectFind(m_chart, EntryButton) >= 0)
-                 ? (int)ObjectGetInteger(m_chart, EntryButton, OBJPROP_XSIZE)
-                 : m_ref_w;
-   if(entry_w <= 0)
-      entry_w = m_ref_w;
-
-   int new_entry_x = (int)w - right_margin_px - entry_w - shift_px;
-   if(new_entry_x < 0)
-      new_entry_x = 0;
-
-   SetObjectXClamped(EntryButton,  new_entry_x, (int)w);
-   SetObjectXClamped(SLButton,     new_entry_x + m_dx_slbtn, (int)w);
-   SetObjectXClamped(SENDTRADEBTN, new_entry_x + m_dx_send, (int)w);
-   SetObjectXClamped(TRNB,         new_entry_x + m_dx_trnb, (int)w);
-   SetObjectXClamped(POSNB,        new_entry_x + m_dx_posnb, (int)w);
-   SetObjectXClamped(SabioEntry,   new_entry_x + m_dx_sabE, (int)w);
-   SetObjectXClamped(SabioSL,      new_entry_x + m_dx_sabS, (int)w);
-  }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void CVirtualTradeGUI::OnBaseLinesChanged(const bool do_save)
-  {
-   SyncBaseControlsToLines();
-   UpdateEntrySLButtonTexts();
-   UpdateTradePosTexts(); // TRNB/POSNB aus TradeManager + Direction
-
-   if(do_save && m_tm != NULL && CheckPointer(m_tm)!=POINTER_INVALID)
-      m_tm.SaveLinePrices(m_symbol, m_tf);
-
-   ChartRedraw(m_chart);
-  }
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void CVirtualTradeGUI::CreateDefaults()
-  {
-// 1) PR_HL + SL_HL erstellen
-
-   int   xd3 = getChartWidthInPixels() -DistancefromRight-10;
-   int   yd3 = getChartHeightInPixels()/2;
-   int  xs3 = 280;
-   int  ys3= 30;
-   datetime dt_tp = iTime(_Symbol, 0, 0), dt_sl = iTime(_Symbol, 0, 0), dt_prc = iTime(_Symbol, 0, 0);
-   double price_tp = iClose(_Symbol, 0, 0), price_sl = iClose(_Symbol, 0, 0), price_prc = iClose(_Symbol, 0, 0);
-   int window = 0;
-
-   ChartXYToTimePrice(0, xd3, yd3 + ys3, window, dt_prc, price_prc);
-
-
-   createHLine(PR_HL, price_prc,color_EntryLine);
-   SetPriceOnObject(PR_HL, price_prc);
-
-
-//+------------------------------------------------------------------+
-//createHL(PR_HL, dt_prc, price_prc, EntryLine);
-
-
-
-   createButton(EntryButton, "", xd3, yd3, xs3, ys3, PriceButton_font_color, PriceButton_bgcolor, InpFontSize, clrNONE, InpFont);
-
-// SL Button
-   int xd5 = xd3;
-   int yd5 = yd3 + 100;
-   int xs5 = xs3;
-   int ys5 = 30;
-
-   ChartXYToTimePrice(0, xd5, yd5 + ys5, window, dt_sl, price_sl);
-
-   createHL(SL_HL, dt_sl, price_sl, color_SLLine);
-
-   ObjectMove(0, EntryButton, 0, dt_prc, price_prc);
-
-
-
-// 2) Buttons/Edits erstellen
-
-
-//   DrawHL();
-   if(Sabioedit)
-     {
-      SabioEdit();
      }
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-   SendButton();
-   if(!SendOnlyButton)
+   void              ApplyRightAnchor(const int right_margin_px, const int shift_px)
      {
-      ObjectSetString(0, SENDTRADEBTN, OBJPROP_TEXT, "T & S"); // label
-      UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_BGCOLOR, TSButton_bgcolor);
-      ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_COLOR, TSButton_font_color);
+      if(!CaptureAnchorBaseline(false))
+         return;
+
+      const int w = VT_GetChartWidthPx(m_chart);
+      if(w <= 0)
+         return;
+
+      int entry_w = (ObjectFind(m_chart, EntryButton) >= 0)
+                    ? (int)ObjectGetInteger(m_chart, EntryButton, OBJPROP_XSIZE)
+                    : m_ref_w;
+      if(entry_w <= 0)
+         entry_w = m_ref_w;
+
+      int new_x = w - right_margin_px - entry_w - shift_px;
+      if(new_x < 0)
+         new_x = 0;
+
+      VT_SetObjectXClamped(m_chart, EntryButton,  new_x, w);
+      VT_SetObjectXClamped(m_chart, SLButton,     new_x + m_dx_slbtn, w);
+      VT_SetObjectXClamped(m_chart, SENDTRADEBTN, new_x + m_dx_send,  w);
+      VT_SetObjectXClamped(m_chart, TRNB,         new_x + m_dx_trnb,  w);
+      VT_SetObjectXClamped(m_chart, POSNB,        new_x + m_dx_posnb, w);
+      VT_SetObjectXClamped(m_chart, SabioEntry,   new_x + m_dx_sabE,  w);
+      VT_SetObjectXClamped(m_chart, SabioSL,      new_x + m_dx_sabS,  w);
      }
 
+   // ------------------------------------------------------------------
+   // TRNB Override (User tippt TradeNo) -> setzt last_trade_no
+   // ------------------------------------------------------------------
+   void              ApplyTRNBOverrideFromUser()
+     {
+      if(m_tm == NULL || CheckPointer(m_tm) == POINTER_INVALID)
+         return;
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
+      if(ObjectFind(m_chart, TRNB) < 0)
+         return;
 
+      string s = GetText(TRNB);
+      int user_trade_no = ExtractIntDigits(s);
+      if(user_trade_no <= 0)
+         return;
 
-   createButton(SLButton, "", xd5, yd5, xs5, ys5, SLButton_font_color, SLButton_bgcolor, InpFontSize, clrNONE, InpFont);
-   ObjectMove(0, SLButton, 0, dt_sl, price_sl);
-// 3) Defaults setzen
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-   update_Text(EntryButton, "Buy Stop @ " + Get_Price_s(PR_HL) + " | Lot: " + DoubleToString(NormalizeDouble(g_TradeMgr.calcLots(_Symbol,_Period,SL_Price - Entry_Price), 2), 2));
-   update_Text(SLButton, "SL: " + DoubleToString(((Get_Price_d(PR_HL) - Get_Price_d(SL_HL)) / _Point), 0) + " Points | " + Get_Price_s(SL_HL));
+      string dir = DirectionFromLines();
+      int active_trade=0;
+      m_tm.TM_GetActiveTradeNo(m_symbol, m_tf, dir, active_trade);
+      if(active_trade > 0)
+         return;
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-   ChartSetInteger(0, CHART_EVENT_MOUSE_MOVE, true);
-   ChartRedraw(0);
+      // Startnummer setzen: last_trade_no = user_trade_no - 1
+      m_tm.TM_SetLastTradeNo(m_symbol, m_tf, user_trade_no - 1);
+     }
+  };
 
-// 4) ApplyRightAnchor + OnBaseLinesChanged(false)
-  }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void               CVirtualTradeGUI::ApplyTRNBOverrideFromUser()
-  {
-   if(ObjectFind(m_chart, TRNB) < 0)
-      return;
-
-   string s = ObjectGetString(m_chart, TRNB, OBJPROP_TEXT);
-   int user_trade_no = ExtractIntDigits(s);
-   if(user_trade_no <= 0)
-      return;
-
-// Nur wenn kein aktiver Trade in dieser Direction läuft
-   string dir = DirectionFromLines();
-   int active_trade=0;
-   m_tm.TM_GetActiveTradeNo(m_symbol, m_tf, dir, active_trade);
-   if(active_trade > 0)
-      return;
-
-// Startnummer setzen: last_trade_no = user_trade_no-1
-   m_tm.TM_SetLastTradeNo(m_symbol, m_tf, user_trade_no - 1);
-  }
-#endif __CVIRTUALTRADEGUI_MQH__
-//+------------------------------------------------------------------+
+#endif // __CVIRTUALTRADEGUI_MQH__

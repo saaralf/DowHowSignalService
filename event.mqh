@@ -42,12 +42,12 @@ void OnChartEvent(const int id,
    CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
 
-   if(g_vgui.OnChartEvent(id, lparam, dparam, sparam))
-     {
-      UI_ProcessRedraw();
-      g_tp.ProcessRebuild();
+ if(g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam))
       return;
-     }
+
+   // 2) Edit-Fokus (TRNB/POSNB)
+   g_vgui.OnChartEvent(id, lparam, dparam, sparam);
+
 
 
    if(id == CHARTEVENT_OBJECT_CLICK)
