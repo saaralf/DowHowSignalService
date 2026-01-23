@@ -80,22 +80,58 @@ private:
 private:
    // --------- Mini helpers (ohne Abhängigkeit zu alten gui_elemente.mqh) ----------
    bool              ObjExists(const string name) const { return (ObjectFind(m_chart, name) >= 0); }
-  void SetYMoveSafe(const string name, const int y)
-{
-   if(ObjectFind(m_chart, name) < 0)
-      return;
 
-   // WICHTIG: Bei OBJ_EDIT niemals SELECTED toggeln, das killt den Edit-Fokus/Caret.
-   long type = ObjectGetInteger(m_chart, name, OBJPROP_TYPE);
-   if(type == OBJ_EDIT)
-   {
+   void              FinalizeAndClearEditing()
+     {
+      if(m_edit_obj == "")
+         return;
+
+      // Inhalt "aktivieren" wie beim echten ENDEDIT
+      if(m_edit_obj == TRNB)
+        {
+         ApplyTRNBOverrideFromUser();
+         m_trnb_editing = false;
+        }
+      else
+         if(m_edit_obj == POSNB)
+           {
+            m_posnb_editing = false;
+           }
+         else
+            if(m_edit_obj == SabioEntry)
+              {
+               NormalizeSabioEdit(SabioEntry, "SABIO Entry: ");
+              }
+            else
+               if(m_edit_obj == SabioSL)
+                 {
+                  NormalizeSabioEdit(SabioSL, "SABIO SL: ");
+                 }
+
+      // Selection/Focus weg (damit Drag/Sync sauber greift)
+      if(ObjectFind(m_chart, m_edit_obj) >= 0)
+         ObjectSetInteger(m_chart, m_edit_obj, OBJPROP_SELECTED, false);
+
+      m_edit_obj = "";
+     }
+
+
+   void              SetYMoveSafe(const string name, const int y)
+     {
+      if(ObjectFind(m_chart, name) < 0)
+         return;
+
+      // WICHTIG: Bei OBJ_EDIT niemals SELECTED toggeln, das killt den Edit-Fokus/Caret.
+      long type = ObjectGetInteger(m_chart, name, OBJPROP_TYPE);
+      if(type == OBJ_EDIT)
+        {
+         ObjectSetInteger(m_chart, name, OBJPROP_YDISTANCE, y);
+         return;
+        }
+
+      // Für andere Objekte einfach bewegen (ohne Selection-Fummelei)
       ObjectSetInteger(m_chart, name, OBJPROP_YDISTANCE, y);
-      return;
-   }
-
-   // Für andere Objekte einfach bewegen (ohne Selection-Fummelei)
-   ObjectSetInteger(m_chart, name, OBJPROP_YDISTANCE, y);
-}
+     }
 
 
 
@@ -111,7 +147,8 @@ private:
 
       if(!(m_drag_pr_line || m_drag_sl_line))
          return;
-
+      // <<< NEU: sobald Drag startet -> Editing hart beenden
+      FinalizeAndClearEditing();
       ChartSetInteger(m_chart, CHART_MOUSE_SCROLL, false);
 
       // Startpreise + diff merken
@@ -151,23 +188,23 @@ private:
          return;
         }
      }
-void SetYKeepSelection(const string name, const int y)
-{
-   if(ObjectFind(m_chart, name) < 0)
-      return;
+   void              SetYKeepSelection(const string name, const int y)
+     {
+      if(ObjectFind(m_chart, name) < 0)
+         return;
 
-   long type = ObjectGetInteger(m_chart, name, OBJPROP_TYPE);
+      long type = ObjectGetInteger(m_chart, name, OBJPROP_TYPE);
 
-   // Für Edit-Felder: NUR bewegen. KEIN Selected togglen, sonst verliert MT5 den Caret/Fokus.
-   if(type == OBJ_EDIT)
-   {
+      // Für Edit-Felder: NUR bewegen. KEIN Selected togglen, sonst verliert MT5 den Caret/Fokus.
+      if(type == OBJ_EDIT)
+        {
+         ObjectSetInteger(m_chart, name, OBJPROP_YDISTANCE, y);
+         return;
+        }
+
+      // Für Buttons/sonstige Objekte: einfach bewegen (auch hier ohne Selected-Rewrite ist am stabilsten)
       ObjectSetInteger(m_chart, name, OBJPROP_YDISTANCE, y);
-      return;
-   }
-
-   // Für Buttons/sonstige Objekte: einfach bewegen (auch hier ohne Selected-Rewrite ist am stabilsten)
-   ObjectSetInteger(m_chart, name, OBJPROP_YDISTANCE, y);
-}
+     }
 
    void              LineDrag_End()
      {
@@ -216,7 +253,8 @@ void SetYKeepSelection(const string name, const int y)
 
       if(!(m_drag_entry_group || m_drag_sl_only))
          return;
-
+      // <<< NEU: sobald Drag startet -> Editing hart beenden
+      FinalizeAndClearEditing();
       ChartSetInteger(m_chart, CHART_MOUSE_SCROLL, false);
 
       m_downMouseY = my;
@@ -874,11 +912,13 @@ public:
          return false;
         }
 
-
-
       // Chart resize -> right anchor re-apply
       if(id == CHARTEVENT_CHART_CHANGE)
         {
+         // WICHTIG: Wenn gerade ein OBJ_EDIT aktiv ist, nichts anfassen – sonst verliert es den Fokus.
+         if(m_edit_obj == TRNB || m_edit_obj == POSNB || m_edit_obj == SabioEntry || m_edit_obj == SabioSL)
+            return true;
+
          ApplyRightAnchor(30, 0);
          OnBaseLinesChanged(false);
          return true;
@@ -968,6 +1008,7 @@ public:
            {
             NormalizeSabioEdit(SabioSL, "SABIO SL: ");
             m_edit_obj = "";
+            OnBaseLinesChanged(false);   // aligniert jetzt auch das zuvor gesperrte Editfeld wieder korrekt
             ChartRedraw(m_chart);
             return true;
            }
@@ -1005,12 +1046,15 @@ public:
 
          // Edits (unter Entry-Button)
          const int y2 = top + ys + 4;
-         if(ObjectFind(m_chart, TRNB) >= 0)
-            SetYKeepSelection(TRNB, y2);
-         if(ObjectFind(m_chart, POSNB) >= 0)
-            SetYKeepSelection(POSNB, y2);
-         if(ObjectFind(m_chart, SabioEntry) >= 0)
-            SetYKeepSelection(SabioEntry, y2);
+
+         if(ObjectFind(m_chart, TRNB) >= 0 && m_edit_obj != TRNB)
+            ObjectSetInteger(m_chart, TRNB, OBJPROP_YDISTANCE, y2);
+
+         if(ObjectFind(m_chart, POSNB) >= 0 && m_edit_obj != POSNB)
+            ObjectSetInteger(m_chart, POSNB, OBJPROP_YDISTANCE, y2);
+
+         if(ObjectFind(m_chart, SabioEntry) >= 0 && m_edit_obj != SabioEntry)
+            ObjectSetInteger(m_chart, SabioEntry, OBJPROP_YDISTANCE, y2);
 
         }
 
@@ -1025,8 +1069,8 @@ public:
          ObjectSetInteger(m_chart, SLButton, OBJPROP_YDISTANCE, top);
 
          const int y2 = top + ys + 4;
-         if(ObjectFind(m_chart, SabioSL) >= 0)
-            SetYKeepSelection(SabioSL, y2);
+         if(ObjectFind(m_chart, SabioSL) >= 0 && m_edit_obj != SabioSL)
+            ObjectSetInteger(m_chart, SabioSL, OBJPROP_YDISTANCE, y2);
 
         }
      }
@@ -1177,10 +1221,15 @@ public:
       VT_SetObjectXClamped(m_chart, EntryButton,  new_x, w);
       VT_SetObjectXClamped(m_chart, SLButton,     new_x + m_dx_slbtn, w);
       VT_SetObjectXClamped(m_chart, SENDTRADEBTN, new_x + m_dx_send,  w);
-      VT_SetObjectXClamped(m_chart, TRNB,         new_x + m_dx_trnb,  w);
-      VT_SetObjectXClamped(m_chart, POSNB,        new_x + m_dx_posnb, w);
-      VT_SetObjectXClamped(m_chart, SabioEntry,   new_x + m_dx_sabE,  w);
-      VT_SetObjectXClamped(m_chart, SabioSL,      new_x + m_dx_sabS,  w);
+      // Edits: NICHT anfassen, wenn gerade aktiv (sonst Caret/Fokus weg)
+      if(m_edit_obj != TRNB)
+         VT_SetObjectXClamped(TRNB,       x_trnb, chart_w);
+      if(m_edit_obj != POSNB)
+         VT_SetObjectXClamped(POSNB,      x_pos,  chart_w);
+      if(m_edit_obj != SabioEntry)
+         VT_SetObjectXClamped(SabioEntry, x_entry,chart_w);
+      if(m_edit_obj != SabioSL)
+         VT_SetObjectXClamped(SabioSL,    x_entry,chart_w);
      }
 
    // ------------------------------------------------------------------

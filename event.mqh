@@ -46,7 +46,8 @@ void OnChartEvent(const int id,
       return;
 
    // 2) Edit-Fokus (TRNB/POSNB)
-   g_vgui.OnChartEvent(id, lparam, dparam, sparam);
+if(g_vgui.OnChartEvent(id, lparam, dparam, sparam))
+   return;
 
 
 
@@ -148,26 +149,20 @@ void OnChartEvent(const int id,
          handled = true;
         }
 
-      // CHART_CHANGE
-      if(!handled && id == CHARTEVENT_CHART_CHANGE)
-        {
-         g_vgui.ApplyRightAnchor(InpBaseUI_RightMarginPx, InpBaseUI_RightShiftPx);
+// CHART_CHANGE
+if(!handled && id == CHARTEVENT_CHART_CHANGE)
+  {
+   // TradePosLine Tags bleiben separat
+   g_tradePosLines.SyncAllTags();
 
-         // TradePosLine Tags bleiben separat
-         g_tradePosLines.SyncAllTags();
+   // Base UI: Anker + Layout (inkl. Edit-Schutz) in der Klasse
+   if(g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam))
+      handled = true;
 
-         // Base UI danach konsistent setzen
-         g_vgui.OnBaseLinesChanged(false);
-         if(g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam))
-            handled = true;
-
-         g_tradePosLines.SyncAllTags();
-         UI_ApplyZOrder();
-         handled = true;
-
-         UI_ApplyZOrder();
-         handled = true;
-        }
+   g_tradePosLines.SyncAllTags();
+   UI_ApplyZOrder();
+   handled = true;
+  }
      } // if(!handled)
 
 
