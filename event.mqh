@@ -46,8 +46,7 @@ void OnChartEvent(const int id,
       return;
 
    // 2) Edit-Fokus (TRNB/POSNB)
-if(g_vgui.OnChartEvent(id, lparam, dparam, sparam))
-   return;
+   g_vgui.OnChartEvent(id, lparam, dparam, sparam);
 
 
 
