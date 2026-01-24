@@ -29,7 +29,7 @@ static uint g_ui_last_redraw_ms = 0;
 
 
 input bool InpDebugEventTrace = false; // true: Events in Experts loggen
-
+extern CVirtualTradeGUI g_vgui;
 //extern CVirtualTradeGUI g_vgui;
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -38,35 +38,32 @@ void OnChartEvent(const int id,
                   const long &lparam,
                   const double &dparam,
                   const string &sparam)
-  {
+  {   bool handled = false;
+ if(id == CHARTEVENT_OBJECT_CLICK)
+   Print("CLICK sparam=", sparam);
+
+if(id == CHARTEVENT_OBJECT_ENDEDIT)
+   Print("ENDEDIT sparam=", sparam);
+ 
    CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
 
- if(g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam))
-      return;
-
-   // 2) Edit-Fokus (TRNB/POSNB)
-   g_vgui.OnChartEvent(id, lparam, dparam, sparam);
 
 
 
-   if(id == CHARTEVENT_OBJECT_CLICK)
-      PrintFormat("GLOBAL CLICK: %s", sparam);
 
-   if(id == CHARTEVENT_OBJECT_CLICK && sparam == "TP_BG")
-     {
-      TP_DumpPanel();
-     }
+   // 2) BaseUI (Drag Lines/Buttons + Sync)
+   if(g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam))
+       handled = true;
 
-// 0) Router: Panel + SendClick etc.
-   bool handled = false;
+   // 3) Router / restliche Logik wie bisher...
+
    if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
       handled = true;
 
 // 1) Legacy / restliche Verarbeitung nur wenn Router NICHT handled hat
    if(!handled)
      {
-      UI_DebugTraceEvent(id, lparam, dparam, sparam);
 
 
 
@@ -76,12 +73,6 @@ void OnChartEvent(const int id,
          if(g_send_ctl.OnObjectClick(sparam))
            {
             handled = true;
-           }
-         else
-
-           {
-            if(g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam))
-               handled = true;
            }
         }
 
@@ -94,9 +85,6 @@ void OnChartEvent(const int id,
            }
          else
            {
-            // Base-UI (PR_HL/SL_HL) Drag
-            if(g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam))
-               handled = true;
             if(!handled && UI_IsTradePosLine(sparam))
               {
                UI_RequestRedrawThrottled(15);
@@ -114,8 +102,6 @@ void OnChartEvent(const int id,
            }
          else
            {
-            if(g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam))
-               handled = true;
 
             if(!handled && UI_IsTradePosLine(sparam))
               {
@@ -143,82 +129,37 @@ void OnChartEvent(const int id,
          // TradePosLine finalize muss bleiben
          g_tp_drag.OnMouseMoveFinalizeIfNeeded(MouseState);
 
-         // Base UI (Buttons + PR_HL/SL_HL Coupling)
-         g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam);
-         handled = true;
         }
 
-// CHART_CHANGE
-if(!handled && id == CHARTEVENT_CHART_CHANGE)
-  {
-   // TradePosLine Tags bleiben separat
-   g_tradePosLines.SyncAllTags();
+      // CHART_CHANGE
+      if(!handled && id == CHARTEVENT_CHART_CHANGE)
+        {
+         // TradePosLine Tags bleiben separat
+         g_tradePosLines.SyncAllTags();
 
-   // Base UI: Anker + Layout (inkl. Edit-Schutz) in der Klasse
-   if(g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam))
-      handled = true;
 
-   g_tradePosLines.SyncAllTags();
-   UI_ApplyZOrder();
-   handled = true;
-  }
+         g_tradePosLines.SyncAllTags();
+         UI_ApplyZOrder();
+         handled = true;
+        }
      } // if(!handled)
 
 
-// ENDEDIT soll immer laufen (unabhängig davon, ob Router handled hat)
-   if(id == CHARTEVENT_OBJECT_ENDEDIT)
-     {
-      // TRNB: Anwender kann die nächste TradeNo setzen (pro Symbol/TF).
-      // Wir setzen dafür last_trade_no = (TRNB-1), damit UpdateNextTradePosUI() stabil bleibt
-      // und SendSignalDraft() die Nummer nicht wieder überschreibt.
-      if(sparam == TRNB)
-        {
-         string s="";
-         ObjectGetString(0, TRNB, OBJPROP_TEXT, 0, s);
-         int user_trade_no = UI_ExtractIntDigits(s);
-
-         // Nur wenn kein aktiver Trade läuft: Startnummer annehmen
-         if(user_trade_no > 0 && g_ui_state.ActiveTradeNo() <= 0)
-           {
-            g_ui_state.last_trade_no = user_trade_no - 1;
-
-            // WICHTIG: pro Symbol/TF speichern
-            g_DB.SetMetaInt(
-               g_DB.KeyFor(_Symbol, (ENUM_TIMEFRAMES)_Period, "g_ui_state.last_trade_no"),
-               g_ui_state.last_trade_no
-            );
-           }
-
-         // Editing ist vorbei -> Auto-Updates wieder erlauben
-         g_ui_state.manual_tradepos = false;
-
-         // UI konsistent setzen (TRNB wird dann zu user_trade_no)
-         g_vgui.OnBaseLinesChanged(false); // reicht: synced Texte + TRNB/POSNB
-        }
-      else
-         if(sparam == POSNB)
-           {
-            // Editing ist vorbei -> Auto-Updates wieder erlauben
-            g_ui_state.manual_tradepos = false;
-            // optional: kein UpdateNextTradePosUI(), sonst überschreibst du POSNB wieder
-           }
-      // SabioEntry/SabioSL sind Freitext (Discord/DB) -> keine Berechnung/Parsing hier
-     }
 
 // --- Post-Phase: MUSS IMMER laufen ---
+
+  // Post-Phase + Redraw wie bisher
    static bool last_is_long = true;
    if(last_is_long != g_ui_state.is_long)
-     {
+   {
       last_is_long = g_ui_state.is_long;
       TP_RebuildRows();
-     }
+   }
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
    UI_ProcessRedraw();
    g_tp.ProcessRebuild();
-  }
+
+ }
 
 
 
@@ -308,32 +249,6 @@ bool UI_IsWatchedEventObject(const string name)
    return false;
   }
 
-/**
- * Beschreibung: Loggt relevante Chart-Events für watched Objects.
- * Parameter:    id,lparam,dparam,sparam - Standard OnChartEvent Parameter
- * Rückgabewert: void
- * Hinweise:     Filtert MOUSE_MOVE aggressiv (sonst Log-Spam).
- * Fehlerfälle:  Keine; reine Diagnose.
- */
-void UI_DebugTraceEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
-  {
-   if(!InpDebugEventTrace)
-      return;
-// MouseMove nur loggen, wenn gerade ein Drag aktiv ist (sonst Spam)
-
-   const bool baseDrag = g_vgui.BaseLines().IsDragging();
-   const bool btnDrag  = g_vgui.BaseBtnDrag().IsDragging();
-
-   if(id == CHARTEVENT_MOUSE_MOVE && !(btnDrag || baseDrag))
-      return;
-
-   Print("EVT ", UI_EventIdToStr(id),
-         " sparam='", sparam,
-         "' lparam=", (long)lparam,
-         " dparam=", DoubleToString(dparam, 8),
-         " baseDrag=", (baseDrag ? "1":"0"),
-         " btnDrag=", (btnDrag  ? "1":"0"));
-  }
 
 
 /**

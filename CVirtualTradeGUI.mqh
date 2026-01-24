@@ -6,12 +6,42 @@
 #include "ta_controllers.mqh"
 #include "CTradeManager.mqh"
 #include "ui_state.mqh"
-#ifdef ObjectGetString
-#pragma message("ObjectGetString is a macro here")
-#endif
-#ifdef StringSubstr
-#pragma message("StringSubstr is a macro here")
-#endif
+
+
+
+// --- tiny helpers (global, damit kein Klassen/Scope-Ärger) ---
+string VT_TrimCopy(string s)
+  {
+   StringTrimLeft(s);
+   StringTrimRight(s);
+   return s;
+  }
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+string VT_ObjText(const long chart_id, const string obj)
+  {
+   if(ObjectFind(chart_id, obj) < 0)
+      return "";
+   return ObjectGetString(chart_id, obj, OBJPROP_TEXT);
+  }
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+string VT_SubstrFrom(const string s, const int start)
+  {
+   int n = StringLen(s);
+   if(start <= 0)
+      return s;
+   if(start >= n)
+      return "";
+   string out = "";
+   for(int i=start; i<n; i++)
+      out += CharToString((uchar)StringGetCharacter(s, i));
+   return out;
+  }
 
 // ------------------------------------------------------------
 // Draft struct (optional, falls du es später nutzt)
@@ -38,10 +68,7 @@ private:
    ENUM_TIMEFRAMES     m_tf;
    long                m_chart;
 
-   // Edit state
-   bool                m_trnb_editing;
-   bool                m_posnb_editing;
-   string              m_edit_obj;
+
 
    // Right anchor baseline
    bool                m_anchor_inited;
@@ -83,7 +110,7 @@ private:
    bool              m_sabio_sl_editing;
    bool              m_sabio_user_entry;
    bool              m_sabio_user_sl;
-
+   bool              m_prevLeftDown;
    // Controllers
    CBaseLinesController        m_baseLines;
    CBaseButtonsDragController  m_baseBtnDrag;
@@ -93,7 +120,7 @@ private:
    bool              ObjExists(const string name) const { return (ObjectFind(m_chart, name) >= 0); }
 
 
- 
+
    void              SetYMoveSafe(const string name, const int y)
      {
       if(ObjectFind(m_chart, name) < 0)
@@ -115,19 +142,20 @@ private:
 
    void              LineDrag_Begin(const int mx, const int my)
      {
-      // Nur starten, wenn Maus wirklich "auf" einer Linie ist
       bool hit_pr = HitTestLinePx(PR_HL, mx, my, 6);
       bool hit_sl = HitTestLinePx(SL_HL, mx, my, 6);
 
-      // PR hat Priorität, falls beide nah
-      m_drag_pr_line = hit_pr;
-      m_drag_sl_line = (!m_drag_pr_line && hit_sl);
+      bool start_pr = hit_pr;
+      bool start_sl = (!start_pr && hit_sl);
 
-      if(!(m_drag_pr_line || m_drag_sl_line))
+      if(!(start_pr || start_sl))
          return;
 
-      // Sobald wir einen Linien-Drag starten, ggf. aktive Edit-Session beenden
-      EndAnyEdit();
+      // Erst jetzt finalisieren
+      FinalizeActiveEditBeforeDrag();
+
+      m_drag_pr_line = start_pr;
+      m_drag_sl_line = start_sl;
 
       ChartSetInteger(m_chart, CHART_MOUSE_SCROLL, false);
 
@@ -168,40 +196,7 @@ private:
          return;
         }
      }
-   // Drag und Edit schließen sich praktisch aus. Sobald ein Drag startet,
-   // beenden wir ein aktives Edit-Feld explizit, damit es mitgezogen wird
-   // und nicht "stehen bleibt".
-   // Beendet eine laufende Edit-Session (TRNB/POSNB/Sabio), so dass Drag/Sync alle Controls bewegen darf.
-   // Wichtig: Wenn wir das Edit durch Drag beenden, kommt i.d.R. KEIN CHARTEVENT_OBJECT_ENDEDIT.
-   // Daher wenden wir hier die gleichen Normalisierungen/Overrides an wie im ENDEDIT-Handler.
-   void              EndAnyEdit(const bool apply_changes=true)
-     {
-      if(m_edit_obj == "")
-         return;
 
-      const string obj = m_edit_obj;
-
-      if(apply_changes)
-        {
-         if(obj == TRNB)
-            ApplyTRNBOverrideFromUser();
-         else
-            if(obj == SabioEntry)
-               NormalizeSabioEdit(SabioEntry, "SABIO Entry: ");
-            else
-               if(obj == SabioSL)
-                  NormalizeSabioEdit(SabioSL, "SABIO SL: ");
-         // POSNB: Freitext/Nummer, wird beim Senden gelesen; hier kein Overwrite.
-        }
-
-      if(ObjectFind(m_chart, obj) >= 0)
-         ObjectSetInteger(m_chart, obj, OBJPROP_SELECTED, false);
-
-      m_edit_obj = "";
-      m_trnb_editing = false;
-      m_posnb_editing = false;
-
-     }
 
    void              LineDrag_End()
      {
@@ -245,14 +240,18 @@ private:
 
    void              Drag_Begin(const int mx, const int my)
      {
-      m_drag_entry_group = HitTest(EntryButton, mx, my);
-      m_drag_sl_only     = (!m_drag_entry_group && HitTest(SLButton, mx, my));
 
-      if(!(m_drag_entry_group || m_drag_sl_only))
+      bool hit_entry = HitTest(EntryButton, mx, my);
+      bool hit_sl    = (!hit_entry && HitTest(SLButton, mx, my));
+
+      if(!(hit_entry || hit_sl))
          return;
 
-      // Sobald wir einen Button-Drag starten, ggf. aktive Edit-Session beenden
-      EndAnyEdit();
+      // Erst jetzt, wo klar ist: wir starten Drag
+      FinalizeActiveEditBeforeDrag();
+
+      m_drag_entry_group = hit_entry;
+      m_drag_sl_only     = hit_sl;
 
       ChartSetInteger(m_chart, CHART_MOUSE_SCROLL, false);
 
@@ -399,7 +398,7 @@ private:
       if(ObjectFind(m_chart, obj) < 0)
          return prefix + DoubleToString(VT_NormalizeToTick(fallback_price), VT_Digits());
 
-      string t = TrimCopy(ObjText(obj));
+      string t = VT_TrimCopy(VT_ObjText(m_chart, obj));
       if(t == "" || t == prefix)
          return prefix + DoubleToString(VT_NormalizeToTick(fallback_price), VT_Digits());
 
@@ -483,14 +482,14 @@ private:
          const double price,
          const bool allow_overwrite_when_has_value)
      {
+      if(IsSelected(obj_name))
+         return;
       if(ObjectFind(m_chart, obj_name) < 0)
          return;
 
       string cur = ObjectGetString(m_chart, obj_name, OBJPROP_TEXT);
 
-      // Wenn User tippt: niemals überschreiben
-      if(m_edit_obj == obj_name)
-         return;
+
 
       // Zieltext
       string target = prefix + DoubleToString(price, VT_Digits());
@@ -517,12 +516,12 @@ private:
      {
       if(ObjectFind(m_chart, obj) < 0)
          return true;
-      string t = TrimCopy(ObjectGetString(m_chart, obj, OBJPROP_TEXT));
+      string t = VT_TrimCopy(VT_ObjText(m_chart, obj));
       if(t == "" || t == prefix)
          return true;
       if(StringFind(t, prefix, 0) == 0)
         {
-         string rest = TrimCopy(SubstrFrom(t, StringLen(prefix)));
+         string rest = VT_TrimCopy(VT_SubstrFrom(t, StringLen(prefix)));
          return (rest == "");
         }
       return false;
@@ -586,12 +585,11 @@ private:
       return true;
      }
 
-
    bool              EnsureEdit(const string name, const int x, const int y, const int w, const int h,
-                                const string txt,
-                                const color font_clr, const color bg_clr)
+                                const string txt, const color font_clr, const color bg_clr)
      {
-      if(ObjectFind(m_chart, name) < 0)
+      const bool created = (ObjectFind(m_chart, name) < 0);
+      if(created)
         {
          if(!ObjectCreate(m_chart, name, OBJ_EDIT, 0, 0, 0))
             return false;
@@ -603,32 +601,24 @@ private:
       ObjectSetInteger(m_chart, name, OBJPROP_XSIZE,      w);
       ObjectSetInteger(m_chart, name, OBJPROP_YSIZE,      h);
 
-      ObjectSetInteger(m_chart, name, OBJPROP_HIDDEN,     false);
       ObjectSetInteger(m_chart, name, OBJPROP_SELECTABLE, true);
-      ObjectSetInteger(m_chart, name, OBJPROP_SELECTED,   false);
-
-      // WICHTIG: editierbar
+      ObjectSetInteger(m_chart, name, OBJPROP_HIDDEN,     false);
       ObjectSetInteger(m_chart, name, OBJPROP_READONLY,   false);
+      ObjectSetInteger(m_chart, name, OBJPROP_BACK,       false);
+      ObjectSetInteger(m_chart, name, OBJPROP_ZORDER,     120);
 
       ObjectSetInteger(m_chart, name, OBJPROP_BGCOLOR,    bg_clr);
       ObjectSetInteger(m_chart, name, OBJPROP_COLOR,      font_clr);
-      ObjectSetInteger(m_chart, name, OBJPROP_ZORDER,     120);
       ObjectSetInteger(m_chart, name, OBJPROP_FONTSIZE,   9);
       ObjectSetString(m_chart, name, OBJPROP_FONT,       "Arial");
 
-      // Text nur setzen, wenn leer oder neu – damit wir User-Eingaben nicht jedes Mal überschreiben
-      string cur = ObjectGetString(m_chart, name, OBJPROP_TEXT);
-      if(cur == "" || ObjectFind(m_chart, name) < 0)
+      // Text nur beim Erstellen initial setzen (nie laufend überschreiben)
+      if(created && txt != "")
          ObjectSetString(m_chart, name, OBJPROP_TEXT, txt);
-      else
-        {
-         // wenn txt explizit gesetzt werden soll (z.B. Prefix), und cur leer ist:
-         if(cur == "" && txt != "")
-            ObjectSetString(m_chart, name, OBJPROP_TEXT, txt);
-        }
 
       return true;
      }
+
 
    bool              GetBaseEntrySL(double &entry, double &sl) const
      {
@@ -671,9 +661,7 @@ public:
       m_tf = PERIOD_CURRENT;
       m_chart = 0;
 
-      m_trnb_editing=false;
-      m_posnb_editing=false;
-      m_edit_obj="";
+
 
       m_anchor_inited=false;
       m_ref_x=0;
@@ -718,7 +706,7 @@ public:
       m_sabio_sl_editing    = false;
       m_sabio_user_entry = false;
       m_sabio_user_sl    = false;
-
+      m_prevLeftDown = false;
      }
 
    // Zugriff (Pointer; Return-Referenz ist in MQL5 als Return-Typ nicht erlaubt)
@@ -854,6 +842,11 @@ public:
    // ------------------------------------------------------------------
    bool              HandleBaseUIEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
      {
+      if(id == CHARTEVENT_OBJECT_ENDEDIT && IsEditObject(sparam))
+        {
+         EndEdit(sparam);
+         return true;
+        }
       // Linien Drag/Change
       if(id == CHARTEVENT_OBJECT_CHANGE && (sparam == PR_HL || sparam == SL_HL))
         {
@@ -881,47 +874,49 @@ public:
         {
          const int mx = (int)lparam;
          const int my = (int)dparam;
-         const int ms = (int)StringToInteger(sparam); // 0/1
+         const int flags = (int)StringToInteger(sparam);
+         const bool leftDown = ((flags & 1) != 0);   // Bit 0 = Left button
 
          // MouseDown edge
-         if(m_prevMouseState == 0 && ms == 1)
+         if(!m_prevLeftDown && leftDown)
            {
-            // 1) zuerst Button-Drag versuchen
             Drag_Begin(mx, my);
-
-            // 2) wenn kein Button-Drag -> Line-Drag versuchen
             if(!(m_drag_entry_group || m_drag_sl_only))
                LineDrag_Begin(mx, my);
            }
 
-         // Dragging (Buttons)
-         if(ms == 1 && (m_drag_entry_group || m_drag_sl_only))
+         // Dragging
+         if(leftDown && (m_drag_entry_group || m_drag_sl_only))
            {
             Drag_Update(mx, my);
-            m_prevMouseState = ms;
+            m_prevLeftDown = leftDown;
             return true;
            }
 
-         // Dragging (Lines)
-         if(ms == 1 && (m_drag_pr_line || m_drag_sl_line))
+         if(leftDown && (m_drag_pr_line || m_drag_sl_line))
            {
             LineDrag_Update(mx, my);
-            m_prevMouseState = ms;
+            m_prevLeftDown = leftDown;
             return true;
            }
 
-         // MouseUp
-         if(ms == 0)
+         // MouseUp edge
+         if(m_prevLeftDown && !leftDown)
            {
             if(m_drag_entry_group || m_drag_sl_only)
                Drag_End();
-
             if(m_drag_pr_line || m_drag_sl_line)
                LineDrag_End();
            }
 
-         m_prevMouseState = ms;
+         m_prevLeftDown = leftDown;
          return false;
+
+
+
+
+
+
         }
 
 
@@ -929,11 +924,6 @@ public:
       // Chart resize -> right anchor re-apply
       if(id == CHARTEVENT_CHART_CHANGE)
         {
-         // WICHTIG: Ein Chart-Change kommt oft direkt nach OBJECT_CLICK/Select.
-         // Wenn dabei OBJ_EDIT Objekte neu positioniert werden, verliert MT5 sofort den Edit-Fokus (Caret).
-         // Daher: während der Nutzer tippt, Chart-Change nur "schlucken" und NICHT repositionieren.
-         if(m_edit_obj == TRNB || m_edit_obj == POSNB || m_edit_obj == SabioEntry || m_edit_obj == SabioSL)
-            return true;
 
          ApplyRightAnchor(30, 0);
          OnBaseLinesChanged(false);
@@ -943,106 +933,25 @@ public:
       return false;
      }
 
-   // TRNB/POSNB Edit handling (klein, damit Autoupdate nicht "drüber schreibt")
-   bool              OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
+
+public:
+
+
+   bool              IsEditObject(const string name) const
      {
-      if(id == CHARTEVENT_OBJECT_CLICK)
-        {
-         if(sparam == TRNB)
-           {
-            m_trnb_editing = true;
-            m_posnb_editing = false;
-            m_edit_obj = TRNB;
-            return false;
-           }
-         if(sparam == POSNB)
-           {
-            m_posnb_editing = true;
-            m_trnb_editing = false;
-            m_edit_obj = POSNB;
-            return false;
-           }
+      if(name == TRNB || name == POSNB || name == SabioEntry || name == SabioSL)
+         return true;
 
-         if(sparam == SabioEntry)
-           {
-            m_trnb_editing = false;
-            m_posnb_editing = false;
-            m_edit_obj = SabioEntry;
-
-            // WICHTIG: nur wenn leer / ohne Prefix -> Prefix setzen, sonst Cursor nicht "resetten"
-            EnsureSabioPrefixIfMissing(SabioEntry, "SABIO Entry: ");
-            return false; // default editing soll passieren
-           }
-
-         if(sparam == SabioSL)
-           {
-            m_trnb_editing = false;
-            m_posnb_editing = false;
-            m_edit_obj = SabioSL;
-
-            EnsureSabioPrefixIfMissing(SabioSL, "SABIO SL: ");
-            return false;
-           }
-
-         // Klick woanders -> alle Edit-Modi aus
-         m_trnb_editing = false;
-         m_posnb_editing = false;
-         m_edit_obj = "";
-         return false;
-        }
-
-      if(id == CHARTEVENT_OBJECT_ENDEDIT)
-        {
-         if(sparam == TRNB)
-           {
-            ApplyTRNBOverrideFromUser();
-            m_trnb_editing = false;
-            m_edit_obj = "";
-            UpdateTradePosTexts();
-            ChartRedraw(m_chart);
-            return true;
-           }
-
-         if(sparam == POSNB)
-           {
-            m_posnb_editing = false;
-            m_edit_obj = "";
-            UpdateTradePosTexts();
-            ChartRedraw(m_chart);
-            return true;
-           }
-         if(sparam == SabioEntry)
-           {
-            NormalizeSabioEdit(SabioEntry, "SABIO Entry: ");
-
-            // Wenn User wirklich etwas eingetragen hat -> lock
-            m_sabio_user_entry = !SabioHasOnlyPrefix(SabioEntry, "SABIO Entry: ");
-
-            m_edit_obj = "";
-            ChartRedraw(m_chart);
-            return true;
-           }
-
-         if(sparam == SabioSL)
-           {
-            NormalizeSabioEdit(SabioSL, "SABIO SL: ");
-
-            m_sabio_user_sl = !SabioHasOnlyPrefix(SabioSL, "SABIO SL: ");
-
-            m_edit_obj = "";
-            ChartRedraw(m_chart);
-            return true;
-           }
-        }
+      // Legacy-Namen (falls noch im Chart)
+      if(name == "EingabePos" || name == "EingabeTrade")
+         return true;
 
       return false;
      }
 
 
 
-   // ------------------------------------------------------------------
-   // Sync + Text Updates
-   // ------------------------------------------------------------------
+
    void              SyncBaseControlsToLines()
      {
       double entry=0.0, sl=0.0;
@@ -1050,40 +959,62 @@ public:
          return;
 
       datetime t = VT_VisibleTime();
-      int x=0,y=0;
+      int x=0, y=0;
 
-      // Entry line -> EntryButton row
+      // Hilfs-Offsets (wie bei CreateDefaults)
+      const int gap_under_btn = 2;
+
+      // -----------------------------
+      // ENTRY line -> Entry row
+      // -----------------------------
+      int entry_top = -1;
       if(ObjectFind(m_chart, EntryButton) >= 0 && ChartTimePriceToXY(m_chart, 0, t, entry, x, y))
         {
-         int ys = (int)ObjectGetInteger(m_chart, EntryButton, OBJPROP_YSIZE);
-         int top = y - (ys/2);
-         if(top < 0)
-            top = 0;
+         int btn_h = (int)ObjectGetInteger(m_chart, EntryButton, OBJPROP_YSIZE);
+         entry_top = y - (btn_h/2);
+         if(entry_top < 0)
+            entry_top = 0;
 
-         ObjectSetInteger(m_chart, EntryButton, OBJPROP_YDISTANCE, top);
+         ObjectSetInteger(m_chart, EntryButton, OBJPROP_YDISTANCE, entry_top);
 
          if(ObjectFind(m_chart, SENDTRADEBTN) >= 0)
-            ObjectSetInteger(m_chart, SENDTRADEBTN, OBJPROP_YDISTANCE, top);
+            ObjectSetInteger(m_chart, SENDTRADEBTN, OBJPROP_YDISTANCE, entry_top);
 
+         // EDITs unter Entry-Button-Zeile
+         int y_edits_entry = entry_top + btn_h + gap_under_btn;
 
+         // TRNB / POSNB (nur bewegen, wenn nicht aktiv editiert)
+         if(ObjectFind(m_chart, TRNB) >= 0 && !IsSelected(TRNB))
+            SetYMoveSafe(TRNB, y_edits_entry);
 
+         if(ObjectFind(m_chart, POSNB) >= 0 && !IsSelected(POSNB))
+            SetYMoveSafe(POSNB, y_edits_entry);
+
+         if(ObjectFind(m_chart, SabioEntry) >= 0 && !IsSelected(SabioEntry))
+            SetYMoveSafe(SabioEntry, y_edits_entry);
         }
 
-      // SL line -> SLButton row
+      // -----------------------------
+      // SL line -> SL row
+      // -----------------------------
+      int sl_top = -1;
       if(ObjectFind(m_chart, SLButton) >= 0 && ChartTimePriceToXY(m_chart, 0, t, sl, x, y))
         {
-         int ys = (int)ObjectGetInteger(m_chart, SLButton, OBJPROP_YSIZE);
-         int top = y - (ys/2);
-         if(top < 0)
-            top = 0;
+         int btn_h2 = (int)ObjectGetInteger(m_chart, SLButton, OBJPROP_YSIZE);
+         sl_top = y - (btn_h2/2);
+         if(sl_top < 0)
+            sl_top = 0;
 
-         ObjectSetInteger(m_chart, SLButton, OBJPROP_YDISTANCE, top);
+         ObjectSetInteger(m_chart, SLButton, OBJPROP_YDISTANCE, sl_top);
 
-         const int y2 = top + ys + 4;
+         // SabioSL unter SL-Button-Zeile
+         int y_edits_sl = sl_top + btn_h2 + gap_under_btn;
 
-
+         if(ObjectFind(m_chart, SabioSL) >= 0 && !IsSelected(SabioSL))
+            SetYMoveSafe(SabioSL, y_edits_sl);
         }
      }
+
 
    void              UpdateEntrySLButtonTexts()
      {
@@ -1114,7 +1045,8 @@ public:
 
    void              UpdateTradePosTexts()
      {
-      if(m_trnb_editing || m_posnb_editing)
+
+      if(IsSelected(TRNB) || IsSelected(POSNB))
          return;
 
       if(m_tm == NULL || CheckPointer(m_tm) == POINTER_INVALID)
@@ -1170,16 +1102,62 @@ public:
            }
          else
            {
-            // Kein Drag: nur autosync, wenn User nicht overridden hat
-            if(!m_sabio_user_entry && m_edit_obj != SabioEntry)
+            if(!m_sabio_user_entry && !IsSelected(SabioEntry))
                SetSabioFromLinePrice(SabioEntry, "SABIO Entry: ", entry);
 
-            if(!m_sabio_user_sl && m_edit_obj != SabioSL)
+            if(!m_sabio_user_sl && !IsSelected(SabioSL))
                SetSabioFromLinePrice(SabioSL, "SABIO SL: ", sl);
+
            }
         }
 
       ChartRedraw(m_chart);
+     }
+public:
+
+
+
+   bool              EndEdit(const string obj)
+     {
+      if(!IsEditObject(obj))
+         return false;
+
+      else
+         if(obj == "EingabePos") { /* wie POSNB behandeln */ }
+         else
+            if(obj == "EingabeTrade")
+              {
+               ApplyTRNBOverrideFromUser(); /* wie TRNB behandeln */
+              }
+
+      // Normalisieren/Override je Feld
+      if(obj == TRNB)
+        {
+         ApplyTRNBOverrideFromUser();
+        }
+      else
+         if(obj == SabioEntry)
+           {
+            NormalizeSabioEdit(SabioEntry, "SABIO Entry: ");
+            m_sabio_user_entry = !SabioHasOnlyPrefix(SabioEntry, "SABIO Entry: ");
+           }
+         else
+            if(obj == SabioSL)
+              {
+               NormalizeSabioEdit(SabioSL, "SABIO SL: ");
+               m_sabio_user_sl = !SabioHasOnlyPrefix(SabioSL, "SABIO SL: ");
+              }
+      // POSNB: bleibt Freitext/Nummer, keine Auto-Logik beim ENDEDIT
+
+
+
+      // UI konsistent
+      UpdateTradePosTexts();
+      ChartRedraw(m_chart);
+
+      if(ObjectFind(m_chart, obj) >= 0)
+         ObjectSetInteger(m_chart, obj, OBJPROP_SELECTED, false);
+      return true;
      }
 
 
@@ -1239,14 +1217,16 @@ public:
       VT_SetObjectXClamped(m_chart, SLButton,     new_x + m_dx_slbtn, w);
       VT_SetObjectXClamped(m_chart, SENDTRADEBTN, new_x + m_dx_send,  w);
       // OBJ_EDIT im Fokus nicht bewegen (sonst verliert der User sofort den Edit-Fokus)
-      if(m_edit_obj != TRNB)
-         VT_SetObjectXClamped(m_chart, TRNB,       new_x + m_dx_trnb,  w);
-      if(m_edit_obj != POSNB)
-         VT_SetObjectXClamped(m_chart, POSNB,      new_x + m_dx_posnb, w);
-      if(m_edit_obj != SabioEntry)
-         VT_SetObjectXClamped(m_chart, SabioEntry, new_x + m_dx_sabE,  w);
-      if(m_edit_obj != SabioSL)
-         VT_SetObjectXClamped(m_chart, SabioSL,    new_x + m_dx_sabS,  w);
+
+      if(!IsSelected(TRNB))
+         VT_SetObjectXClamped(m_chart, TRNB, new_x + m_dx_trnb, w);
+      if(!IsSelected(POSNB))
+         VT_SetObjectXClamped(m_chart, POSNB, new_x + m_dx_posnb, w);
+      if(!IsSelected(SabioEntry))
+         VT_SetObjectXClamped(m_chart, SabioEntry, new_x + m_dx_sabE, w);
+      if(!IsSelected(SabioSL))
+         VT_SetObjectXClamped(m_chart, SabioSL, new_x + m_dx_sabS, w);
+
      }
 
    // ------------------------------------------------------------------
@@ -1283,8 +1263,53 @@ public:
       g_DB.SetMetaInt(g_DB.KeyFor(m_symbol, m_tf, "g_ui_state.last_trade_no"), new_last_trade_no);
      }
 
-  };
+   bool              IsSelected(const string name) const
+     {
+      if(ObjectFind(m_chart, name) < 0)
+         return false;
+      return (ObjectGetInteger(m_chart, name, OBJPROP_SELECTED) != 0);
+     }
 
+   string            ActiveEditSelected() const
+     {
+      if(IsSelected(TRNB))
+         return TRNB;
+      if(IsSelected(POSNB))
+         return POSNB;
+      if(IsSelected(SabioEntry))
+         return SabioEntry;
+      if(IsSelected(SabioSL))
+         return SabioSL;
+      return "";
+     }
+   void              FinalizeActiveEditBeforeDrag()
+     {
+      string obj = ActiveEditSelected();
+      if(obj == "")
+         return;
+
+      if(obj == TRNB)
+         ApplyTRNBOverrideFromUser();
+      else
+         if(obj == SabioEntry)
+           {
+            NormalizeSabioEdit(SabioEntry, "SABIO Entry: ");
+            m_sabio_user_entry = !SabioHasOnlyPrefix(SabioEntry, "SABIO Entry: ");
+           }
+         else
+            if(obj == SabioSL)
+              {
+               NormalizeSabioEdit(SabioSL, "SABIO SL: ");
+               m_sabio_user_sl = !SabioHasOnlyPrefix(SabioSL, "SABIO SL: ");
+              }
+      // POSNB: keine Normalisierung nötig
+
+      ObjectSetInteger(m_chart, obj, OBJPROP_SELECTED, false);
+     }
+
+  };
 #endif
 // __CVIRTUALTRAGUI_MQH__
 // __CVIRTUALTRADEGUI_MQH__
+
+//+------------------------------------------------------------------+
