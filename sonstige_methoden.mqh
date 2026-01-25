@@ -236,7 +236,7 @@ void TPSLReached()
         {
          if(p.sl > 0.0 && (CurrentBidPrice <= p.sl))
            {
-            UI_CloseOnePositionAndNotify("HIT_SL","LONG",p.trade_no,p.pos_no);
+             g_TradeMgr.UI_CloseOnePositionAndNotify("HIT_SL","LONG",p.trade_no,p.pos_no);
             any_closed=true;
             Alert(_Symbol + " LONG Trade " + IntegerToString(p.trade_no) + " Pos" + IntegerToString(p.pos_no) + " stopped out");
             continue;
@@ -248,7 +248,7 @@ void TPSLReached()
         {
          if(p.sl > 0.0 && (CurrentAskPrice >= p.sl))
            {
-            UI_CloseOnePositionAndNotify("HIT_SL","SHORT",p.trade_no,p.pos_no);
+             g_TradeMgr.UI_CloseOnePositionAndNotify("HIT_SL","SHORT",p.trade_no,p.pos_no);
             any_closed=true;
             Alert(_Symbol + _Period +" SHORT: Trade " + IntegerToString(p.trade_no) + " Pos" + IntegerToString(p.pos_no) + " stopped out");
             continue;
