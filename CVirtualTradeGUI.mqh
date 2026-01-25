@@ -5,7 +5,8 @@
 #include "ui_names.mqh"
 #include "ta_controllers.mqh"
 #include "ui_state.mqh"
-
+#include "CDBService.mqh"
+extern CDBService g_DB;
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -570,23 +571,6 @@ public:
 
       return (m_tm != NULL && CheckPointer(m_tm) != POINTER_INVALID);
      }
-   void              ApplyTradePosFromDBToEdits()
-     {
-      int tr=0, po=0;
-      if(!DB_GetInt("tm.pub.trnb", tr, 1))
-         tr = 1;
-      if(!DB_GetInt("tm.pub.posnb", po, 1))
-         po = 1;
-
-      // Draft-DB immer aktuell halten (SEND-Layer liest vt.draft.*)
-      DB_SetInt("vt.draft.trnb", tr);
-      DB_SetInt("vt.draft.posnb", po);
-
-      if(ObjectFind(m_chart, TRNB) >= 0)
-         ObjectSetString(m_chart, TRNB, OBJPROP_TEXT, IntegerToString(tr));
-      if(ObjectFind(m_chart, POSNB) >= 0)
-         ObjectSetString(m_chart, POSNB, OBJPROP_TEXT, IntegerToString(po));
-     }
    void              Destroy()
      {
       ObjectDelete(m_chart, PR_HL);
@@ -806,6 +790,23 @@ public:
       return (s < e ? "LONG" : "SHORT");
      }
 
+   void              ApplyTradePosFromDBToEdits()
+     {
+      int tr=0, po=0;
+      if(!DB_GetInt("tm.pub.trnb", tr, 1))
+         tr = 1;
+      if(!DB_GetInt("tm.pub.posnb", po, 1))
+         po = 1;
+
+      // Draft-DB immer aktuell halten (SEND-Layer liest vt.draft.*)
+      DB_SetInt("vt.draft.trnb", tr);
+      DB_SetInt("vt.draft.posnb", po);
+
+      if(ObjectFind(m_chart, TRNB) >= 0)
+         ObjectSetString(m_chart, TRNB, OBJPROP_TEXT, IntegerToString(tr));
+      if(ObjectFind(m_chart, POSNB) >= 0)
+         ObjectSetString(m_chart, POSNB, OBJPROP_TEXT, IntegerToString(po));
+     }
   };
 
 #endif // __CVIRTUALTRADEGUI_MQH__

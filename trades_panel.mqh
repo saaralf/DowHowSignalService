@@ -1,6 +1,9 @@
 ﻿//======================== trades_panel.mqh ========================
 #ifndef __TRADES_PANEL_MQH__
 #define __TRADES_PANEL_MQH__
+
+
+
 #include "CDBService.mqh"
 #include "trade_pos_line_registry.mqh"
 #include "CDiscordClient.mqh"
@@ -154,6 +157,7 @@ void showCancel_short(bool show)
  * Hinweise:     UI_Reg_Add wird genutzt, damit Deinit sauber aufräumt.
  * Fehlerfälle:  ObjectCreate schlägt fehl -> false (GetLastError im Log via UI_ObjSetIntSafe, falls aktiv)
  */
+
 bool TP_CreateRect(const string name, const int x, const int y, const int w, const int h,
                    const color border, const color bg, const int z)
   {

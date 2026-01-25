@@ -12,7 +12,7 @@
 extern CTradesPanel          g_tp;
 extern CSendButtonController g_send_ctl;
 extern CVirtualTradeGUI      g_vgui;       // ODER: extern CVirtualTradeGUI g_vgui;
-extern CTradeManager         g_TradeMgr;   // ODER: extern CTradeManager g_tradeManager;
+extern CTradeManager         g_TradeMgr;   
 extern CDBService            g_DB;
 
 
