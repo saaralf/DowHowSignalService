@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #ifndef __EVENTHANDLER__
 #define __EVENTHANDLER__
-
+#include "CVirtualTradeGUI.mqh"
 #include "CSendButtonController.mqh"
 #include "ui_state.mqh"
 #include "CChartEventRouter.mqh"
@@ -29,6 +29,136 @@ static uint g_ui_last_redraw_ms = 0;
 
 
 input bool InpDebugEventTrace = false; // true: Events in Experts loggen
+extern CVirtualTradeGUI g_vgui;
+//extern CVirtualTradeGUI g_vgui;
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void OnChartEvent(const int id,
+                  const long &lparam,
+                  const double &dparam,
+                  const string &sparam)
+  {
+   bool handled = false;
+
+
+   CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+
+
+
+
+
+// 2) BaseUI (Drag Lines/Buttons + Sync)
+   if(g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam))
+      handled = true;
+
+// 3) Router / restliche Logik wie bisher...
+
+   if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
+      handled = true;
+
+// 1) Legacy / restliche Verarbeitung nur wenn Router NICHT handled hat
+   /*if(!handled)
+     {
+
+
+
+      // OBJECT_CLICK (Fallback)
+      if(id == CHARTEVENT_OBJECT_CLICK)
+        {
+         if(g_send_ctl.OnObjectClick(sparam))
+           {
+            handled = true;
+           }
+        }
+
+      // OBJECT_DRAG
+      if(!handled && id == CHARTEVENT_OBJECT_DRAG)
+        {
+         if(g_tp_drag.OnObjectDrag(sparam))
+           {
+            handled = true;
+           }
+         else
+           {
+            if(!handled && UI_IsTradePosLine(sparam))
+              {
+               UI_RequestRedrawThrottled(15);
+               handled = true;
+              }
+           }
+        }
+
+      // OBJECT_CHANGE
+      if(!handled && id == CHARTEVENT_OBJECT_CHANGE)
+        {
+         if(g_tp_drag.OnObjectChange(sparam))
+           {
+            handled = true;
+           }
+         else
+           {
+
+            if(!handled && UI_IsTradePosLine(sparam))
+              {
+               UI_RequestRedrawThrottled(15);
+               g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
+               handled = true;
+              }
+           }
+        }
+
+      // Preise der Linien (wie vorher, aber nur wenn wir noch nicht handled sind)
+      if(!handled)
+        {
+         Entry_Price = Get_Price_d(PR_HL);
+         SL_Price    = Get_Price_d(SL_HL);
+        }
+
+      // MOUSE_MOVE
+      if(!handled && id == CHARTEVENT_MOUSE_MOVE)
+        {
+         const int mx = (int)lparam;
+         const int my = (int)dparam;
+         const int MouseState = (int)StringToInteger(sparam);
+
+         // TradePosLine finalize muss bleiben
+         g_tp_drag.OnMouseMoveFinalizeIfNeeded(MouseState);
+
+        }
+
+      // CHART_CHANGE
+      if(!handled && id == CHARTEVENT_CHART_CHANGE)
+        {
+         // TradePosLine Tags bleiben separat
+         g_tradePosLines.SyncAllTags();
+
+
+         g_tradePosLines.SyncAllTags();
+         UI_ApplyZOrder();
+         handled = true;
+        }
+     } // if(!handled)
+   */
+
+
+// --- Post-Phase: MUSS IMMER laufen ---
+
+// Post-Phase + Redraw wie bisher
+   static bool last_is_long = true;
+   if(last_is_long != g_ui_state.is_long)
+     {
+      last_is_long = g_ui_state.is_long;
+      TP_RebuildRows();
+     }
+
+   UI_ProcessRedraw();
+   g_tp.ProcessRebuild();
+
+  }
+
+
 
 /**
  * Beschreibung: Wandelt Chart-Event-IDs in lesbaren Text um.
@@ -116,31 +246,6 @@ bool UI_IsWatchedEventObject(const string name)
    return false;
   }
 
-/**
- * Beschreibung: Loggt relevante Chart-Events für watched Objects.
- * Parameter:    id,lparam,dparam,sparam - Standard OnChartEvent Parameter
- * Rückgabewert: void
- * Hinweise:     Filtert MOUSE_MOVE aggressiv (sonst Log-Spam).
- * Fehlerfälle:  Keine; reine Diagnose.
- */
-void UI_DebugTraceEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
-  {
-   if(!InpDebugEventTrace)
-      return;
-// MouseMove nur loggen, wenn gerade ein Drag aktiv ist (sonst Spam)
-   const bool baseDrag = g_BaseLines.IsDragging();
-   const bool btnDrag  = g_BaseBtnDrag.IsDragging();
-
-   if(id == CHARTEVENT_MOUSE_MOVE && !(btnDrag || baseDrag))
-      return;
-
-   Print("EVT ", UI_EventIdToStr(id),
-         " sparam='", sparam,
-         "' lparam=", (long)lparam,
-         " dparam=", DoubleToString(dparam, 8),
-         " baseDrag=", (baseDrag ? "1":"0"),
-         " btnDrag=", (btnDrag  ? "1":"0"));
-  }
 
 
 /**
@@ -192,6 +297,8 @@ static string g_base_btn_drag_line_name= "";
 static int    g_base_btn_drag_offset_y = 0;   // Cursor-Offset innerhalb des Buttons (top->cursor)
 static int    g_base_btn_drag_btn_ysize = 0;  // Button-Höhe (für bottom-y -> price)
 static bool   g_base_btn_prev_left_down = false;
+static string g_base_edit_active = ""; // "", TRNB oder POSNB wenn User gerade tippt
+
 // --- OPTIONAL: Gekoppelter Drag (Abstand Entry<->SL bleibt konstant) ---
 
 // Letzte bekannte Maus-Y aus CHARTEVENT_MOUSE_MOVE (Fallback für Objekt-Drag)
@@ -211,7 +318,7 @@ static int  g_dx_trnb    = 0;
 static int  g_dx_posnb   = 0;
 static int  g_dx_sabEnt  = 0;
 static int  g_dx_sabSL   = 0;
-
+static bool g_sabio_user_override = false; // sobald User Sabio editiert -> keine Auto-Texte mehr
 /**
  * Beschreibung: Merkt die aktuellen X-Offsets der Base-UI relativ zum EntryButton.
  * Parameter:    force - true: immer neu erfassen (z.B. nach Rebuild), false: nur beim ersten Mal
@@ -219,41 +326,6 @@ static int  g_dx_sabSL   = 0;
  * Hinweise:     Wir ändern hier nichts, wir speichern nur Offsets (Layout bleibt erhalten).
  * Fehlerfälle:  EntryButton fehlt -> false (kein Anchor möglich)
  */
-bool BaseUI_CaptureAnchorBaseline(const bool force)
-  {
-   if(g_base_anchor_inited && !force)
-      return true;
-
-   if(ObjectFind(0, EntryButton) < 0)
-      return false;
-
-   g_base_ref_x = (int)ObjectGetInteger(0, EntryButton, OBJPROP_XDISTANCE);
-   g_base_ref_w = (int)ObjectGetInteger(0, EntryButton, OBJPROP_XSIZE);
-   if(g_base_ref_w <= 0)
-      g_base_ref_w = 200; // Fallback
-
-// relative Offsets (obj_x - entry_x)
-   if(ObjectFind(0, SLButton) >= 0)
-      g_dx_slbtn = (int)ObjectGetInteger(0, SLButton, OBJPROP_XDISTANCE) - g_base_ref_x;
-
-   if(ObjectFind(0, SENDTRADEBTN) >= 0)
-      g_dx_send = (int)ObjectGetInteger(0, SENDTRADEBTN, OBJPROP_XDISTANCE) - g_base_ref_x;
-
-   if(ObjectFind(0, TRNB) >= 0)
-      g_dx_trnb = (int)ObjectGetInteger(0, TRNB, OBJPROP_XDISTANCE) - g_base_ref_x;
-
-   if(ObjectFind(0, POSNB) >= 0)
-      g_dx_posnb = (int)ObjectGetInteger(0, POSNB, OBJPROP_XDISTANCE) - g_base_ref_x;
-
-   if(ObjectFind(0, SabioEntry) >= 0)
-      g_dx_sabEnt = (int)ObjectGetInteger(0, SabioEntry, OBJPROP_XDISTANCE) - g_base_ref_x;
-
-   if(ObjectFind(0, SabioSL) >= 0)
-      g_dx_sabSL = (int)ObjectGetInteger(0, SabioSL, OBJPROP_XDISTANCE) - g_base_ref_x;
-
-   g_base_anchor_inited = true;
-   return true;
-  }
 
 // ------------------------------------------------------------------
 // BaseLine-Kopplung / Reentrancy-Guard
@@ -283,41 +355,6 @@ int UI_GetChartWidthPx()
   }
 
 
-/**
- * Beschreibung: Verankert die Base-UI an der rechten Chartkante.
- * Parameter:    none
- * Rückgabewert: void
- * Hinweise:     Nur X wird gesetzt. Y kommt weiter aus UI_SyncBaseButtonsToLines().
- * Fehlerfälle:  Chartbreite 0 oder EntryButton fehlt -> keine Aktion
- */
-void BaseUI_ApplyRightAnchor()
-  {
-   if(!BaseUI_CaptureAnchorBaseline(false))
-      return;
-
-   int w = UI_GetChartWidthPx();
-   if(w <= 0)
-      return;
-
-   int entry_w = (ObjectFind(0, EntryButton) >= 0)
-                 ? (int)ObjectGetInteger(0, EntryButton, OBJPROP_XSIZE)
-                 : g_base_ref_w;
-
-   if(entry_w <= 0)
-      entry_w = g_base_ref_w;
-
-   int new_entry_x = w - InpBaseUI_RightMarginPx - entry_w - InpBaseUI_RightShiftPx;
-   if(new_entry_x < 0)
-      new_entry_x = 0;
-
-   UI_SetObjectXClamped(EntryButton,   new_entry_x, w);
-   UI_SetObjectXClamped(SLButton,      new_entry_x + g_dx_slbtn,  w);
-   UI_SetObjectXClamped(SENDTRADEBTN,  new_entry_x + g_dx_send,   w);
-   UI_SetObjectXClamped(TRNB,          new_entry_x + g_dx_trnb,   w);
-   UI_SetObjectXClamped(POSNB,         new_entry_x + g_dx_posnb,  w);
-   UI_SetObjectXClamped(SabioEntry,    new_entry_x + g_dx_sabEnt, w);
-   UI_SetObjectXClamped(SabioSL,       new_entry_x + g_dx_sabSL,  w);
-  }
 
 /**
  * Beschreibung: Setzt das X (XDISTANCE) eines Objekts sicher (clamp an Chartbreite).
@@ -349,39 +386,6 @@ void UI_SetObjectXClamped(const string name, const int x_left, const int chart_w
 
    UI_ObjSetIntSafe(0, name, OBJPROP_XDISTANCE, xx);
   }
-
-/**
- * Beschreibung: Verankert die Base-UI an der rechten Chartkante.
- * Parameter:    none
- * Rückgabewert: void
- * Hinweise:     Nur X wird gesetzt.
- * Fehlerfälle:  s.o.
- */
-/*
-void BaseUI_ApplyRightAnchor()
-{
-  if(!BaseUI_CaptureAnchorBaseline(false))
-     return;
-
-  int w = UI_GetChartWidthPx();
-  if(w <= 0)
-     return;
-
-  int entry_w = (ObjectFind(0, EntryButton) >= 0) ? (int)ObjectGetInteger(0, EntryButton, OBJPROP_XSIZE) : g_base_ref_w;
-  if(entry_w <= 0) entry_w = g_base_ref_w;
-
-  int new_entry_x = w - InpBaseUI_RightMarginPx - entry_w - InpBaseUI_RightShiftPx;
-  if(new_entry_x < 0) new_entry_x = 0;
-
-  UI_SetObjectXClamped(EntryButton, new_entry_x, w);
-
-  UI_SetObjectXClamped(SLButton,     new_entry_x + g_dx_slbtn,  w);
-  UI_SetObjectXClamped(SENDTRADEBTN, new_entry_x + g_dx_send,   w);
-  UI_SetObjectXClamped(TRNB,         new_entry_x + g_dx_trnb,   w);
-  UI_SetObjectXClamped(POSNB,        new_entry_x + g_dx_posnb,  w);
-  UI_SetObjectXClamped(SabioEntry,   new_entry_x + g_dx_sabEnt, w);
-  UI_SetObjectXClamped(SabioSL,      new_entry_x + g_dx_sabSL,  w);
-}
 
 
 /**
@@ -549,181 +553,19 @@ void UI_SelectBaseLineExclusive(const string clicked_line)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void OnChartEvent(const int id,
-                  const long &lparam,
-                  const double &dparam,
-                  const string &sparam)
+int UI_ExtractIntDigits(const string text)
   {
-   CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-   CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-   if(id == CHARTEVENT_OBJECT_CLICK)
-      PrintFormat("GLOBAL CLICK: %s", sparam);
-
-   if(id == CHARTEVENT_OBJECT_CLICK && sparam == "TP_BG")
+   string digits = "";
+   for(int i=0; i<StringLen(text); i++)
      {
-      TP_DumpPanel();
+      ushort c = StringGetCharacter(text, i);
+      if(c >= '0' && c <= '9')
+         digits += (string)CharToString((uchar)c);
      }
-
-// 0) Router: Panel + SendClick etc.
-   bool handled = false;
-   if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
-      handled = true;
-
-// 1) Legacy / restliche Verarbeitung nur wenn Router NICHT handled hat
-   if(!handled)
-     {
-      UI_DebugTraceEvent(id, lparam, dparam, sparam);
-
-
-
-      // OBJECT_CLICK (Fallback)
-      if(id == CHARTEVENT_OBJECT_CLICK)
-        {
-         if(g_send_ctl.OnObjectClick(sparam))
-           {
-            handled = true;
-           }
-         else
-           {
-            if(sparam == PR_HL || sparam == SL_HL)
-              {
-               UI_SelectBaseLineExclusive(sparam);
-               g_base_last_clicked_line = sparam;
-              }
-           }
-        }
-
-      // OBJECT_DRAG
-      if(!handled && id == CHARTEVENT_OBJECT_DRAG)
-        {
-         if(g_tp_drag.OnObjectDrag(sparam))
-           {
-            handled = true;
-           }
-         else
-           {
-#ifdef PR_HL
-#ifdef SL_HL
-            if(sparam == PR_HL || sparam == SL_HL)
-              {
-               if(g_BaseLines.OnObjectDrag(sparam, dparam))
-                 {
-                  UI_OnBaseLinesChanged(false);   // <-- live: Direction + TRNB/POSNB aktualisieren
-                  handled = true;
-                 }
-              }
-
-#endif
-#endif
-            if(!handled && UI_IsTradePosLine(sparam))
-              {
-               UI_RequestRedrawThrottled(15);
-               handled = true;
-              }
-           }
-        }
-
-      // OBJECT_CHANGE
-      if(!handled && id == CHARTEVENT_OBJECT_CHANGE)
-        {
-         if(g_tp_drag.OnObjectChange(sparam))
-           {
-            handled = true;
-           }
-         else
-           {
-#ifdef PR_HL
-#ifdef SL_HL
-            if(sparam == PR_HL || sparam == SL_HL)
-              {
-               if(g_BaseLines.OnObjectChange(sparam))
-                 {
-                  UI_OnBaseLinesChanged(true);    // <-- finalize: inkl. SaveLinePrices
-                  handled = true;
-                 }
-              }
-
-#endif
-#endif
-            if(!handled && UI_IsTradePosLine(sparam))
-              {
-               UI_RequestRedrawThrottled(15);
-               g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
-               handled = true;
-              }
-           }
-        }
-
-      // Preise der Linien (wie vorher, aber nur wenn wir noch nicht handled sind)
-      if(!handled)
-        {
-         Entry_Price = Get_Price_d(PR_HL);
-         SL_Price    = Get_Price_d(SL_HL);
-        }
-
-      // MOUSE_MOVE
-      if(!handled && id == CHARTEVENT_MOUSE_MOVE)
-        {
-         const int mx = (int)lparam;
-         const int my = (int)dparam;
-         const int MouseState = (int)StringToInteger(sparam);
-
-         g_tp_drag.OnMouseMoveFinalizeIfNeeded(MouseState);
-
-         g_last_mouse_y = my;
-         g_BaseLines.SetLastMouseY(my);
-
-         if(g_BaseBtnDrag.OnMouseMove(mx, my, MouseState))
-           {
-            // Button-Drag: live TRNB/POSNB updaten (SL <-> Entry kann Direction ändern)
-            if(g_BaseBtnDrag.IsDragging())
-               UI_OnBaseLinesChanged(false);   // live
-            else
-               UI_OnBaseLinesChanged(true);    // Drag wurde beendet -> speichern
-
-            handled = true;
-           }
-         else
-           {
-            g_BaseLines.OnMouseMove(mx, my, MouseState, g_BaseBtnDrag.IsDragging());
-            handled = true;
-           }
-
-        }
-
-      // CHART_CHANGE
-      if(!handled && id == CHARTEVENT_CHART_CHANGE)
-        {
-         g_BaseLines.ApplyRightAnchor();
-         g_tradePosLines.SyncAllTags();
-         UI_OnBaseLinesChanged(false);
-         UI_ApplyZOrder();   // <-- ergänzen
-         handled = true;
-        }
-     } // if(!handled)
-
-// ENDEDIT soll immer laufen (unabhängig davon, ob Router handled hat)
-   if(id == CHARTEVENT_OBJECT_ENDEDIT)
-     {
-      if(sparam == SabioEntry || sparam == SabioSL)
-         UpdateSabioTP();
-     }
-
-// --- Post-Phase: MUSS IMMER laufen ---
-static bool last_is_long = true;
-if(last_is_long != g_ui_state.is_long)
-{
-   last_is_long = g_ui_state.is_long;
-   TP_RebuildRows();
-}
-
-   UI_ProcessRedraw();
-   g_tp.ProcessRebuild();
+   if(digits == "")
+      return 0;
+   return (int)StringToInteger(digits);
   }
-
-
-
-
 
 
 //+------------------------------------------------------------------+
@@ -797,7 +639,6 @@ bool UI_CloseOnePositionAndNotify(const string action,
      }
 
 // 4) UI Refresh
-   g_ui.UpdateNextTradePosUI();
    UI_ProcessRedraw();
    g_tp.RequestRebuild();
 
@@ -814,7 +655,7 @@ bool UI_CloseOnePositionAndNotify(const string action,
 bool UI_CancelActiveTrade(const string direction)
   {
    const bool isLong = (direction == "LONG");
- int trade_no = (isLong ? g_ui_state.active_trade_no_long : g_ui_state.active_trade_no_short);
+   int trade_no = (isLong ? g_ui_state.active_trade_no_long : g_ui_state.active_trade_no_short);
 
    if(trade_no <= 0)
      {
@@ -845,8 +686,8 @@ bool UI_CancelActiveTrade(const string direction)
       is_long_trade     = false;
       HitEntryPriceLong = false;
 
-      showActive_long(false);
-      showCancel_long(false);
+      g_tp.ShowActiveLong(false);
+      g_tp.ShowCancelLong(false);
 
       if(ObjectFind(0, "ActiveLongTrade") >= 0)
         {
@@ -866,8 +707,8 @@ bool UI_CancelActiveTrade(const string direction)
       is_sell_trade_pending = false;
       HitEntryPriceShort    = false;
 
-      showActive_short(false);
-      showCancel_short(false);
+      g_tp.ShowActiveShort(false);
+      g_tp.ShowCancelShort(false);
 
       if(ObjectFind(0, "ActiveShortTrade") >= 0)
         {
@@ -875,273 +716,18 @@ bool UI_CancelActiveTrade(const string direction)
          UI_ObjSetIntSafe(0, "ActiveShortTrade", OBJPROP_BGCOLOR, clrNONE);
         }
      }
-
-   g_ui.UpdateNextTradePosUI();
    g_tp.RebuildRows();
 
    ChartRedraw(0);
    return true;
   }
-/**
- * Beschreibung: Liest Entry- und SL-Preis sicher aus den Basis-HLines (PR_HL/SL_HL).
- * Parameter:    out_entry - Rückgabe Entry-Preis
- *               out_sl    - Rückgabe SL-Preis
- * Rückgabewert: true, wenn beide Linien existieren und Preise > 0 sind
- * Hinweise:     Nutzt ObjectFind/ObjectGetDouble mit Fehler-Logs.
- * Fehlerfälle:  Linien fehlen oder Preis<=0 -> false (Print im Log)
- */
-bool UI_GetBaseEntrySL(double &out_entry, double &out_sl)
-  {
-   out_entry = 0.0;
-   out_sl    = 0.0;
-
-   if(ObjectFind(0, PR_HL) < 0 || ObjectFind(0, SL_HL) < 0)
-     {
-      Print(__FUNCTION__, ": PR_HL/SL_HL not found");
-      return false;
-     }
-
-   ResetLastError();
-   out_entry = ObjectGetDouble(0, PR_HL, OBJPROP_PRICE);
-   int err1  = GetLastError();
-
-   ResetLastError();
-   out_sl    = ObjectGetDouble(0, SL_HL, OBJPROP_PRICE);
-   int err2  = GetLastError();
-
-   if(err1 != 0 || err2 != 0)
-      Print(__FUNCTION__, ": ObjectGetDouble error entry=", err1, " sl=", err2);
-
-   if(out_entry <= 0.0 || out_sl <= 0.0)
-      return false;
-
-   return true;
-  }/**
- * Beschreibung: Aktualisiert Direction/Lot/Texts (EntryButton, SLButton, SabioEntry, SabioSL)
- *              anhand der Basislinien-Preise (PR_HL/SL_HL) als 1 Quelle der Wahrheit.
- * Parameter:    opt_direction_object_name - OPTIONAL: Name eines Labels/Buttons, das nur "BUY" oder "SELL" anzeigen soll.
- * Rückgabewert: void
- * Hinweise:     Sabio-Texts werden hier zentral gepflegt, damit MouseMove keine Sonderlogik mehr braucht.
- * Fehlerfälle:  Fehlende Objekte werden übersprungen; bei fehlenden Linien wird abgebrochen (Print im Log).
- */
-void UI_UpdateBaseSignalTexts(const string opt_direction_object_name = "")
-  {
-   double entry = 0.0, sl = 0.0;
-   if(!UI_GetBaseEntrySL(entry, sl))
-      return;
-
-// Direction: SL über Entry => SHORT, sonst LONG
-g_ui_state.is_long = (sl < entry);
-// Distanz robust positiv (für Lots/Risk)
-   const double dist = MathAbs(entry - sl);
-
-// Lots: nutzt deine bestehende Logik im TradeManager (keine Heavy-Operation)
-   double lots = g_TradeMgr.calcLots(_Symbol, (ENUM_TIMEFRAMES)_Period, dist);
-   lots = NormalizeDouble(lots, 2);
-
-// Entry-Button Text: zeigt Direction + Preis + Lot
-string entry_txt = (g_ui_state.is_long ? "Buy Stop @ " : "Sell Stop @ ");
-   entry_txt += DoubleToString(entry, _Digits) + " | Lot: " + DoubleToString(lots, 2);
-
-// SL-Button Text: zeigt SL-Preis + Distanz in Points
-   string sl_txt = "SL: " + DoubleToString(dist / _Point, 0) + " Points | " + DoubleToString(sl, _Digits);
-
-// UI aktualisieren (nur wenn Objekt existiert)
-   if(ObjectFind(0, EntryButton) >= 0)
-      update_Text(EntryButton, entry_txt);
-   if(ObjectFind(0, SLButton)    >= 0)
-      update_Text(SLButton,    sl_txt);
-
-// Sabio-Texts zentral pflegen (damit MouseMove nicht doppelt rechnet)
-   if(ObjectFind(0, SabioEntry) >= 0)
-     {
-      if(SabioPrices)
-         update_Text(SabioEntry, "SABIO Entry: " + DoubleToString(entry, _Digits));
-      else
-         update_Text(SabioEntry, "SABIO ENTRY: ");
-     }
-
-   if(ObjectFind(0, SabioSL) >= 0)
-     {
-      if(SabioPrices)
-         update_Text(SabioSL, "SABIO SL: " + DoubleToString(sl, _Digits));
-      else
-         update_Text(SabioSL, "SABIO SL: ");
-     }
-
-// OPTIONAL: Falls du irgendwo ein Direction-Label/Button hast
-   if(opt_direction_object_name != "" && ObjectFind(0, opt_direction_object_name) >= 0)
-     update_Text(opt_direction_object_name, (g_ui_state.is_long ? "BUY" : "SELL"));
-  }
-
-
-/**
- * Beschreibung: Synchronisiert die Y-Position der Basis-UI (Entry/SL Buttons + Send/TRNB/POSNB + Sabio-Edits)
- *               zu den Basis-HLines PR_HL und SL_HL.
- * Parameter:    none
- * Rückgabewert: void
- * Hinweise:     Nur Y wird angepasst; X bleibt wie vom Layout vorgegeben.
- * Fehlerfälle:  ChartTimePriceToXY=false -> Print im Log
- */
-void UI_SyncBaseButtonsToLines()
-  {
-   double entry = 0.0, sl = 0.0;
-   if(!UI_GetBaseEntrySL(entry, sl))
-      return;
 
 
 
-// Wir nehmen die aktuelle Bar-Zeit als X-Anker (rechts sichtbar).
-   datetime t = iTime(_Symbol, (ENUM_TIMEFRAMES)_Period, 0);
-
-   int x = 0, y = 0;
-
-// -------------------------
-// ENTRY-GRUPPE (PR_HL)
-// EntryButton, SENDTRADEBTN, TRNB, POSNB, SabioEntry
-// -------------------------
-   if(ObjectFind(0, EntryButton) >= 0)
-     {
-      int ysize_entry_btn = (int)ObjectGetInteger(0, EntryButton, OBJPROP_YSIZE);
-      int entrySLBtnDistance = MathAbs((int)ObjectGetInteger(0, EntryButton, OBJPROP_YDISTANCE)- (int)ObjectGetInteger(0, SLButton, OBJPROP_YDISTANCE));
 
 
-      if(ChartTimePriceToXY(0, 0, t, entry, x, y))
-        {
-         const int baseY = y - ysize_entry_btn;
-
-         UI_ObjSetIntSafe(0, EntryButton,  OBJPROP_YDISTANCE, baseY);
-
-         // SendButton sitzt links neben EntryButton auf gleicher Höhe
-         if(ObjectFind(0, SENDTRADEBTN) >= 0)
-            UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_YDISTANCE, baseY);
-
-         // TRNB/POSNB + SabioEntry sind 30px unter EntryButton
-         if(ObjectFind(0, TRNB) >= 0)
-            UI_ObjSetIntSafe(0, TRNB, OBJPROP_YDISTANCE, baseY + 30);
-
-         if(ObjectFind(0, POSNB) >= 0)
-            UI_ObjSetIntSafe(0, POSNB, OBJPROP_YDISTANCE, baseY + 30);
-
-         if(ObjectFind(0, SabioEntry) >= 0)
-            UI_ObjSetIntSafe(0, SabioEntry, OBJPROP_YDISTANCE, baseY + 30);
-
-         //Auch SL Button und der SLSabio muss verschoben werden
-         if(ObjectFind(0, SLButton) >= 0)
-            if(g_ui_state.is_long)
-              {
-               UI_ObjSetIntSafe(0, SLButton, OBJPROP_YDISTANCE, baseY-entrySLBtnDistance);
-               if(ObjectFind(0, SabioSL) >= 0)
-                  UI_ObjSetIntSafe(0, SabioSL, OBJPROP_YDISTANCE, baseY-entrySLBtnDistance + 30);
-              }
-            else
-              {
-               UI_ObjSetIntSafe(0, SLButton, OBJPROP_YDISTANCE, baseY+entrySLBtnDistance);
-               if(ObjectFind(0, SabioSL) >= 0)
-                  UI_ObjSetIntSafe(0, SabioSL, OBJPROP_YDISTANCE, baseY-entrySLBtnDistance + 30);
-              }
-        }
-      else
-        {
-         Print(__FUNCTION__, ": ChartTimePriceToXY failed for Entry");
-        }
-     }
-
-// -------------------------
-// SL-GRUPPE (SL_HL)
-// SLButton + SabioSL
-// -------------------------
-   if(ObjectFind(0, SLButton) >= 0)
-     {
-      int ysize_sl_btn = (int)ObjectGetInteger(0, SLButton, OBJPROP_YSIZE);
-
-      bool did_set = false;
-
-      // 1) Wenn gerade SL_HL gezogen wird: UI direkt aus MouseY setzen (kein Springen)
-      if(g_BaseLines.IsDraggingSL() && g_BaseLines.GetDragMouseY() >= 0)
-        {
-         const int baseY = g_BaseLines.GetDragMouseY() - ysize_sl_btn;
-         UI_ObjSetIntSafe(0, SLButton, OBJPROP_YDISTANCE, baseY);
-         if(ObjectFind(0, SabioSL) >= 0)
-            UI_ObjSetIntSafe(0, SabioSL, OBJPROP_YDISTANCE, baseY + 30);
-         did_set = true;
-        }
-
-      // 2) Normalfall: aus Preis berechnen
-      if(!did_set)
-        {
-         if(ChartTimePriceToXY(0, 0, t, sl, x, y))
-           {
-            const int baseY = y - ysize_sl_btn;
-            UI_ObjSetIntSafe(0, SLButton, OBJPROP_YDISTANCE, baseY);
-
-            if(ObjectFind(0, SabioSL) >= 0)
-               UI_ObjSetIntSafe(0, SabioSL, OBJPROP_YDISTANCE, baseY + 30);
-           }
-         else
-           {
-            // 3) Fallback: falls ChartTimePriceToXY während Drag fehlschlägt
-            //    -> NUR noch die neue Klassen-Quelle verwenden (kein Legacy-State)
-            const int dy = g_BaseLines.GetDragMouseY();
-            if(dy >= 0)
-              {
-               int h = UI_GetChartHeightPx();
-               int yclamp = dy;
-
-               // clamp (Sicherheit)
-               if(h > 0)
-                 {
-                  if(yclamp < 0)
-                     yclamp = 0;
-                  if(yclamp > h - 1)
-                     yclamp = h - 1;
-                 }
-
-               const int baseY = yclamp - ysize_sl_btn;
-               UI_ObjSetIntSafe(0, SLButton, OBJPROP_YDISTANCE, baseY);
-
-               if(ObjectFind(0, SabioSL) >= 0)
-                  UI_ObjSetIntSafe(0, SabioSL, OBJPROP_YDISTANCE, baseY + 30);
-              }
-            else
-              {
-               Print(__FUNCTION__, ": ChartTimePriceToXY failed for SL (no drag Y fallback)");
-              }
-
-           }
-        }
-     }
-
-  }
 
 
-/**
- * Beschreibung: Zentraler Handler für Basis-Linienänderungen (Line-Drag oder Change-Event).
- * Parameter:    do_save - wenn true: LinePrices in DB persistieren (nur beim Finalize)
- * Rückgabewert: void
- * Hinweise:     Throttled Redraw, damit Drag flüssig bleibt.
- * Fehlerfälle:  Keine (nur Logs).
- */
-void UI_OnBaseLinesChanged(const bool do_save)
-  {
-   UI_SyncBaseButtonsToLines();
-   UI_UpdateBaseSignalTexts(); // Direction steckt im EntryButton-Text
-   g_ui.UpdateNextTradePosUI();      // <-- DAS fehlt dir beim SL-Drag
-   if(do_save)
-     {
-      g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
-      Print(__FUNCTION__, ": finalized + saved base line prices");
-     }
-
-// Redraw throttlen: Drag kann sonst ruckeln
-   static uint last_redraw_ms = 0;
-   uint now = GetTickCount();
-   if(do_save || (now - last_redraw_ms > 50))
-     {
-      ChartRedraw(0);
-      last_redraw_ms = now;
-     }
-  }
 
 
 

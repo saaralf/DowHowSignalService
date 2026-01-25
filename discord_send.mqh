@@ -7,7 +7,7 @@
 #ifndef __DISCORD_SEND__
 #define __DISCORD_SEND__
 
-#include "trades_panel.mqh"
+#include "CTradesPanel.mqh"
 #include "ui_state.mqh"
 
 
@@ -32,8 +32,15 @@ void DiscordSend()
       string tradenummer_string="";
       ObjectGetString(0, TRNB, OBJPROP_TEXT, 0, tradenummer_string);
       int trade_no_input = (int)StringToInteger(tradenummer_string);
-
-    bool isLong = g_ui_state.is_long;
+      // TRNB manuell: wenn Anwender eine höhere TradeNo einträgt, soll diese als nächste verwendet werden.
+      // (pro Symbol/TF; baseline = trade_no-1). Verhindert, dass UpdateNextTradePosUI() die Eingabe überschreibt.
+      if(trade_no_input > 0 && g_ui_state.ActiveTradeNo() <= 0)
+        {
+         int expected_next = (g_ui_state.last_trade_no > 0 ? (g_ui_state.last_trade_no + 1) : 1);
+         if(trade_no_input > expected_next)
+            g_ui_state.last_trade_no = trade_no_input - 1;
+        }
+      bool isLong = g_ui_state.is_long;
       string direction = (isLong ? "LONG" : "SHORT");
 
       // --- Basis-Validierung (Preis vs. Markt)
@@ -74,7 +81,7 @@ void DiscordSend()
                                         trade_no_input,Entry_Price,SL_Price,
                                         sabE,sabS,
                                         g_ui_state.last_trade_no,
-                                         g_ui_state.active_trade_no_long,
+                                        g_ui_state.active_trade_no_long,
                                         is_long_trade,
                                         eff_trade_no,pos_no,starting_new_trade,
                                         row,err);
@@ -83,7 +90,7 @@ void DiscordSend()
                                         trade_no_input,Entry_Price,SL_Price,
                                         sabE,sabS,
                                         g_ui_state.last_trade_no,
-                                         g_ui_state.active_trade_no_short,
+                                        g_ui_state.active_trade_no_short,
                                         is_sell_trade,
                                         eff_trade_no,pos_no,starting_new_trade,
                                         row,err);
@@ -121,21 +128,24 @@ void DiscordSend()
       // UI Updates wie vorher
       if(isLong)
         {
-         showActive_long(true);
-         showCancel_long(true);
-         update_Text(TP_BTN_ACTIVE_LONG, "ACTIVE POSITION");
+         g_tp.ShowActiveLong(true);
+         g_tp.ShowCancelLong(true);
+         update_Text("TP_BTN_ACTIVE_LONG", "ACTIVE POSITION");
 
         }
       else
         {
-         showActive_short(true);
-         showCancel_short(true);
-         update_Text(TP_BTN_ACTIVE_SHORT, "ACTIVE POSITION");
+         g_tp.ShowActiveShort(true);
+         g_tp.ShowCancelShort(true);
+         update_Text("TP_BTN_ACTIVE_SHORT", "ACTIVE POSITION");
 
         }
       g_tp.RebuildRows();
       g_TradeMgr.RestoreTradePosLines(_Symbol, (ENUM_TIMEFRAMES)_Period);
       ChartRedraw(0);
+      g_ui_state.manual_tradepos = false;   // nach Send wieder Auto
+      // optional: Sabio wieder Auto, falls du willst:
+      // g_ui_state.manual_sabio = false;
       g_ui.UpdateNextTradePosUI();
 
      }

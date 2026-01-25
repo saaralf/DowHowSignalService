@@ -3,11 +3,38 @@
 #ifndef __TRADES_PANEL_CLASS_MQH__
 #define __TRADES_PANEL_CLASS_MQH__
 
-#include "db_service.mqh"
+#include "CDBService.mqh"
 #include "trade_pos_line_registry.mqh"
 #include "CDiscordClient.mqh"
 #include "logger.mqh"
 #include "UI_ParseTradePosFromName.mqh"
+
+
+#define TP_BG "TP_BG"
+
+#define TP_LBL_LONG "TP_LBL_LONG"
+#define TP_LBL_SHORT "TP_LBL_SHORT"
+
+#define TP_BTN_ACTIVE_LONG "TP_BTN_ACTIVE_LONG"
+#define TP_BTN_ACTIVE_SHORT "TP_BTN_ACTIVE_SHORT"
+
+#define TP_BTN_CANCEL_LONG "TP_BTN_CANCEL_LONG"
+#define TP_BTN_CANCEL_SHORT "TP_BTN_CANCEL_SHORT"
+
+#define TP_ROW_LONG_TR_PREFIX "TP_ROW_LONG_TR_"   // TP_ROW_LONG_12 Tradesnummern!
+#define TP_ROW_SHORT_TR_PREFIX "TP_ROW_SHORT_TR_" // TP_ROW_SHORT_12
+
+#define TP_ROW_LONG_TR_Cancel_PREFIX "TP_ROW_LONG_TR_Cancel_"   // TP_ROW_LONG_12_c
+#define TP_ROW_SHORT_TR_Cancel_PREFIX "TP_ROW_SHORT_TR_Cancel_" // TP_ROW_SHORT_12_c
+
+#define TP_ROW_LONG_PREFIX "TP_ROW_LONG_"   // TP_ROW_LONG_3 Positionen
+#define TP_ROW_SHORT_PREFIX "TP_ROW_SHORT_" // TP_ROW_SHORT_3 Positionen!
+
+#define TP_ROW_LONG_Cancel_PREFIX "TP_ROW_LONG_Cancel_"   // TP_ROW_LONG_3_c
+#define TP_ROW_SHORT_Cancel_PREFIX "TP_ROW_SHORT_Cancel_" // TP_ROW_SHORT_3_c
+
+#define TP_ROW_LONG_hitSL_PREFIX "TP_ROW_LONG_sl_"   // TP_ROW_LONG_3_sl
+#define TP_ROW_SHORT_hitSL_PREFIX "TP_ROW_SHORT_sl_" // TP_ROW_SHORT_3_sl
 
 
 
@@ -40,7 +67,7 @@ public:
    virtual          ~ITradesPanelHandler() {}
   };
 
-// Optional: UI helpers (wo UI_Reg_Add/UI_ObjSetIntSafe/UI_RequestRedraw wohnen)
+// Optional: UI helpers (wo UI_Reg_Add/ObjSetIntSafe/UI_RequestRedraw wohnen)
 // #include "ui_helpers.mqh"
 
 #ifndef OBJ_ALL_PERIODS
@@ -51,11 +78,81 @@ public:
 class CTradesPanel
   {
 private:
-   // State
+
+   // ------------------------------------------------------------
+   // Tiny, self-contained UI helpers
+   // (keeps CTradesPanel independent from legacy trades_panel.mqh)
+   // ------------------------------------------------------------
+   static void        ObjSetIntSafe(const long chart_id,const string obj,const ENUM_OBJECT_PROPERTY_INTEGER prop,const long v)
+     {
+      if(ObjectFind(chart_id,obj) >= 0)
+         ObjectSetInteger(chart_id,obj,prop,v);
+     }
+   static void        ObjSetStrSafe(const long chart_id,const string obj,const ENUM_OBJECT_PROPERTY_STRING prop,const string v)
+     {
+      if(ObjectFind(chart_id,obj) >= 0)
+         ObjectSetString(chart_id,obj,prop,v);
+     }
+
+   // true wenn Preis im sichtbaren Chartbereich liegt
+   static bool        IsPriceVisible(const long chart_id,const double price,const int subwin=0)
+     {
+      double pmin=0.0, pmax=0.0;
+      if(!ChartGetDouble(chart_id, CHART_PRICE_MIN, subwin, pmin))
+         return true;
+      if(!ChartGetDouble(chart_id, CHART_PRICE_MAX, subwin, pmax))
+         return true;
+      return (price>=pmin && price<=pmax);
+     }
+
+   // Fallback: sichtbarer Mid-Preis (wenn Preis außerhalb)
+   static double      ChartMidPrice(const long chart_id,const int subwin=0)
+     {
+      double pmin=0.0, pmax=0.0;
+      if(!ChartGetDouble(chart_id, CHART_PRICE_MIN, subwin, pmin))
+         return 0.0;
+      if(!ChartGetDouble(chart_id, CHART_PRICE_MAX, subwin, pmax))
+         return 0.0;
+      return (pmin+pmax)/2.0;
+     }
+
+   // Zeichnet einen Preis, oder (wenn außerhalb) den sichtbaren Mid-Preis
+   static double      DrawPriceOrMid(const long chart_id,const double intended_price,const int subwin=0)
+     {
+      if(IsPriceVisible(chart_id, intended_price, subwin))
+         return intended_price;
+      double mid = ChartMidPrice(chart_id, subwin);
+      if(mid>0.0)
+         return mid;
+      return intended_price;
+     }
+
+   // Sortiert DB-Positionen nach trade_no, pos_no (stabil, aufsteigend)
+   static void        SortRowsByTradePos(DB_PositionRow &rows[], const int n)
+     {
+      if(n<=1) return;
+      for(int i=0;i<n-1;i++)
+        {
+         int best=i;
+         for(int j=i+1;j<n;j++)
+           {
+            if(rows[j].trade_no < rows[best].trade_no) { best=j; continue; }
+            if(rows[j].trade_no == rows[best].trade_no && rows[j].pos_no < rows[best].pos_no) { best=j; continue; }
+           }
+         if(best!=i)
+           {
+            DB_PositionRow tmp = rows[i];
+            rows[i] = rows[best];
+            rows[best] = tmp;
+           }
+        }
+     }
+
+// State
    bool              m_created;
    bool              m_dirty;
    ulong             m_lastRebuildMs;
-
+int m_chart;
    // External
    CDBService        *m_db;          // optional (wenn UI selbst laden soll)
    ITradesPanelHandler *m_handler;  // Aktionen
@@ -83,6 +180,7 @@ private:
 
    // Names (statisch)
    string            m_bg, m_sep, m_hdrL, m_hdrR, m_lblL, m_lblR;
+   string            m_btnActiveL, m_btnActiveR;
    string            m_btnCancelL, m_btnCancelR;
 
    // Prefixes (Rows)
@@ -115,7 +213,7 @@ private:
 
    bool              BuildSide(const bool isLong, const DB_PositionRow &arr[], const int cnt,
                                const int xBase, const int yTop, const int col_w, const int maxRows);
-
+color  TP_PanelBg();
    // ---------- events ----------
    bool              HandleHeaderClick(const string objName);
    bool              HandleRowClick(const string objName);
@@ -131,7 +229,7 @@ public:
       m_lastRebuildMs=0;
       m_db=NULL;
       m_handler=NULL;
-
+m_chart=0;
       m_x=10;
       m_y=40;
       m_w=440;
@@ -159,6 +257,9 @@ public:
       m_hdrR="TP_HDR_SHORT_BG";
       m_lblL="TP_LBL_LONG";
       m_lblR="TP_LBL_SHORT";
+
+      m_btnActiveL="TP_BTN_ACTIVE_LONG";
+      m_btnActiveR="TP_BTN_ACTIVE_SHORT";
 
       m_btnCancelL="TP_BTN_CANCEL_LONG";
       m_btnCancelR="TP_BTN_CANCEL_SHORT";
@@ -188,6 +289,12 @@ public:
 
    void              SetButtonVisible(const string name, const bool visible, const string caption,
                                       const color txt_col, const color bg_col, const color border_col);
+
+   // Komfort-Wrapper: Active/Cancel Buttons (ersetzen legacy trades_panel.mqh)
+   void              ShowActiveLong(const bool visible)  { SetButtonVisible(m_btnActiveL, visible, "ACTIVE", clrWhite, clrFireBrick, clrMaroon); }
+   void              ShowActiveShort(const bool visible) { SetButtonVisible(m_btnActiveR, visible, "ACTIVE", clrWhite, clrFireBrick, clrMaroon); }
+   void              ShowCancelLong(const bool visible)  { SetButtonVisible(m_btnCancelL, visible, "CANCEL", clrWhite, clrDimGray, clrBlack); }
+   void              ShowCancelShort(const bool visible) { SetButtonVisible(m_btnCancelR, visible, "CANCEL", clrWhite, clrDimGray, clrBlack); }
    void              DeleteByPrefix(const string prefix);
    void              SetDB(CDBService *db) { m_db=db; }
    void              SetHandler(ITradesPanelHandler *h) { m_handler=h; }
@@ -260,8 +367,8 @@ bool CTradesPanel::BuildStatic(const int x, const int y, const int w, const int 
 
 // Header-Vertikal-Layout (einmalig)
    int y1 = m_y + m_pad;
-   int y2 = y1 + m_hdr_h + 6;
-
+   int yActive = y1 + m_hdr_h + 4;      // Active-Buttons unter Header
+   int y2      = yActive + m_btn_h + 2; // Cancel-Buttons unter Active
 
    m_layout.col_w   = col_w;
    m_layout.block_w = block_w;
@@ -299,6 +406,14 @@ bool CTradesPanel::BuildStatic(const int x, const int y, const int w, const int 
 
 // Header-Buttons erstellen (aber hidden)
  
+   CreateButton(m_btnActiveL, xL, yActive, block_w, m_btn_h, "Active", 9);
+   CreateButton(m_btnActiveR, xR, yActive, block_w, m_btn_h, "Active", 9);
+
+   // default: hidden; when visible, make it shouty-red
+   SetButtonVisible(m_btnActiveL, false, "", clrWhite, clrFireBrick, clrFireBrick);
+   SetButtonVisible(m_btnActiveR, false, "", clrWhite, clrFireBrick, clrFireBrick);
+
+
    CreateButton(m_btnCancelL, xL, y2, block_w, m_btn_h, "Cancel Trade", 9);
    CreateButton(m_btnCancelR, xR, y2, block_w, m_btn_h, "Cancel Trade", 9);
 
@@ -331,19 +446,19 @@ bool CTradesPanel::CreateRect(const string name,const int x,const int y,const in
       UI_Reg_Add(name);
      }
 
-   UI_ObjSetIntSafe(0,name,OBJPROP_XDISTANCE,x);
-   UI_ObjSetIntSafe(0,name,OBJPROP_YDISTANCE,y);
-   UI_ObjSetIntSafe(0,name,OBJPROP_XSIZE,w);
-   UI_ObjSetIntSafe(0,name,OBJPROP_YSIZE,h);
-   UI_ObjSetIntSafe(0,name,OBJPROP_COLOR,border);
-   UI_ObjSetIntSafe(0,name,OBJPROP_BGCOLOR,bg);
-   UI_ObjSetIntSafe(0,name,OBJPROP_BORDER_TYPE,BORDER_FLAT);
-   UI_ObjSetIntSafe(0,name,OBJPROP_ZORDER,z);
-   UI_ObjSetIntSafe(0,name,OBJPROP_HIDDEN,true);
-   UI_ObjSetIntSafe(0,name,OBJPROP_SELECTABLE,false);
-   UI_ObjSetIntSafe(0,name,OBJPROP_BACK,false);
-   UI_ObjSetIntSafe(0,name,OBJPROP_CORNER,CORNER_LEFT_UPPER);
-   UI_ObjSetIntSafe(0,name,OBJPROP_TIMEFRAMES,OBJ_ALL_PERIODS);
+   ObjSetIntSafe(0,name,OBJPROP_XDISTANCE,x);
+   ObjSetIntSafe(0,name,OBJPROP_YDISTANCE,y);
+   ObjSetIntSafe(0,name,OBJPROP_XSIZE,w);
+   ObjSetIntSafe(0,name,OBJPROP_YSIZE,h);
+   ObjSetIntSafe(0,name,OBJPROP_COLOR,border);
+   ObjSetIntSafe(0,name,OBJPROP_BGCOLOR,bg);
+   ObjSetIntSafe(0,name,OBJPROP_BORDER_TYPE,BORDER_FLAT);
+   ObjSetIntSafe(0,name,OBJPROP_ZORDER,z);
+   ObjSetIntSafe(0,name,OBJPROP_HIDDEN,true);
+   ObjSetIntSafe(0,name,OBJPROP_SELECTABLE,false);
+   ObjSetIntSafe(0,name,OBJPROP_BACK,false);
+   ObjSetIntSafe(0,name,OBJPROP_CORNER,CORNER_LEFT_UPPER);
+   ObjSetIntSafe(0,name,OBJPROP_TIMEFRAMES,OBJ_ALL_PERIODS);
    return true;
   }
 
@@ -368,19 +483,19 @@ bool CTradesPanel::CreateLabel(const string name,const int x,const int y,const i
       UI_Reg_Add(name);
      }
 
-   UI_ObjSetIntSafe(0,name,OBJPROP_XDISTANCE,x);
-   UI_ObjSetIntSafe(0,name,OBJPROP_YDISTANCE,y);
-   UI_ObjSetIntSafe(0,name,OBJPROP_COLOR,col);
-   UI_ObjSetIntSafe(0,name,OBJPROP_FONTSIZE,fontsize);
+   ObjSetIntSafe(0,name,OBJPROP_XDISTANCE,x);
+   ObjSetIntSafe(0,name,OBJPROP_YDISTANCE,y);
+   ObjSetIntSafe(0,name,OBJPROP_COLOR,col);
+   ObjSetIntSafe(0,name,OBJPROP_FONTSIZE,fontsize);
    ObjectSetString(0,name,OBJPROP_TEXT,txt);
-   UI_ObjSetIntSafe(0,name,OBJPROP_CORNER,CORNER_LEFT_UPPER);
-   UI_ObjSetIntSafe(0,name,OBJPROP_HIDDEN,true);
-   UI_ObjSetIntSafe(0,name,OBJPROP_SELECTABLE,false);
-   UI_ObjSetIntSafe(0,name,OBJPROP_TIMEFRAMES,OBJ_ALL_PERIODS);
+   ObjSetIntSafe(0,name,OBJPROP_CORNER,CORNER_LEFT_UPPER);
+   ObjSetIntSafe(0,name,OBJPROP_HIDDEN,true);
+   ObjSetIntSafe(0,name,OBJPROP_SELECTABLE,false);
+   ObjSetIntSafe(0,name,OBJPROP_TIMEFRAMES,OBJ_ALL_PERIODS);
 
-   UI_ObjSetIntSafe(0,name,OBJPROP_SELECTABLE,false);
-   UI_ObjSetIntSafe(0,name,OBJPROP_ZORDER,10005);
-   UI_ObjSetIntSafe(0,name,OBJPROP_BACK,false);
+   ObjSetIntSafe(0,name,OBJPROP_SELECTABLE,false);
+   ObjSetIntSafe(0,name,OBJPROP_ZORDER,10005);
+   ObjSetIntSafe(0,name,OBJPROP_BACK,false);
    return true;
   }
 
@@ -405,26 +520,26 @@ bool CTradesPanel::CreateButton(const string name,const int x,const int y,const 
       UI_Reg_Add(name);
      }
 
-   UI_ObjSetIntSafe(0,name,OBJPROP_XDISTANCE,x);
-   UI_ObjSetIntSafe(0,name,OBJPROP_YDISTANCE,y);
-   UI_ObjSetIntSafe(0,name,OBJPROP_XSIZE,w);
-   UI_ObjSetIntSafe(0,name,OBJPROP_YSIZE,h);
-   UI_ObjSetIntSafe(0,name,OBJPROP_FONTSIZE,fontsize);
+   ObjSetIntSafe(0,name,OBJPROP_XDISTANCE,x);
+   ObjSetIntSafe(0,name,OBJPROP_YDISTANCE,y);
+   ObjSetIntSafe(0,name,OBJPROP_XSIZE,w);
+   ObjSetIntSafe(0,name,OBJPROP_YSIZE,h);
+   ObjSetIntSafe(0,name,OBJPROP_FONTSIZE,fontsize);
    ObjectSetString(0,name,OBJPROP_TEXT,txt);
-   UI_ObjSetIntSafe(0,name,OBJPROP_CORNER,CORNER_LEFT_UPPER);
-   UI_ObjSetIntSafe(0,name,OBJPROP_HIDDEN,true);
-   UI_ObjSetIntSafe(0,name,OBJPROP_TIMEFRAMES,OBJ_ALL_PERIODS);
+   ObjSetIntSafe(0,name,OBJPROP_CORNER,CORNER_LEFT_UPPER);
+   ObjSetIntSafe(0,name,OBJPROP_HIDDEN,true);
+   ObjSetIntSafe(0,name,OBJPROP_TIMEFRAMES,OBJ_ALL_PERIODS);
 
 // klickbar
-   UI_ObjSetIntSafe(0,name,OBJPROP_SELECTABLE,true);
-   UI_ObjSetIntSafe(0,name,OBJPROP_SELECTED,false);
+   ObjSetIntSafe(0,name,OBJPROP_SELECTABLE,true);
+   ObjSetIntSafe(0,name,OBJPROP_SELECTED,false);
 
 // sicher vor dem BG (BG hat 10000)
-   UI_ObjSetIntSafe(0,name,OBJPROP_ZORDER,10010);
+   ObjSetIntSafe(0,name,OBJPROP_ZORDER,10010);
 
 // optional, aber empfehlenswert
-   UI_ObjSetIntSafe(0,name,OBJPROP_BACK,false);
-   UI_ObjSetIntSafe(0,name,OBJPROP_STATE,0);
+   ObjSetIntSafe(0,name,OBJPROP_BACK,false);
+   ObjSetIntSafe(0,name,OBJPROP_STATE,0);
 
 
    return true;
@@ -562,8 +677,8 @@ void CTradesPanel::RestoreTradeLinesFromRows(const DB_PositionRow &rows[], const
       const int pos_no   = rows[i].pos_no;
       const string suf   = "_" + IntegerToString(trade_no) + "_" + IntegerToString(pos_no);
 
-      const double entry_draw = UI_DrawPriceOrMid(rows[i].entry, 0);
-      const double sl_draw    = UI_DrawPriceOrMid(rows[i].sl, 0);
+      const double entry_draw = DrawPriceOrMid(m_chart, rows[i].entry, 0);
+      const double sl_draw    = DrawPriceOrMid(m_chart, rows[i].sl, 0);
 
       if(rows[i].direction == "LONG")
         {
@@ -664,9 +779,9 @@ void               CTradesPanel::StyleButton(const string name, const color txt,
    if(ObjectFind(0, name) < 0)
       return;
 
-   UI_ObjSetIntSafe(0, name, OBJPROP_COLOR,        txt);
-   UI_ObjSetIntSafe(0, name, OBJPROP_BGCOLOR,      bg);
-   UI_ObjSetIntSafe(0, name, OBJPROP_BORDER_COLOR, brd);
+   ObjSetIntSafe(0, name, OBJPROP_COLOR,        txt);
+   ObjSetIntSafe(0, name, OBJPROP_BGCOLOR,      bg);
+   ObjSetIntSafe(0, name, OBJPROP_BORDER_COLOR, brd);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -700,9 +815,9 @@ bool CTradesPanel::BuildSide(const bool isLong, const DB_PositionRow &arr[], con
          string trTxt  = StringFormat("%s T%d", (isLong?"LONG":"SHORT"), trade_no);
 
          CreateButton(trName, xBase, yTop + idx*m_row_h, col_w, m_row_h, trTxt, 8);
-         UI_ObjSetIntSafe(0, trName, OBJPROP_COLOR, TR_TXT);
-         UI_ObjSetIntSafe(0, trName, OBJPROP_BGCOLOR, TR_BG);
-         UI_ObjSetIntSafe(0, trName, OBJPROP_BORDER_COLOR, TR_BRD);
+         ObjSetIntSafe(0, trName, OBJPROP_COLOR, TR_TXT);
+         ObjSetIntSafe(0, trName, OBJPROP_BGCOLOR, TR_BG);
+         ObjSetIntSafe(0, trName, OBJPROP_BORDER_COLOR, TR_BRD);
 
          idx++;
          if(idx >= maxRows)
@@ -725,18 +840,18 @@ bool CTradesPanel::BuildSide(const bool isLong, const DB_PositionRow &arr[], con
       CreateButton(sName, xBase + col_w + m_gap + m_btnC_w + m_gap, yTop + idx*m_row_h, m_btnS_w, m_row_h, "S", 8);
 
       // Styles row
-      UI_ObjSetIntSafe(0, rowName, OBJPROP_COLOR, clrWhite);
-      UI_ObjSetIntSafe(0, rowName, OBJPROP_BGCOLOR, clrDarkSlateGray);
-      UI_ObjSetIntSafe(0, rowName, OBJPROP_BORDER_COLOR, clrDimGray);
+      ObjSetIntSafe(0, rowName, OBJPROP_COLOR, clrWhite);
+      ObjSetIntSafe(0, rowName, OBJPROP_BGCOLOR, clrDarkSlateGray);
+      ObjSetIntSafe(0, rowName, OBJPROP_BORDER_COLOR, clrDimGray);
 
       // Styles minis (du nutzt SLButton_* als Theme)
-      UI_ObjSetIntSafe(0, cName, OBJPROP_COLOR, SLButton_font_color);
-      UI_ObjSetIntSafe(0, cName, OBJPROP_BGCOLOR, SLButton_bgcolor);
-      UI_ObjSetIntSafe(0, cName, OBJPROP_BORDER_COLOR, clrWhite);
+      ObjSetIntSafe(0, cName, OBJPROP_COLOR, SLButton_font_color);
+      ObjSetIntSafe(0, cName, OBJPROP_BGCOLOR, SLButton_bgcolor);
+      ObjSetIntSafe(0, cName, OBJPROP_BORDER_COLOR, clrWhite);
 
-      UI_ObjSetIntSafe(0, sName, OBJPROP_COLOR, SLButton_font_color);
-      UI_ObjSetIntSafe(0, sName, OBJPROP_BGCOLOR, SLButton_bgcolor);
-      UI_ObjSetIntSafe(0, sName, OBJPROP_BORDER_COLOR, clrWhite);
+      ObjSetIntSafe(0, sName, OBJPROP_COLOR, SLButton_font_color);
+      ObjSetIntSafe(0, sName, OBJPROP_BGCOLOR, SLButton_bgcolor);
+      ObjSetIntSafe(0, sName, OBJPROP_BORDER_COLOR, clrWhite);
 
       idx++;
       any=true;
@@ -756,26 +871,34 @@ void               CTradesPanel::SetButtonVisible(const string name, const bool 
 
    if(visible)
      {
-      UI_ObjSetIntSafe(0, name, OBJPROP_TIMEFRAMES, OBJ_ALL_PERIODS);
+      ObjSetIntSafe(0, name, OBJPROP_TIMEFRAMES, OBJ_ALL_PERIODS);
       ObjectSetString(0, name, OBJPROP_TEXT, caption);
 
-      UI_ObjSetIntSafe(0, name, OBJPROP_COLOR,        txt_col);
-      UI_ObjSetIntSafe(0, name, OBJPROP_BGCOLOR,      bg_col);
-      UI_ObjSetIntSafe(0, name, OBJPROP_BORDER_COLOR, border_col);
+      ObjSetIntSafe(0, name, OBJPROP_COLOR,        txt_col);
+      ObjSetIntSafe(0, name, OBJPROP_BGCOLOR,      bg_col);
+      ObjSetIntSafe(0, name, OBJPROP_BORDER_COLOR, border_col);
      }
    else
      {
       // wirklich unsichtbar
-      UI_ObjSetIntSafe(0, name, OBJPROP_TIMEFRAMES, 0);
+      ObjSetIntSafe(0, name, OBJPROP_TIMEFRAMES, 0);
 
       // optional: gegen “Rahmen-Flicker”
       color bg = TP_PanelBg();
       ObjectSetString(0, name, OBJPROP_TEXT, "");
-      UI_ObjSetIntSafe(0, name, OBJPROP_COLOR,        bg);
-      UI_ObjSetIntSafe(0, name, OBJPROP_BGCOLOR,      bg);
-      UI_ObjSetIntSafe(0, name, OBJPROP_BORDER_COLOR, bg);
+      ObjSetIntSafe(0, name, OBJPROP_COLOR,        bg);
+      ObjSetIntSafe(0, name, OBJPROP_BGCOLOR,      bg);
+      ObjSetIntSafe(0, name, OBJPROP_BORDER_COLOR, bg);
      }
   }
+  
+ color  CTradesPanel::TP_PanelBg()
+  {
+   if(ObjectFind(0, TP_BG) >= 0)
+      return (color)ObjectGetInteger(0, TP_BG, OBJPROP_BGCOLOR);
+   return clrBlack; // Fallback
+  }
+
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+

@@ -71,10 +71,10 @@ void ClearActiveTrend(const string direction)
 
       g_DB.SetMetaInt(g_DB.Key("g_ui_state.active_trade_no_long"), 0);
 
-      if(ObjectFind(0, TP_BTN_ACTIVE_LONG) != -1)
+      if(ObjectFind(0, "TP_BTN_ACTIVE_LONG") != -1)
         {
-         showActive_long(false); //Button Ausblenden
-         showCancel_long(false);
+         g_tp.ShowActiveLong(false); //Button Ausblenden
+         g_tp.ShowCancelLong(false);
         }
      }
    else
@@ -86,10 +86,10 @@ void ClearActiveTrend(const string direction)
 
          if(g_DB.SetMetaInt(g_DB.Key("g_ui_state.active_trade_no_short"), 0))
            {
-            if(ObjectFind(0, TP_BTN_ACTIVE_SHORT) != -1)
+            if(ObjectFind(0, "TP_BTN_ACTIVE_SHORT") != -1)
               {
-               showActive_long(false);
-               showCancel_short(false);
+               g_tp.ShowActiveLong(false);
+               g_tp.ShowCancelShort(false);
               }
            }
         }
@@ -154,41 +154,9 @@ void setzeTrade()
        */
   }
 
-//+------------------------------------------------------------------+
-//| Sabio TP berechnen                                                                 |
-//+------------------------------------------------------------------+
-void UpdateSabioTP()
-  {
-   if(Entry_Price > CurrentAskPrice)
-     {
-      string EntryPriceString = ObjectGetString(0, SabioEntry, OBJPROP_TEXT, 0);
-      int Ergebnis = StringReplace(EntryPriceString, "SABIO ENTRY:", "");
-      double SabioEntryPrice = (double)EntryPriceString;
-      string SabioSLPriceString = ObjectGetString(0, SabioSL, OBJPROP_TEXT, 0);
-      int ErgebnisSL = StringReplace(SabioSLPriceString, "SABIO SL:", "");
-      double SabioSLPrice = (double)SabioSLPriceString;
-     }
-
-   if(Entry_Price < CurrentBidPrice)
-     {
-      string EntryPriceString = ObjectGetString(0, SabioEntry, OBJPROP_TEXT, 0);
-      int Ergebnis = StringReplace(EntryPriceString, "SABIO ENTRY:", "");
-      double SabioEntryPrice = (double)EntryPriceString;
-      string SabioSLPriceString = ObjectGetString(0, SabioSL, OBJPROP_TEXT, 0);
-      int ErgebnisSL = StringReplace(SabioSLPriceString, "SABIO SL:", "");
-
-      double SabioSLPrice = (double)SabioSLPriceString;
-     }
-  }
-
-//+------------------------------------------------------------------+
-//| Tradelinien Short löschen                                                                 |
-//+------------------------------------------------------------------+
 
 
 
-
-//+------------------------------------------------------------------+
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -324,136 +292,6 @@ void TPSLReached()
 
 
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-bool SetPriceOnObject(const string name, const double price)
-  {
-   if(ObjectFind(0, name) < 0)
-      return false;
-
-   long type = ObjectGetInteger(0, name, OBJPROP_TYPE);
-
-   if(type == OBJ_HLINE)
-      return ObjectSetDouble(0, name, OBJPROP_PRICE, price);
-
-// Fallback für “preisbasierte” Objekte mit Punkten:
-   datetime t = iTime(_Symbol, (ENUM_TIMEFRAMES)Period(), 0);
-   return ObjectMove(0, name, 0, t, price);
-  }
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void createEntryAndSLLinien()
-  {
-
-   xd3 = getChartWidthInPixels() -DistancefromRight-10;
-   yd3 = getChartHeightInPixels()/2;
-   xs3 = 280;
-   ys3= 30;
-   datetime dt_tp = iTime(_Symbol, 0, 0), dt_sl = iTime(_Symbol, 0, 0), dt_prc = iTime(_Symbol, 0, 0);
-   double price_tp = iClose(_Symbol, 0, 0), price_sl = iClose(_Symbol, 0, 0), price_prc = iClose(_Symbol, 0, 0);
-   int window = 0;
-
-   ChartXYToTimePrice(0, xd3, yd3 + ys3, window, dt_prc, price_prc);
-   ChartXYToTimePrice(0, xd5, yd5 + ys5, window, dt_sl, price_sl);
-
-   createHLine(PR_HL, price_prc,color_EntryLine);
-   SetPriceOnObject(PR_HL, price_prc);
-
-
-//+------------------------------------------------------------------+
-   createHL(PR_HL, dt_prc, price_prc, EntryLine);
-
-
-
-   createButton(EntryButton, "", xd3, yd3, xs3, ys3, PriceButton_font_color, PriceButton_bgcolor, InpFontSize, clrNONE, InpFont);
-
-// SL Button
-   xd5 = xd3;
-   yd5 = yd3 + 100;
-   xs5 = xs3;
-   ys5 = 30;
-
-   ChartXYToTimePrice(0, xd5, yd5 + ys5, window, dt_sl, price_sl);
-
-   createHL(SL_HL, dt_sl, price_sl, color_SLLine);
-
-   ObjectMove(0, EntryButton, 0, dt_prc, price_prc);
-
-
-
-
-//   DrawHL();
-   if(Sabioedit)
-     {
-      SabioEdit();
-     }
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-   SendButton();
-   if(!SendOnlyButton)
-     {
-      ObjectSetString(0, SENDTRADEBTN, OBJPROP_TEXT, "T & S"); // label
-      UI_ObjSetIntSafe(0, SENDTRADEBTN, OBJPROP_BGCOLOR, TSButton_bgcolor);
-      ObjectSetInteger(0, SENDTRADEBTN, OBJPROP_COLOR, TSButton_font_color);
-     }
-
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-
-
-   createButton(SLButton, "", xd5, yd5, xs5, ys5, SLButton_font_color, SLButton_bgcolor, InpFontSize, clrNONE, InpFont);
-   ObjectMove(0, SLButton, 0, dt_sl, price_sl);
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-   update_Text(EntryButton, "Buy Stop @ " + Get_Price_s(PR_HL) + " | Lot: " + DoubleToString(NormalizeDouble(g_TradeMgr.calcLots(_Symbol,_Period,SL_Price - Entry_Price), 2), 2));
-   update_Text(SLButton, "SL: " + DoubleToString(((Get_Price_d(PR_HL) - Get_Price_d(SL_HL)) / _Point), 0) + " Points | " + Get_Price_s(SL_HL));
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-   ChartSetInteger(0, CHART_EVENT_MOUSE_MOVE, true);
-   ChartRedraw(0);
-  }
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-bool createHLine(const string name, const double price, color clr)
-  {
-   if(ObjectFind(0, name) >= 0)
-      return true;
-
-   if(!ObjectCreate(0, name, OBJ_HLINE, 0, 0, price))
-     {
-      CLogger::Add(LOG_LEVEL_INFO, "createHLine: create failed for "+ name+ " err="+ GetLastError());
-      return false;
-     }
-   UI_ObjSetIntSafe(0, name, OBJPROP_SELECTABLE, true);
-   UI_ObjSetIntSafe(0, name, OBJPROP_HIDDEN, false);
-//UI_ObjSetIntSafe(0, objName, OBJPROP_TIME, time1);
-   ObjectSetDouble(0, name, OBJPROP_PRICE, price);
-   UI_ObjSetIntSafe(0, name, OBJPROP_COLOR, clr);
-   UI_ObjSetIntSafe(0, name, OBJPROP_BACK, false);
-   UI_ObjSetIntSafe(0, name, OBJPROP_STYLE, STYLE_SOLID);
-   UI_ObjSetIntSafe(0, name, OBJPROP_ZORDER, 10);
-
-   UI_Reg_Add(name);//Speichere Object im Array zum späteren löschen
-
-   return true;
-  }
-
-
-
-// Einheitlicher Suffix (wenn du lieber "_tag" willst: hier ändern UND überall beim Delete ändern)
 
 
 
