@@ -39,11 +39,7 @@ void OnChartEvent(const int id,
                   const double &dparam,
                   const string &sparam)
   {   bool handled = false;
- if(id == CHARTEVENT_OBJECT_CLICK)
-   Print("CLICK sparam=", sparam);
 
-if(id == CHARTEVENT_OBJECT_ENDEDIT)
-   Print("ENDEDIT sparam=", sparam);
  
    CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
@@ -58,11 +54,11 @@ if(id == CHARTEVENT_OBJECT_ENDEDIT)
 
    // 3) Router / restliche Logik wie bisher...
 
-   if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
-      handled = true;
+//   if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
+  //    handled = true;
 
 // 1) Legacy / restliche Verarbeitung nur wenn Router NICHT handled hat
-   if(!handled)
+   /*if(!handled)
      {
 
 
@@ -143,7 +139,7 @@ if(id == CHARTEVENT_OBJECT_ENDEDIT)
          handled = true;
         }
      } // if(!handled)
-
+*/
 
 
 // --- Post-Phase: MUSS IMMER laufen ---
@@ -642,7 +638,6 @@ bool UI_CloseOnePositionAndNotify(const string action,
      }
 
 // 4) UI Refresh
-   g_vgui.OnBaseLinesChanged(false); // reicht: synced Texte + TRNB/POSNB
    UI_ProcessRedraw();
    g_tp.RequestRebuild();
 
@@ -720,7 +715,6 @@ bool UI_CancelActiveTrade(const string direction)
          UI_ObjSetIntSafe(0, "ActiveShortTrade", OBJPROP_BGCOLOR, clrNONE);
         }
      }
-   g_vgui.OnBaseLinesChanged(false); // reicht: synced Texte + TRNB/POSNB
    g_tp.RebuildRows();
 
    ChartRedraw(0);
