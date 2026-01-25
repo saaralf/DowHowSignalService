@@ -38,9 +38,10 @@ void OnChartEvent(const int id,
                   const long &lparam,
                   const double &dparam,
                   const string &sparam)
-  {   bool handled = false;
+  {
+   bool handled = false;
 
- 
+
    CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
 
@@ -48,14 +49,14 @@ void OnChartEvent(const int id,
 
 
 
-   // 2) BaseUI (Drag Lines/Buttons + Sync)
+// 2) BaseUI (Drag Lines/Buttons + Sync)
    if(g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam))
-       handled = true;
+      handled = true;
 
-   // 3) Router / restliche Logik wie bisher...
+// 3) Router / restliche Logik wie bisher...
 
-//   if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
-  //    handled = true;
+   if(g_evt_router.Dispatch(id, lparam, dparam, sparam))
+      handled = true;
 
 // 1) Legacy / restliche Verarbeitung nur wenn Router NICHT handled hat
    /*if(!handled)
@@ -139,23 +140,23 @@ void OnChartEvent(const int id,
          handled = true;
         }
      } // if(!handled)
-*/
+   */
 
 
 // --- Post-Phase: MUSS IMMER laufen ---
 
-  // Post-Phase + Redraw wie bisher
+// Post-Phase + Redraw wie bisher
    static bool last_is_long = true;
    if(last_is_long != g_ui_state.is_long)
-   {
+     {
       last_is_long = g_ui_state.is_long;
       TP_RebuildRows();
-   }
+     }
 
    UI_ProcessRedraw();
    g_tp.ProcessRebuild();
 
- }
+  }
 
 
 
