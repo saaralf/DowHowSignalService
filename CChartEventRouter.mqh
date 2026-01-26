@@ -29,6 +29,7 @@ class CChartEventRouter
 public:
    bool              Dispatch(const int id, const long &lparam, const double &dparam, const string &sparam)
      {
+      const ENUM_TIMEFRAMES tf = (ENUM_TIMEFRAMES)_Period;
       // 1) Panel zuerst (Row Buttons etc.)
       if(g_tp.OnChartEvent(id, lparam, dparam, sparam))
          return true;
@@ -51,21 +52,20 @@ public:
       if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == TRNB || sparam == POSNB))
         {
          // TM übernimmt ggf. Requests aus DB und published tm.pub.*
-         g_TradeMgr.TM_ConsumeGUIRequestsFromDB(_Symbol, PERIOD_CURRENT);
+         g_TradeMgr.TM_ConsumeGUIRequestsFromDB(_Symbol, tf);
 
          // GUI zeigt published Werte (und schreibt vt.draft.trnb/posnb)
          g_vgui.ApplyTradePosFromDBToEdits();
-         g_TradeMgr.TM_ConsumeGUIRequestsFromDB(_Symbol, PERIOD_CURRENT);
          // danach GUI: aus tm.pub.* lesen und anzeigen (deine GUI macht das)
         }
 
       if(id == CHARTEVENT_OBJECT_CLICK && sparam == SENDTRADEBTN)
         {
-         const string k_dir   = g_DB.KeyFor(_Symbol, PERIOD_CURRENT, "vt.draft.direction");
-         const string k_entry = g_DB.KeyFor(_Symbol, PERIOD_CURRENT, "vt.draft.entry_price");
-         const string k_sl    = g_DB.KeyFor(_Symbol, PERIOD_CURRENT, "vt.draft.sl_price");
-         const string k_sabE  = g_DB.KeyFor(_Symbol, PERIOD_CURRENT, "vt.draft.sabio_entry_text");
-         const string k_sabS  = g_DB.KeyFor(_Symbol, PERIOD_CURRENT, "vt.draft.sabio_sl_text");
+         const string k_dir   = g_DB.KeyFor(_Symbol, tf, "vt.draft.direction");
+         const string k_entry = g_DB.KeyFor(_Symbol, tf, "vt.draft.entry_price");
+         const string k_sl    = g_DB.KeyFor(_Symbol, tf, "vt.draft.sl_price");
+         const string k_sabE  = g_DB.KeyFor(_Symbol, tf, "vt.draft.sabio_entry_text");
+         const string k_sabS  = g_DB.KeyFor(_Symbol, tf, "vt.draft.sabio_sl_text");
 
          string dir   = "LONG";
          g_DB.GetMetaText(k_dir,   dir,   "LONG");
@@ -78,12 +78,12 @@ public:
          string sabS  = "SABIO SL: ";
          g_DB.GetMetaText(k_sabS,  sabS,  "SABIO SL: ");
 
-         int trnb  = g_DB.GetMetaInt(g_DB.KeyFor(_Symbol, PERIOD_CURRENT, "vt.draft.trnb"), 1);
-         int posnb = g_DB.GetMetaInt(g_DB.KeyFor(_Symbol, PERIOD_CURRENT, "vt.draft.posnb"), 1);
+         int trnb  = g_DB.GetMetaInt(g_DB.KeyFor(_Symbol, tf, "vt.draft.trnb"), 1);
+         int posnb = g_DB.GetMetaInt(g_DB.KeyFor(_Symbol, tf, "vt.draft.posnb"), 1);
 
          // TODO: hier würdest du "SendDraft" / "SendSignalDraft" aufrufen,
          // aktuell nur publish:
-         g_TradeMgr.TM_PublishTradePosToDB(_Symbol, PERIOD_CURRENT);
+         g_TradeMgr.TM_PublishTradePosToDB(_Symbol, tf);
 
          return true;
         }

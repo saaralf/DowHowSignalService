@@ -255,7 +255,7 @@ public:
         }
 
       // 5) fallback
-      CLogger::Add(LOG_LEVEL_ERROR, "WebhookRouter: WARN: Kein Mapping für _Symbol='"+sym_raw+"' (norm='"+n+"', fx='"+fx+"') -> system");
+      CLogger::Add(LOG_LEVEL_ERROR, "WebhookRouter: WARN: Kein Mapping für _Symbol='"+sym_raw+"' (norm='"+n+"', fx='"+fx+"') . system");
       return (require_known ? "" : webhook_system);
      }
   };

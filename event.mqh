@@ -1,4 +1,112 @@
-﻿//+------------------------------------------------------------------+
+﻿// event.mqh
+// -----------------------------------------------------------------------------
+// Zentraler Einstiegspunkt für Chart-Events.
+// Reihenfolge:
+//   1) CVirtualTradeGUI  (Base UI rechts: Entry/SL Buttons + Edits + Drag)
+//   2) CChartEventRouter (TradesPanel + Controller-Kette)
+//   3) Drag-Fallback (MouseUp-Erkennung für TradePosLines)
+// -----------------------------------------------------------------------------
+
+#ifndef __EVENT_MQH__
+#define __EVENT_MQH__
+
+#include "logger.mqh"
+#include "ui_names.mqh"
+#include "ui_state.mqh"
+#include "CVirtualTradeGUI.mqh"
+#include "CTradePosLineDragController.mqh"
+#include "CChartEventRouter.mqh"
+
+// (Optional) Alt-Input bleibt bestehen, auch wenn aktuell nicht benutzt.
+input int InpUI_Deprecated_RedrawMinIntervalMs = 60; // deprecated
+
+extern CVirtualTradeGUI g_vgui;
+
+//+------------------------------------------------------------------+
+//| Chart event handler                                              |
+//+------------------------------------------------------------------+
+void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
+  {
+   // ----------------------------------------------------------------
+   // Preise aktuell halten (einige UI-/Lot-Berechnungen lesen das)
+   // ----------------------------------------------------------------
+   CurrentAskPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   CurrentBidPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+
+   // ----------------------------------------------------------------
+   // MouseMove: wir brauchen den MouseState (Flags) immer auch für
+   // TradePosLine-Drag-Fallback (MouseUp-Erkennung).
+   // ----------------------------------------------------------------
+   if(id == CHARTEVENT_MOUSE_MOVE)
+     {
+      const int mx = (int)lparam;
+      const int my = (int)dparam;
+      const int mouse_state = (int)StringToInteger(sparam);
+
+      // 1) Base UI (Entry/SL + Edits) darf zuerst ziehen/verschieben.
+      const bool handled_by_base = g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam);
+
+      // 3) MouseUp-Fallback für TradePosLines (nur anhand MouseState möglich)
+      g_tp_drag.OnMouseMoveFinalizeIfNeeded(mouse_state);
+
+      if(handled_by_base)
+         return;
+
+      // 2) Router (Panel/Send/Controller)
+     g_evt_router.Dispatch(id, lparam, dparam, sparam);
+
+      // TradesPanel Rebuild/Throttle (falls angefordert)
+      g_tp.ProcessRebuild();
+      return;
+     }
+
+   // ----------------------------------------------------------------
+   // Alle anderen Events: Base UI zuerst
+   // ----------------------------------------------------------------
+   if(g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam))
+      return;
+
+   // ----------------------------------------------------------------
+   // Router (Panel + Controller-Kette)
+   // ----------------------------------------------------------------
+  g_evt_router.Dispatch(id, lparam, dparam, sparam);
+
+   // Chart-Resize / TF-Wechsel etc: Panel neu anfordern
+   if(id == CHARTEVENT_CHART_CHANGE)
+      g_tp.RequestRebuild();
+
+   // TradesPanel Rebuild/Throttle (falls angefordert)
+   g_tp.ProcessRebuild();
+  }
+
+
+void UI_RequestRedraw()
+  {
+   g_ui_redraw_pending = true;
+  }
+input int InpUI_RedrawMinIntervalMs = 50;
+static bool g_ui_redraw_pending = false;
+static uint g_ui_last_redraw_ms = 0;
+
+void UI_ProcessRedraw()
+  {
+   if(!g_ui_redraw_pending)
+      return;
+
+   uint now = GetTickCount();
+   if((now - g_ui_last_redraw_ms) < (uint)InpUI_RedrawMinIntervalMs)
+      return;
+
+   ChartRedraw(0);
+   g_ui_last_redraw_ms = now;
+   g_ui_redraw_pending = false;
+  }
+
+#endif // __EVENT_MQH__
+/*
+
+
+//+------------------------------------------------------------------+
 //|                                                      ProjectName |
 //|                                      Copyright 2020, CompanyName |
 //|                                       http://www.companyname.net |
@@ -164,40 +272,6 @@ void OnChartEvent(const int id,
 
 
 
-/**
- * Beschreibung: Merkt, dass ein Redraw nötig ist (ohne sofort zu zeichnen).
- * Parameter:    none
- * Rückgabewert: void
- * Hinweise:     Verwenden statt ChartRedraw in Low-Level UI Funktionen.
- * Fehlerfälle:  keine
- */
-void UI_RequestRedraw()
-  {
-   g_ui_redraw_pending = true;
-  }
-
-/**
- * Beschreibung: Führt ein gedrosseltes ChartRedraw aus, wenn angefordert.
- * Parameter:    none
- * Rückgabewert: void
- * Hinweise:     Am Ende von OnChartEvent und/oder OnTick aufrufen.
- * Fehlerfälle:  keine
- */
-void UI_ProcessRedraw()
-  {
-   if(!g_ui_redraw_pending)
-      return;
-
-   uint now = GetTickCount();
-   if((now - g_ui_last_redraw_ms) < (uint)InpUI_RedrawMinIntervalMs)
-      return;
-
-   ChartRedraw(0);
-   g_ui_last_redraw_ms = now;
-   g_ui_redraw_pending = false;
-  }
-
-
 
 // ------------------------------------------------------------------
 // Basis-Linien-Drag Tracking (PR_HL / SL_HL)
@@ -235,13 +309,7 @@ static int  g_dx_posnb   = 0;
 static int  g_dx_sabEnt  = 0;
 static int  g_dx_sabSL   = 0;
 static bool g_sabio_user_override = false; // sobald User Sabio editiert -> keine Auto-Texte mehr
-/**
- * Beschreibung: Merkt die aktuellen X-Offsets der Base-UI relativ zum EntryButton.
- * Parameter:    force - true: immer neu erfassen (z.B. nach Rebuild), false: nur beim ersten Mal
- * Rückgabewert: bool - true wenn EntryButton vorhanden und Baseline gespeichert
- * Hinweise:     Wir ändern hier nichts, wir speichern nur Offsets (Layout bleibt erhalten).
- * Fehlerfälle:  EntryButton fehlt -> false (kein Anchor möglich)
- */
+
 
 // ------------------------------------------------------------------
 // BaseLine-Kopplung / Reentrancy-Guard
@@ -254,14 +322,7 @@ static double g_base_lock_delta    = 0.0;   // SL - Entry (Preisdelta)
 
 
 
-/**
-* Beschreibung: Fordert ein Chart-Redraw an, aber gedrosselt (Throttle), um flüssiges UI beim Drag zu bekommen,
-*              ohne die CPU mit ChartRedraw() zu fluten.
-* Parameter:    min_interval_ms - Mindestabstand zwischen Redraw-Requests in Millisekunden
-* Rückgabewert: void
-* Hinweise:     Nutzt UI_RequestRedraw() (dein bestehender Mechanismus). Nur während Drag klein wählen.
-* Fehlerfälle:  Keine (rein logisch). Wenn UI_RequestRedraw() fehlt -> Compile-Fehler.
-*/
+
 void UI_RequestRedrawThrottled(const uint min_interval_ms)
   {
    static uint s_last_ms = 0;

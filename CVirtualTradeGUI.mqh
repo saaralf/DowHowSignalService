@@ -806,6 +806,8 @@ public:
          ObjectSetString(m_chart, TRNB, OBJPROP_TEXT, IntegerToString(tr));
       if(ObjectFind(m_chart, POSNB) >= 0)
          ObjectSetString(m_chart, POSNB, OBJPROP_TEXT, IntegerToString(po));
+
+      ChartRedraw(m_chart);
      }
   };
 
