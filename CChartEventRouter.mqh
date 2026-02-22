@@ -68,31 +68,33 @@ public:
 
       if(id == CHARTEVENT_OBJECT_CLICK && sparam == SENDTRADEBTN)
         {
-         const string k_dir   = g_DB.KeyFor(m_ctx.symbol, m_ctx.tf,"vt.draft.direction");
-         const string k_entry = g_DB.KeyFor(m_ctx.symbol, m_ctx.tf, "vt.draft.entry_price");
-         const string k_sl    = g_DB.KeyFor(m_ctx.symbol, m_ctx.tf, "vt.draft.sl_price");
-         const string k_sabE  = g_DB.KeyFor(m_ctx.symbol, m_ctx.tf, "vt.draft.sabio_entry_text");
-         const string k_sabS  = g_DB.KeyFor(m_ctx.symbol, m_ctx.tf, "vt.draft.sabio_sl_text");
+         ENUM_TIMEFRAMES tf = m_ctx.tf;
 
-         string dir   = "LONG";
-         g_DB.GetMetaText(k_dir,   dir,   "LONG");
-         string entry = "0";
-         g_DB.GetMetaText(k_entry, entry, "0");
-         string sl    = "0";
-         g_DB.GetMetaText(k_sl,    sl,    "0");
-         string sabE  = "SABIO Entry: ";
-         g_DB.GetMetaText(k_sabE,  sabE,  "SABIO Entry: ");
-         string sabS  = "SABIO SL: ";
-         g_DB.GetMetaText(k_sabS,  sabS,  "SABIO SL: ");
+         string dir="LONG", entry="0", sl="0", sabE="", sabS="", trnb_s="1", posnb_s="1";
+         g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, tf, "vt.draft.direction"), dir, "LONG");
+         g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, tf, "vt.draft.entry_price"), entry, "0");
+         g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, tf, "vt.draft.sl_price"), sl, "0");
+         g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, tf, "vt.draft.sabio_entry_text"), sabE, "");
+         g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, tf, "vt.draft.sabio_sl_text"), sabS, "");
+         g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, tf, "vt.draft.trnb"), trnb_s, "1");
+         g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, tf, "vt.draft.posnb"), posnb_s, "1");
+         StringToUpper(dir);
 
-         int trnb  = g_DB.GetMetaInt(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf,"vt.draft.trnb"), 1);
-         int posnb = g_DB.GetMetaInt(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf, "vt.draft.posnb"), 1);
+         const int trade_no = (int)StringToInteger(trnb_s);
+         const int pos_no   = (int)StringToInteger(posnb_s);
 
-         // TODO: hier würdest du "SendDraft" / "SendSignalDraft" aufrufen,
-         // aktuell nur publish:
-         g_TradeMgr.TM_PublishTradePosToDB(m_ctx.symbol, m_ctx.tf);
+         double entry_d = StringToDouble(entry);
+         double sl_d    = StringToDouble(sl);
 
+         string err="";
+         if(!g_TradeMgr.SendDraftWithUserPos(m_ctx.symbol, tf, dir, trade_no, pos_no, entry_d, sl_d, sabE, sabS, err))
+            CLogger::Add(LOG_LEVEL_WARNING, "SEND failed: " + err);
+
+         g_tp.RequestRebuild();
+         UI_ProcessRedraw();
          return true;
+
+
         }
 
 
@@ -109,3 +111,4 @@ public:
 static CChartEventRouter g_evt_router;
 //+------------------------------------------------------------------+
 #endif
+//+------------------------------------------------------------------+

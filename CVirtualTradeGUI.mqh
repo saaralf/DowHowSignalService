@@ -55,9 +55,9 @@ private:
    CTradeManager      *m_tm;
    string              m_symbol;
    ENUM_TIMEFRAMES     m_tf;
-   SContext         m_ctx;
- 
-   
+   SContext          m_ctx;
+
+
    // Right anchor baseline
    bool                m_anchor_inited;
    int                 m_ref_x, m_ref_w;
@@ -98,6 +98,24 @@ private:
 
       DB_SetText("vt.draft.sabio_entry_text", se);
       DB_SetText("vt.draft.sabio_sl_text",    ss);
+
+      // --- NEU: TRNB / POSNB als Draft sichern (UI-Entwurf) ---
+      if(ObjectFind(m_ctx.chart_id, TRNB) >= 0)
+        {
+         string tr = ObjectGetString(m_ctx.chart_id, TRNB, OBJPROP_TEXT);
+         StringTrimLeft(tr);
+         StringTrimRight(tr);
+         DB_SetText("vt.draft.trnb", tr);
+        }
+
+      if(ObjectFind(m_ctx.chart_id, POSNB) >= 0)
+        {
+         string pn = ObjectGetString(m_ctx.chart_id, POSNB, OBJPROP_TEXT);
+         StringTrimLeft(pn);
+         StringTrimRight(pn);
+         DB_SetText("vt.draft.posnb", pn);
+        }
+
      }
 
 
@@ -396,6 +414,7 @@ private:
       m_drag_sl_only     = false;
       ChartSetInteger(m_ctx.chart_id, CHART_MOUSE_SCROLL, true);
       OnBaseLinesChanged();
+      PersistDraftPricesAndSabio(); // Speichere in db
      }
 
    void              LineDrag_Begin(const int mx, const int my)
@@ -456,6 +475,7 @@ private:
       m_drag_sl_line = false;
       ChartSetInteger(m_ctx.chart_id, CHART_MOUSE_SCROLL, true);
       OnBaseLinesChanged();
+      PersistDraftPricesAndSabio(); // <-- P0: Finalize persistieren
      }
 
    // ----------------- UI sync -----------------
@@ -680,6 +700,7 @@ public:
       if(id == CHARTEVENT_OBJECT_CHANGE && (sparam == PR_HL || sparam == SL_HL))
         {
          OnBaseLinesChanged();
+         PersistDraftPricesAndSabio(); // <-- P0: Persist bei OBJECT_CHANGE
          return true;
         }
 
@@ -743,6 +764,7 @@ public:
 
                int rev = DB_GetIntV("tm.req.rev", 0);
                DB_SetInt("tm.req.rev", rev + 1);
+               PersistDraftPricesAndSabio();
               }
            }
          else // POSNB
@@ -756,6 +778,7 @@ public:
 
                int rev = DB_GetIntV("tm.req.rev", 0);
                DB_SetInt("tm.req.rev", rev + 1);
+               PersistDraftPricesAndSabio();
               }
            }
          return true;
