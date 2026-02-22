@@ -8,14 +8,14 @@
 #include "context.mqh"
 #include "ui_names.mqh"
 #include "CTradesPanel.mqh"
-#include "CSendButtonController.mqh"
+
 #include "CVirtualTradeGUI.mqh"
 #include "CTradeManager.mqh"
 #include "CDBService.mqh"
 
 // Globals (müssen in *einer* .mq5 oder zentraler .mqh auch wirklich existieren!)
 extern CTradesPanel          g_tp;
-extern CSendButtonController g_send_ctl;
+//extern CSendButtonController g_send_ctl;
 extern CVirtualTradeGUI      g_vgui;       // ODER: extern CVirtualTradeGUI g_vgui;
 extern CTradeManager         g_TradeMgr;
 extern CDBService            g_DB;
@@ -41,13 +41,6 @@ public:
       if(g_tp.OnChartEvent(m_ctx.chart_id, lparam, dparam, sparam))
          return true;
 
-      // 2) Controller Chain
-      if(id == CHARTEVENT_OBJECT_CLICK)
-        {
-         if(g_send_ctl.OnObjectClick(sparam))
-            return true;
-
-        }
 
       if(id == CHARTEVENT_OBJECT_DRAG)
         {
