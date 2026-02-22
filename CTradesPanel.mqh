@@ -8,6 +8,7 @@
 #include "CDiscordClient.mqh"
 #include "logger.mqh"
 #include "UI_ParseTradePosFromName.mqh"
+#include "context.mqh"
 
 
 #define TP_BG "TP_BG"
@@ -231,8 +232,10 @@ private:
          int &trade_no, int &pos_no);
    void              RestoreTradeLinesFromRows(const DB_PositionRow &rows[], const int n);
 public:
+ SContext m_ctx;
                      CTradesPanel()
      {
+   
       m_created=false;
       m_dirty=false;
       m_lastRebuildMs=0;
@@ -291,7 +294,7 @@ public:
       m_layout.yTop=0;
       m_layout.maxRows=0;
      }
-
+void SetContext(const SContext &ctx) { m_ctx = ctx; }
    bool              OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
 
    void              StyleButton(const string name, const color txt, const color bg, const color brd);
@@ -310,7 +313,7 @@ public:
   
    bool              IsCreated() const { return m_created; }
 
-   bool              Create(const int x, const int y, const int w, const int h)
+   bool              Create(const int x, const int y, const int w, const int h,const SContext &ctx)
      {
       m_x=x;
       m_y=y;
@@ -325,6 +328,7 @@ public:
 
       m_created=true;
       RequestRebuild();
+      SetContext(ctx);
       return true;
      }
 
@@ -617,9 +621,9 @@ void CTradesPanel::BuildRows()
    DB_PositionRow rows[];
    int n=0;
    if(m_db != NULL)
-      n = m_db.LoadPositions(_Symbol, (ENUM_TIMEFRAMES)_Period, rows);
+      n = m_db.LoadPositions(m_ctx.symbol, m_ctx.tf, rows);
    else
-      n = g_DB.LoadPositions(_Symbol, (ENUM_TIMEFRAMES)_Period, rows);
+      n = g_DB.LoadPositions(m_ctx.symbol, m_ctx.tf, rows);
 // NEU: Lines aus DB wiederherstellen (Entry/SL pro Position)
 
    if(n <= 0)
@@ -717,8 +721,6 @@ void CTradesPanel::RestoreTradeLinesFromRows(const DB_PositionRow &rows[], const
      }
   }
 
-
-
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -733,7 +735,7 @@ bool CTradesPanel::HandleRowClick(const string objName)
          if(m_handler != NULL)
             m_handler.OnRowCancelPos(true, trade_no, pos_no);
          else
-             g_TradeMgr.UI_CloseOnePositionAndNotify("CANCEL","LONG",trade_no,pos_no);
+             g_TradeMgr.UI_CloseOnePositionAndNotify(m_ctx.symbol,m_ctx.tf,"CANCEL","LONG",trade_no,pos_no);
          RebuildRows();
         }
       return true;
@@ -746,7 +748,7 @@ bool CTradesPanel::HandleRowClick(const string objName)
          if(m_handler != NULL)
             m_handler.OnRowHitSL(true, trade_no, pos_no);
          else
-             g_TradeMgr.UI_CloseOnePositionAndNotify("HIT_SL","LONG",trade_no,pos_no);
+             g_TradeMgr.UI_CloseOnePositionAndNotify(m_ctx.symbol,m_ctx.tf,"HIT_SL","LONG",trade_no,pos_no);
          RebuildRows();
         }
       return true;
@@ -759,7 +761,7 @@ bool CTradesPanel::HandleRowClick(const string objName)
          if(m_handler != NULL)
             m_handler.OnRowCancelPos(false, trade_no, pos_no);
          else
-             g_TradeMgr.UI_CloseOnePositionAndNotify("CANCEL","SHORT",trade_no,pos_no);
+             g_TradeMgr.UI_CloseOnePositionAndNotify(m_ctx.symbol,m_ctx.tf,"CANCEL","SHORT",trade_no,pos_no);
          RebuildRows();
         }
       return true;
@@ -772,7 +774,7 @@ bool CTradesPanel::HandleRowClick(const string objName)
          if(m_handler != NULL)
             m_handler.OnRowHitSL(false, trade_no, pos_no);
          else
-             g_TradeMgr.UI_CloseOnePositionAndNotify("HIT_SL","SHORT",trade_no,pos_no);
+             g_TradeMgr.UI_CloseOnePositionAndNotify(m_ctx.symbol,m_ctx.tf,"HIT_SL","SHORT",trade_no,pos_no);
          RebuildRows();
         }
       return true;

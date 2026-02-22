@@ -4,7 +4,7 @@
 //|                                       http://www.companyname.net |
 //+------------------------------------------------------------------+
 #include "trade_pos_line_registry.mqh"
-
+#include "context.mqh"
 extern CTradePosLineRegistry g_tradePosLines;
 
 /**
@@ -18,6 +18,8 @@ extern CTradePosLineRegistry g_tradePosLines;
 class CTradePosLineDragController
   {
 private:
+   SContext          m_ctx;
+
    bool              m_active;
    string            m_name;
    string            m_dir;        // "LONG"/"SHORT"
@@ -40,7 +42,7 @@ public:
      {
       Reset();
      }
-
+   void              SetContext(const SContext &ctx) { m_ctx=ctx; }
    /**
     * Beschreibung: Liefert ob gerade ein TradePos-Drag aktiv ist.
     * Parameter:    none
@@ -83,7 +85,7 @@ public:
          // old aus DB (wenn vorhanden), sonst Startpreis
          m_old_price = 0.0;
          DB_PositionRow row;
-         if(g_DB.GetPosition(_Symbol, (ENUM_TIMEFRAMES)_Period, direction, trade_no, pos_no, row))
+         if(g_DB.GetPosition(m_ctx.symbol, m_ctx.tf, direction, trade_no, pos_no, row))
             m_old_price = (kind == "ENTRY") ? row.entry : row.sl;
          if(m_old_price <= 0.0)
             m_old_price = cur_price;
@@ -122,7 +124,7 @@ public:
       if(!m_active || obj_name != m_name)
          return false;
 
-      m_last_price = ObjectGetDouble(0, obj_name, OBJPROP_PRICE);
+      m_last_price = ObjectGetDouble(m_ctx.chart_id, obj_name, OBJPROP_PRICE);
       Finalize();
       return true;
      }
@@ -190,19 +192,19 @@ private:
       const double old_price = m_old_price;
 
       // UI Tag sauber final
-   // UI Tag sauber final
-CTradePosLine *L = g_tradePosLines.FindByLineName(m_name);
-if(L != NULL)
-   L.SyncTagToLine();
+      // UI Tag sauber final
+      CTradePosLine *L = g_tradePosLines.FindByLineName(m_name);
+      if(L != NULL)
+         L.SyncTagToLine();
 
 
       UI_RequestRedraw();
 
       // DB persistieren
-      g_TradeMgr.SaveLinePrices(_Symbol, (ENUM_TIMEFRAMES)_Period);
+      g_TradeMgr.SaveLinePrices(m_ctx.symbol, m_ctx.tf);
 
       // Discord nur wenn wirklich geändert
-      const double pt = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+      const double pt = SymbolInfoDouble(m_ctx.symbol,  SYMBOL_POINT);
       const bool changed = (old_price <= 0.0) || (MathAbs(new_price - old_price) > pt * 0.25);
 
       if(changed && (m_kind == "ENTRY" || m_kind == "SL"))
@@ -210,7 +212,7 @@ if(L != NULL)
          const string what = (m_kind == "ENTRY") ? "ENTRY" : "SL";
          string msg = "@everyone\n";
          msg += StringFormat("**UPDATE:** %s %s Trade %d Pos %d (%s)\n",
-                             _Symbol, TF_ToString((ENUM_TIMEFRAMES)_Period),
+                             m_ctx.symbol,  TF_ToString(m_ctx.tf),
                              m_trade_no, m_pos_no, m_dir);
 
          if(old_price > 0.0)
@@ -222,7 +224,7 @@ if(L != NULL)
             msg += StringFormat("**%s:** %s\n", what, DoubleToString(new_price, _Digits));
 
          msg += "Linie verschoben\n";
-         g_Discord.SendMessage(_Symbol, msg);
+         g_Discord.SendMessage(m_ctx.symbol, msg);
         }
 
       Reset();

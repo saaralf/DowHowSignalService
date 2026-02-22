@@ -61,15 +61,16 @@ void DeletePosLines(const string direction, const int pos_no)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void ClearActiveTrend(const string direction)
+void ClearActiveTrend(const string direction,const SContext &ctx)
   {
+  m_ctx = ctx;
    if(direction == "LONG")
      {
       g_ui_state.active_trade_no_long = 0;
       is_long_trade = false;
       HitEntryPriceLong = false; // legacy-Flag, jetzt egal – aber sauber
 
-      g_DB.SetMetaInt(g_DB.Key("g_ui_state.active_trade_no_long"), 0);
+      g_DB.SetMetaInt(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf,"g_ui_state.active_trade_no_long"), 0);
 
       if(ObjectFind(0, "TP_BTN_ACTIVE_LONG") != -1)
         {
@@ -236,7 +237,7 @@ void TPSLReached()
         {
          if(p.sl > 0.0 && (CurrentBidPrice <= p.sl))
            {
-             g_TradeMgr.UI_CloseOnePositionAndNotify("HIT_SL","LONG",p.trade_no,p.pos_no);
+             g_TradeMgr.UI_CloseOnePositionAndNotify(m_ctx.symbol,m_ctx.tf,"HIT_SL","LONG",p.trade_no,p.pos_no);
             any_closed=true;
             Alert(_Symbol + " LONG Trade " + IntegerToString(p.trade_no) + " Pos" + IntegerToString(p.pos_no) + " stopped out");
             continue;
@@ -248,7 +249,7 @@ void TPSLReached()
         {
          if(p.sl > 0.0 && (CurrentAskPrice >= p.sl))
            {
-             g_TradeMgr.UI_CloseOnePositionAndNotify("HIT_SL","SHORT",p.trade_no,p.pos_no);
+             g_TradeMgr.UI_CloseOnePositionAndNotify(m_ctx.symbol,m_ctx.tf,"HIT_SL","SHORT",p.trade_no,p.pos_no);
             any_closed=true;
             Alert(_Symbol + _Period +" SHORT: Trade " + IntegerToString(p.trade_no) + " Pos" + IntegerToString(p.pos_no) + " stopped out");
             continue;
@@ -279,10 +280,10 @@ void TPSLReached()
      }
 
    if(g_ui_state.active_trade_no_long > 0 && !any_long_active)
-      ClearActiveTrend("LONG");
+      ClearActiveTrend("LONG",m_ctx);
 
    if(g_ui_state.active_trade_no_short > 0 && !any_short_active)
-      ClearActiveTrend("SHORT");
+      ClearActiveTrend("SHORT",m_ctx);
 
    if(any_closed || any_opened)
       g_tp.RequestRebuild();
