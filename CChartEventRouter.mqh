@@ -68,35 +68,24 @@ public:
 
       if(id == CHARTEVENT_OBJECT_CLICK && sparam == SENDTRADEBTN)
         {
-         ENUM_TIMEFRAMES tf = m_ctx.tf;
+         STMSendFromDraftResult r;
+         if(!g_TradeMgr.TM_SendFromDraft(m_ctx.symbol, m_ctx.tf, r))
+           {
+            CLogger::Add(LOG_LEVEL_WARNING, "SEND failed: " + r.error);
+            return true;
+           }
 
-         string dir="LONG", entry="0", sl="0", sabE="", sabS="", trnb_s="1", posnb_s="1";
-         g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, tf, "vt.draft.direction"), dir, "LONG");
-         g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, tf, "vt.draft.entry_price"), entry, "0");
-         g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, tf, "vt.draft.sl_price"), sl, "0");
-         g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, tf, "vt.draft.sabio_entry_text"), sabE, "");
-         g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, tf, "vt.draft.sabio_sl_text"), sabS, "");
-         g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, tf, "vt.draft.trnb"), trnb_s, "1");
-         g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, tf, "vt.draft.posnb"), posnb_s, "1");
-         StringToUpper(dir);
+         // Publish (damit tm.pub.* konsistent für GUI ist)
+         g_TradeMgr.TM_PublishTradePosToDB(m_ctx.symbol, m_ctx.tf);
 
-         const int trade_no = (int)StringToInteger(trnb_s);
-         const int pos_no   = (int)StringToInteger(posnb_s);
+         // GUI rechts auf DB-Stand bringen (insb. korrigierte trnb/posnb)
+         g_vgui.ApplyTradePosFromDBToEdits();
 
-         double entry_d = StringToDouble(entry);
-         double sl_d    = StringToDouble(sl);
-
-         string err="";
-         if(!g_TradeMgr.SendDraftWithUserPos(m_ctx.symbol, tf, dir, trade_no, pos_no, entry_d, sl_d, sabE, sabS, err))
-            CLogger::Add(LOG_LEVEL_WARNING, "SEND failed: " + err);
-
+         // Panel links aktualisieren
          g_tp.RequestRebuild();
          UI_ProcessRedraw();
          return true;
-
-
         }
-
 
       if(id == CHARTEVENT_OBJECT_CHANGE)
         {

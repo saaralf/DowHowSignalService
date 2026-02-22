@@ -76,9 +76,21 @@ void DiscordSend()
       string err="";
 
       ESendDraftResult r;
+      string posnb_s="1";
+      g_DB.GetMetaText(g_DB.KeyFor(_Symbol, (ENUM_TIMEFRAMES)_Period, "vt.draft.posnb"), posnb_s, "1");
+      StringTrimLeft(posnb_s);
+      StringTrimRight(posnb_s);
+
+      int pos_no_input = (int)StringToInteger(posnb_s);
+      if(pos_no_input < 1)
+         pos_no_input = 1;
+      if(pos_no_input > DB_MAX_POS_PER_SIDE)
+         pos_no_input = DB_MAX_POS_PER_SIDE;
+
       if(isLong)
          r = g_TradeMgr.SendSignalDraft(_Symbol,(ENUM_TIMEFRAMES)_Period,"LONG",
-                                        trade_no_input,Entry_Price,SL_Price,
+                                        trade_no_input,    pos_no_input, // <-- NEU
+                                        Entry_Price,SL_Price,
                                         sabE,sabS,
                                         g_ui_state.last_trade_no,
                                         g_ui_state.active_trade_no_long,
@@ -87,7 +99,8 @@ void DiscordSend()
                                         row,err);
       else
          r = g_TradeMgr.SendSignalDraft(_Symbol,(ENUM_TIMEFRAMES)_Period,"SHORT",
-                                        trade_no_input,Entry_Price,SL_Price,
+                                        trade_no_input,    pos_no_input, // <-- NEU
+                                        Entry_Price,SL_Price,
                                         sabE,sabS,
                                         g_ui_state.last_trade_no,
                                         g_ui_state.active_trade_no_short,
