@@ -85,11 +85,11 @@ void ClearActiveTrend(const string direction,const SContext &ctx)
          is_sell_trade = false;
          HitEntryPriceShort = false;
 
-         if(g_DB.SetMetaInt(g_DB.Key("g_ui_state.active_trade_no_short"), 0))
+         if(g_DB.SetMetaInt(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf,"g_ui_state.active_trade_no_short"), 0))
            {
             if(ObjectFind(0, "TP_BTN_ACTIVE_SHORT") != -1)
               {
-               g_tp.ShowActiveLong(false);
+               g_tp.ShowActiveShort(false);
                g_tp.ShowCancelShort(false);
               }
            }

@@ -73,8 +73,9 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
 
    // Chart-Resize / TF-Wechsel etc: Panel neu anfordern
    if(id == CHARTEVENT_CHART_CHANGE){
+  
       g_tp.RequestRebuild();
-      m_ctx.tf = (ENUM_TIMEFRAMES)ChartPeriod(m_ctx.chart_id);
+
       }
 
    // TradesPanel Rebuild/Throttle (falls angefordert)
