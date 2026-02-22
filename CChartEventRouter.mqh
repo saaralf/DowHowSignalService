@@ -44,11 +44,8 @@ public:
 
       if(id == CHARTEVENT_OBJECT_DRAG)
         {
-
-
-
-
         }
+
       if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == TRNB || sparam == POSNB))
         {
          // TM übernimmt ggf. Requests aus DB und published tm.pub.*

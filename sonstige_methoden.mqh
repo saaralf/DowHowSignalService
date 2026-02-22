@@ -35,28 +35,6 @@ bool StatusIsActive(const string s)
    return (s == "PENDING" || s == "OPEN");
   }
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void DeletePosLines(const string direction, const int pos_no)
-  {
-   string suf = PosSuf(pos_no);
-
-   if(direction == "LONG")
-     {
-
-      ObjectDelete(0, SL_Long + suf);
-      ObjectDelete(0, Entry_Long + suf);
-     }
-   else
-      if(direction == "SHORT")
-        {
-
-         ObjectDelete(0, SL_Short + suf);
-         ObjectDelete(0, Entry_Short + suf);
-        }
-  }
-
 
 //+------------------------------------------------------------------+
 //|                                                                  |

@@ -141,40 +141,6 @@ bool CreateEntryAndSLLines(string objName, datetime time1, double price1, color 
 //| Create Line Labels
 //+------------------------------------------------------------------+
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void CreateLabelsTPcolor_SLLines(string LABEL_NAME, string text, double price2, color clr1)
-  {
-   ResetLastError();
-
-// Nur erzeugen, wenn das Objekt noch nicht existiert
-   if(ObjectFind(0, LABEL_NAME) < 0)
-     {
-      if(!ObjectCreate(0, LABEL_NAME, OBJ_TEXT, 0, TimeCurrent(), price2))
-        {
-         CLogger::Add(LOG_LEVEL_INFO, "__FUNCTION__ : Failed to create "+ LABEL_NAME+ " Error Code: "+ GetLastError());
-
-         return; // raus bei Fehler
-        }
-
-      UI_Reg_Add(LABEL_NAME); // Speichere Object im Array zum späteren löschen
-      // Grund-Layout nur beim ersten Erzeugen
-      UI_ObjSetIntSafe(0, LABEL_NAME, OBJPROP_COLOR, clr1);
-      UI_ObjSetIntSafe(0, LABEL_NAME, OBJPROP_FONTSIZE, InpFontSize);
-      ObjectSetString(0, LABEL_NAME, OBJPROP_FONT, InpFont);
-      ObjectSetString(0, LABEL_NAME, OBJPROP_TEXT, " ");
-     }
-   else
-     {
-      // Falls sich der Preis geändert hat: Label-Position anpassen
-      ObjectMove(0, LABEL_NAME, 0, TimeCurrent(), price2);
-     }
-
-// Kein ChartRedraw() hier – das ist auf Dauer zu teuer.
-// Text wird wie bisher über update_Text() gesetzt.
-  }
-
 
 
 
