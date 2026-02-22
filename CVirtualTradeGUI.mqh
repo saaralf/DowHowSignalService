@@ -79,6 +79,8 @@ private:
 
    CBaseLinesController        m_baseLines;
    CBaseButtonsDragController  m_baseBtnDrag;
+   bool              m_sabio_entry_user;
+   bool              m_sabio_sl_user;
 
 private:
 
@@ -342,6 +344,8 @@ private:
    // ----------------- Dragging -----------------
    void              Drag_Begin(const int mx, const int my)
      {
+
+
       bool hit_entry = HitTest(EntryButton, mx, my);
       bool hit_sl    = (!hit_entry && HitTest(SLButton, mx, my));
       if(!(hit_entry || hit_sl))
@@ -350,6 +354,8 @@ private:
       m_drag_entry_group = hit_entry;
       m_drag_sl_only     = hit_sl;
 
+      m_sabio_entry_user = false;
+      m_sabio_sl_user    = false;
       ChartSetInteger(m_ctx.chart_id, CHART_MOUSE_SCROLL, false);
 
       int x,y,w,h;
@@ -419,6 +425,7 @@ private:
 
    void              LineDrag_Begin(const int mx, const int my)
      {
+
       bool hit_pr = HitTestLinePx(PR_HL, mx, my, 6);
       bool hit_sl = HitTestLinePx(SL_HL, mx, my, 6);
 
@@ -430,6 +437,8 @@ private:
 
       m_drag_pr_line = start_pr;
       m_drag_sl_line = start_sl;
+      m_sabio_entry_user = false;
+      m_sabio_sl_user    = false;
 
       ChartSetInteger(m_ctx.chart_id, CHART_MOUSE_SCROLL, false);
 
@@ -588,6 +597,8 @@ public:
       m_baseLines.BindChart(m_ctx.chart_id);
       m_baseBtnDrag.BindChart(m_ctx.chart_id);
       m_baseBtnDrag.Bind(&m_baseLines);
+      m_sabio_entry_user = false;
+      m_sabio_sl_user    = false;
 
       return (m_tm != NULL && CheckPointer(m_tm) != POINTER_INVALID);
      }
@@ -781,6 +792,19 @@ public:
                PersistDraftPricesAndSabio();
               }
            }
+         if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == SabioEntry || sparam == SabioSL))
+           {
+            if(sparam == SabioEntry)
+               m_sabio_entry_user = true;
+            if(sparam == SabioSL)
+               m_sabio_sl_user    = true;
+
+            // wichtig: Draft sofort in DB sichern, damit SEND den Text sicher hat
+            PersistDraftPricesAndSabio();
+
+            return true;
+           }
+
          return true;
         }
 
@@ -796,8 +820,11 @@ public:
       double entry=0.0, sl=0.0;
       if(GetBaseEntrySL(entry, sl))
         {
-         SetText(SabioEntry, "SABIO Entry: " + DoubleToString(entry, VT_Digits()));
-         SetText(SabioSL,    "SABIO SL: "    + DoubleToString(sl,    VT_Digits()));
+         if(!m_sabio_entry_user)
+            SetText(SabioEntry, "SABIO Entry: " + DoubleToString(entry, VT_Digits()));
+
+         if(!m_sabio_sl_user)
+            SetText(SabioSL, "SABIO SL: " + DoubleToString(sl, VT_Digits()));
         }
 
 
