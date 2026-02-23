@@ -38,7 +38,7 @@ public:
      {
       const ENUM_TIMEFRAMES tf = m_ctx.tf;
       // 1) Panel zuerst (Row Buttons etc.)
-      if(g_tp.OnChartEvent(m_ctx.chart_id, lparam, dparam, sparam))
+      if(g_tp.OnChartEvent(id, lparam, dparam, sparam))
          return true;
 
 
@@ -68,6 +68,7 @@ public:
             return true;
            }
 
+     
          g_TradeMgr.TM_PublishTradePosToDB(_Symbol, (ENUM_TIMEFRAMES)_Period);
          g_vgui.ApplyTradePosFromDBToEdits();
          g_tp.RebuildRows();

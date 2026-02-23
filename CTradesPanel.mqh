@@ -225,17 +225,19 @@ private:
                                const int xBase, const int yTop, const int col_w, const int maxRows);
    color             TP_PanelBg();
    // ---------- events ----------
-   bool              HandleHeaderClick(const string objName);
-   bool              HandleRowClick(const string objName);
+
+
 
    bool              ParseTradePosFromButtonName(const string name, const string prefix,
          int &trade_no, int &pos_no);
    void              RestoreTradeLinesFromRows(const DB_PositionRow &rows[], const int n);
 public:
- SContext m_ctx;
+   bool              HandleHeaderClick(const string objName);
+   bool              HandleRowClick(const string objName);
+   SContext          m_ctx;
                      CTradesPanel()
      {
-   
+
       m_created=false;
       m_dirty=false;
       m_lastRebuildMs=0;
@@ -294,7 +296,7 @@ public:
       m_layout.yTop=0;
       m_layout.maxRows=0;
      }
-void SetContext(const SContext &ctx) { m_ctx = ctx; }
+   void              SetContext(const SContext &ctx) { m_ctx = ctx; }
    bool              OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
 
    void              StyleButton(const string name, const color txt, const color bg, const color brd);
@@ -310,7 +312,7 @@ void SetContext(const SContext &ctx) { m_ctx = ctx; }
    void              DeleteByPrefix(const string prefix);
    void              SetDB(CDBService *db) { m_db=db; }
    void              SetHandler(ITradesPanelHandler *h) { m_handler=h; }
-  
+
    bool              IsCreated() const { return m_created; }
 
    bool              Create(const int x, const int y, const int w, const int h,const SContext &ctx)
@@ -726,63 +728,78 @@ void CTradesPanel::RestoreTradeLinesFromRows(const DB_PositionRow &rows[], const
 //+------------------------------------------------------------------+
 bool CTradesPanel::HandleRowClick(const string objName)
   {
-   int trade_no=0, pos_no=0;
+   bool isLong=false;
+   bool isCancel=false;
+   bool isHitSL=false;
 
    if(StringFind(objName, m_prefLongCancel, 0) == 0)
      {
-      if(ParseTradePosFromButtonName(objName, m_prefLongCancel, trade_no, pos_no))
-        {
-         if(m_handler != NULL)
-            m_handler.OnRowCancelPos(true, trade_no, pos_no);
-         else
-             g_TradeMgr.UI_CloseOnePositionAndNotify(m_ctx.symbol,m_ctx.tf,"CANCEL","LONG",trade_no,pos_no);
-         RebuildRows();
-        }
-      return true;
+      isLong=true;
+      isCancel=true;
      }
+   else
+      if(StringFind(objName, m_prefShortCancel,0) == 0)
+        {
+         isLong=false;
+         isCancel=true;
+        }
+      else
+         if(StringFind(objName, m_prefLongHitSL,  0) == 0)
+           {
+            isLong=true;
+            isHitSL=true;
+           }
+         else
+            if(StringFind(objName, m_prefShortHitSL, 0) == 0)
+              {
+               isLong=false;
+               isHitSL=true;
+              }
+            else
+               return false;
 
-   if(StringFind(objName, m_prefLongHitSL, 0) == 0)
+// trade_no / pos_no aus objName extrahieren (Suffix nach Prefix)
+   string rest = objName;
+   if(isCancel)
+      rest = StringSubstr(objName, StringLen(isLong ? m_prefLongCancel : m_prefShortCancel));
+   else
+      rest = StringSubstr(objName, StringLen(isLong ? m_prefLongHitSL : m_prefShortHitSL));
+
+// rest erwartet: "<trade>_<pos>" (z.B. "7_2")
+   int sep = StringFind(rest, "_", 0);
+   if(sep <= 0)
+      return true;
+
+   int trade_no = (int)StringToInteger(StringSubstr(rest, 0, sep));
+   int pos_no   = (int)StringToInteger(StringSubstr(rest, sep+1));
+
+   if(trade_no <= 0 || pos_no <= 0)
+      return true;
+
+   if(m_handler != NULL && CheckPointer(m_handler) != POINTER_INVALID)
      {
-      if(ParseTradePosFromButtonName(objName, m_prefLongHitSL, trade_no, pos_no))
-        {
-         if(m_handler != NULL)
-            m_handler.OnRowHitSL(true, trade_no, pos_no);
-         else
-             g_TradeMgr.UI_CloseOnePositionAndNotify(m_ctx.symbol,m_ctx.tf,"HIT_SL","LONG",trade_no,pos_no);
-         RebuildRows();
-        }
-      return true;
+      if(isCancel)
+         m_handler.OnRowCancelPos(isLong, trade_no, pos_no);
+      else
+         m_handler.OnRowHitSL(isLong, trade_no, pos_no);
      }
-
-   if(StringFind(objName, m_prefShortCancel, 0) == 0)
+   else
      {
-      if(ParseTradePosFromButtonName(objName, m_prefShortCancel, trade_no, pos_no))
-        {
-         if(m_handler != NULL)
-            m_handler.OnRowCancelPos(false, trade_no, pos_no);
-         else
-             g_TradeMgr.UI_CloseOnePositionAndNotify(m_ctx.symbol,m_ctx.tf,"CANCEL","SHORT",trade_no,pos_no);
-         RebuildRows();
-        }
-      return true;
+      // Fallback (wenn kein Handler gesetzt ist) – nicht ideal, aber verhindert “toter Button”
+      string dir = (isLong ? "LONG" : "SHORT");
+      bool has_pending=true;
+      string err="";
+      if(isCancel)
+         g_TradeMgr.HandlePositionAction(_Symbol, (ENUM_TIMEFRAMES)_Period, dir, trade_no, pos_no,
+                                         CTradeManager::POS_CANCEL, has_pending, err);
+      else
+         g_TradeMgr.HandlePositionAction(_Symbol, (ENUM_TIMEFRAMES)_Period, dir, trade_no, pos_no,
+                                         CTradeManager::POS_HIT_SL, has_pending, err);
      }
 
-   if(StringFind(objName, m_prefShortHitSL, 0) == 0)
-     {
-      if(ParseTradePosFromButtonName(objName, m_prefShortHitSL, trade_no, pos_no))
-        {
-         if(m_handler != NULL)
-            m_handler.OnRowHitSL(false, trade_no, pos_no);
-         else
-             g_TradeMgr.UI_CloseOnePositionAndNotify(m_ctx.symbol,m_ctx.tf,"HIT_SL","SHORT",trade_no,pos_no);
-         RebuildRows();
-        }
-      return true;
-     }
-
-   return false;
+   RequestRebuild();
+   return true;
   }
-
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -964,6 +981,18 @@ bool CTradesPanel::HandleHeaderClick(const string objName)
       else
          g_TradeMgr.UI_CancelActiveTrade("SHORT");
       RequestRebuild();
+      return true;
+     }
+
+   if(objName == m_btnActiveL)
+     {
+
+      return true;
+     }
+
+   if(objName == m_btnActiveR)
+     {
+
       return true;
      }
 
