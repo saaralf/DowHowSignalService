@@ -86,13 +86,27 @@ private:
 
    void              PersistDraftPricesAndSabio()
      {
+
       double e=0.0, s=0.0;
+      if(!GetBaseEntrySL(e,s))
+        {
+         Print("PersistDraft: GetBaseEntrySL failed (lines missing?)");
+         return;
+        }
+
+
       if(GetBaseEntrySL(e,s))
         {
          DB_SetText("vt.draft.direction", DirectionFromLines());
          DB_SetText("vt.draft.entry_price", DoubleToString(VT_NormalizeToTick(e), VT_Digits()));
          DB_SetText("vt.draft.sl_price",    DoubleToString(VT_NormalizeToTick(s), VT_Digits()));
         }
+      else
+        {
+         Print("PersistDraft: GetBaseEntrySL failed (lines missing?)");
+         return;
+        }
+
 
       // Sabio Texte stehen bereits im Edit (user oder auto)
       string se = (ObjectFind(m_ctx.chart_id,SabioEntry)>=0 ? ObjectGetString(m_ctx.chart_id,SabioEntry,OBJPROP_TEXT) : "SABIO Entry: ");
@@ -117,7 +131,11 @@ private:
          StringTrimRight(pn);
          DB_SetText("vt.draft.posnb", pn);
         }
-
+      string t_entry = "";
+      string t_sl    = "";
+      g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf, "vt.draft.entry_price"), t_entry, "NA");
+      g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf, "vt.draft.sl_price"),    t_sl,    "NA");
+      Print("DraftPersist wrote entry=", t_entry, " sl=", t_sl, " sym=", m_ctx.symbol, " tf=", (int)m_ctx.tf);
      }
 
 
@@ -130,22 +148,22 @@ private:
 
    bool              DB_GetInt(const string suffix, int &out, const int def=0) const
      {
-      return g_DB.GetMetaInt(Key(suffix), out, def);
+      return g_DB.GetMetaInt(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf,suffix), out, def);
      }
 
    int               DB_GetIntV(const string suffix, const int def=0) const
      {
-      return g_DB.GetMetaInt(Key(suffix), def);
+      return g_DB.GetMetaInt(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf,suffix), def);
      }
 
    void              DB_SetInt(const string suffix, const int v)
      {
-      g_DB.SetMetaInt(Key(suffix), v);
+      g_DB.SetMetaInt(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf,suffix), v);
      }
 
    void              DB_SetText(const string suffix, const string v)
      {
-      g_DB.SetMetaText(Key(suffix), v);
+      g_DB.SetMetaText(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf, suffix), v);
      }
 
 
@@ -558,6 +576,10 @@ private:
      }
 
 public:
+   void              FlushDraft()
+     {
+      PersistDraftPricesAndSabio();
+     }
                      CVirtualTradeGUI()
      {
       m_tm = NULL;
@@ -693,6 +715,13 @@ public:
                  "SABIO SL: " + DoubleToString(p_sl, VT_Digits()), clrBlack, clrWhite);
 
       ChartSetInteger(m_ctx.chart_id, CHART_EVENT_MOUSE_MOVE, true);
+
+      // Objekt-Events aktivieren
+      ChartSetInteger(m_ctx.chart_id, CHART_EVENT_OBJECT_CREATE, true);
+      ChartSetInteger(m_ctx.chart_id, CHART_EVENT_OBJECT_DELETE, true);
+
+      ChartSetInteger(m_ctx.chart_id, CHART_EVENT_OBJECT_CREATE, true);
+      ChartSetInteger(m_ctx.chart_id, CHART_EVENT_OBJECT_DELETE, true);
       // --- nach EnsureEdit(...) ---
       // published Werte aus DB in die GUI schreiben (sonst bleibt "1" bis ENDEDIT)
       ApplyTradePosFromDBToEdits();
@@ -702,7 +731,7 @@ public:
 
       // initial sync
       OnBaseLinesChanged();
-
+      PersistDraftPricesAndSabio();
 
      }
 

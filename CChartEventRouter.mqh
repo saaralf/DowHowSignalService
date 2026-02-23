@@ -49,7 +49,7 @@ public:
       if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == TRNB || sparam == POSNB))
         {
          // TM übernimmt ggf. Requests aus DB und published tm.pub.*
-         g_TradeMgr.TM_ConsumeGUIRequestsFromDB(m_ctx.symbol, m_ctx.tf);
+         g_TradeMgr.TM_ConsumeGUIRequestsFromDB(_Symbol, (ENUM_TIMEFRAMES)_Period);
 
          // GUI zeigt published Werte (und schreibt vt.draft.trnb/posnb)
          g_vgui.ApplyTradePosFromDBToEdits();
@@ -58,22 +58,20 @@ public:
 
       if(id == CHARTEVENT_OBJECT_CLICK && sparam == SENDTRADEBTN)
         {
+         // Draft aus aktuellen Linien/Buttons in DB schreiben (falls noch nicht vorhanden)
+         g_vgui.FlushDraft(); // neue public Methode, siehe unten
+
          STMSendFromDraftResult r;
-         if(!g_TradeMgr.TM_SendFromDraft(m_ctx.symbol, m_ctx.tf, r))
+         if(!g_TradeMgr.TM_SendFromDraft(_Symbol, (ENUM_TIMEFRAMES)_Period, r))
            {
-            CLogger::Add(LOG_LEVEL_WARNING, "SEND failed: " + r.error);
+            Print("SEND failed: ", r.error);
             return true;
            }
 
-         // Publish (damit tm.pub.* konsistent für GUI ist)
-         g_TradeMgr.TM_PublishTradePosToDB(m_ctx.symbol, m_ctx.tf);
-
-         // GUI rechts auf DB-Stand bringen (insb. korrigierte trnb/posnb)
+         g_TradeMgr.TM_PublishTradePosToDB(_Symbol, (ENUM_TIMEFRAMES)_Period);
          g_vgui.ApplyTradePosFromDBToEdits();
-
-         // Panel links aktualisieren
-         g_tp.RequestRebuild();
-         UI_ProcessRedraw();
+         g_tp.RebuildRows();
+         ChartRedraw(0);
          return true;
         }
 
