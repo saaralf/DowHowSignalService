@@ -67,11 +67,17 @@ public:
             Print("SEND failed: ", r.error);
             return true;
            }
+         g_TradeMgr.RestoreTradePosLines(_Symbol, (ENUM_TIMEFRAMES)_Period);
+         UI_ApplyZOrder();
+         ChartRedraw(0);
 
-     
          g_TradeMgr.TM_PublishTradePosToDB(_Symbol, (ENUM_TIMEFRAMES)_Period);
          g_vgui.ApplyTradePosFromDBToEdits();
          g_tp.RebuildRows();
+         // NEU: Linien sofort zeichnen
+         g_TradeMgr.RestoreTradePosLines(_Symbol, (ENUM_TIMEFRAMES)_Period);
+         UI_ApplyZOrder();
+
          ChartRedraw(0);
          return true;
         }
