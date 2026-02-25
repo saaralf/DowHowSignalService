@@ -71,18 +71,6 @@ void Cache_UpsertLocal(const DB_PositionRow &row)
    g_cache_rows[i] = row;
 }
 
-bool Cache_DeleteLocal(const string direction, const int trade_no, const int pos_no)
-{
-   int i = Cache_FindIdx(direction, trade_no, pos_no);
-   if(i < 0) return false;
-
-   int n = ArraySize(g_cache_rows);
-   if(i != n-1)
-      g_cache_rows[i] = g_cache_rows[n-1];
-   ArrayResize(g_cache_rows, n-1);
-   return true;
-}
-
 bool Cache_UpdateStatusLocal(const string direction, const int trade_no, const int pos_no,
                             const string new_status, const int new_pending)
 {
@@ -94,31 +82,4 @@ bool Cache_UpdateStatusLocal(const string direction, const int trade_no, const i
    g_cache_rows[i].updated_at = TimeCurrent();
    return true;
 }
-
-bool Cache_UpdateEntrySL_Local(const string direction, const int trade_no, const int pos_no,
-                               const bool is_entry, const double price)
-{
-   int i = Cache_FindIdx(direction, trade_no, pos_no);
-   if(i < 0) return false;
-
-   if(is_entry) g_cache_rows[i].entry = price;
-   else         g_cache_rows[i].sl    = price;
-
-   g_cache_rows[i].updated_at = TimeCurrent();
-   return true;
-}
-
-// -------- Helpers (optional) --------
-int Cache_GetPosNoCount(const string direction, const int trade_no)
-{
-   int n = ArraySize(g_cache_rows);
-   int c = 0;
-   for(int i=0; i<n; i++)
-   {
-      if(g_cache_rows[i].direction == direction && g_cache_rows[i].trade_no == trade_no)
-         c++;
-   }
-   return c;
-}
-
 #endif // __POSITIONS_CACHE_MQH__

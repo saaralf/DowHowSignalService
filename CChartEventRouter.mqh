@@ -1,18 +1,23 @@
-﻿#ifndef __CCHART_EVENT_ROUTER_MQH__
+﻿//+------------------------------------------------------------------+
+//|                                                      ProjectName |
+//|                                      Copyright 2020, CompanyName |
+//|                                       http://www.companyname.net |
+//+------------------------------------------------------------------+
+#ifndef __CCHART_EVENT_ROUTER_MQH__
 #define __CCHART_EVENT_ROUTER_MQH__
-
+#include "context.mqh"
 #include "ui_names.mqh"
 #include "CTradesPanel.mqh"
-#include "CSendButtonController.mqh"
+
 #include "CVirtualTradeGUI.mqh"
 #include "CTradeManager.mqh"
 #include "CDBService.mqh"
 
 // Globals (müssen in *einer* .mq5 oder zentraler .mqh auch wirklich existieren!)
 extern CTradesPanel          g_tp;
-extern CSendButtonController g_send_ctl;
+//extern CSendButtonController g_send_ctl;
 extern CVirtualTradeGUI      g_vgui;       // ODER: extern CVirtualTradeGUI g_vgui;
-extern CTradeManager         g_TradeMgr;   
+extern CTradeManager         g_TradeMgr;
 extern CDBService            g_DB;
 
 
@@ -27,67 +32,55 @@ extern CDBService            g_DB;
 class CChartEventRouter
   {
 public:
+   SContext          m_ctx;
+   void              SetContext(const SContext &ctx) { m_ctx=ctx; }
    bool              Dispatch(const int id, const long &lparam, const double &dparam, const string &sparam)
      {
+      const ENUM_TIMEFRAMES tf = m_ctx.tf;
       // 1) Panel zuerst (Row Buttons etc.)
       if(g_tp.OnChartEvent(id, lparam, dparam, sparam))
          return true;
 
-      // 2) Controller Chain
-      if(id == CHARTEVENT_OBJECT_CLICK)
-        {
-         if(g_send_ctl.OnObjectClick(sparam))
-            return true;
-
-        }
 
       if(id == CHARTEVENT_OBJECT_DRAG)
         {
-
-
-
-
         }
+
       if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == TRNB || sparam == POSNB))
         {
          // TM übernimmt ggf. Requests aus DB und published tm.pub.*
-         g_TradeMgr.TM_ConsumeGUIRequestsFromDB(_Symbol, PERIOD_CURRENT);
+         g_TradeMgr.TM_ConsumeGUIRequestsFromDB(_Symbol, (ENUM_TIMEFRAMES)_Period);
 
          // GUI zeigt published Werte (und schreibt vt.draft.trnb/posnb)
          g_vgui.ApplyTradePosFromDBToEdits();
-         g_TradeMgr.TM_ConsumeGUIRequestsFromDB(_Symbol, PERIOD_CURRENT);
          // danach GUI: aus tm.pub.* lesen und anzeigen (deine GUI macht das)
         }
 
       if(id == CHARTEVENT_OBJECT_CLICK && sparam == SENDTRADEBTN)
         {
-         const string k_dir   = g_DB.KeyFor(_Symbol, PERIOD_CURRENT, "vt.draft.direction");
-         const string k_entry = g_DB.KeyFor(_Symbol, PERIOD_CURRENT, "vt.draft.entry_price");
-         const string k_sl    = g_DB.KeyFor(_Symbol, PERIOD_CURRENT, "vt.draft.sl_price");
-         const string k_sabE  = g_DB.KeyFor(_Symbol, PERIOD_CURRENT, "vt.draft.sabio_entry_text");
-         const string k_sabS  = g_DB.KeyFor(_Symbol, PERIOD_CURRENT, "vt.draft.sabio_sl_text");
+         // Draft aus aktuellen Linien/Buttons in DB schreiben (falls noch nicht vorhanden)
+         g_vgui.FlushDraft(); // neue public Methode, siehe unten
 
-         string dir   = "LONG";
-         g_DB.GetMetaText(k_dir,   dir,   "LONG");
-         string entry = "0";
-         g_DB.GetMetaText(k_entry, entry, "0");
-         string sl    = "0";
-         g_DB.GetMetaText(k_sl,    sl,    "0");
-         string sabE  = "SABIO Entry: ";
-         g_DB.GetMetaText(k_sabE,  sabE,  "SABIO Entry: ");
-         string sabS  = "SABIO SL: ";
-         g_DB.GetMetaText(k_sabS,  sabS,  "SABIO SL: ");
+         STMSendFromDraftResult r;
+         if(!g_TradeMgr.TM_SendFromDraft(_Symbol, (ENUM_TIMEFRAMES)_Period, r))
+           {
+            Print("SEND failed: ", r.error);
+            return true;
+           }
+         g_TradeMgr.RestoreTradePosLines(_Symbol, (ENUM_TIMEFRAMES)_Period);
+         UI_ApplyZOrder();
+         ChartRedraw(0);
 
-         int trnb  = g_DB.GetMetaInt(g_DB.KeyFor(_Symbol, PERIOD_CURRENT, "vt.draft.trnb"), 1);
-         int posnb = g_DB.GetMetaInt(g_DB.KeyFor(_Symbol, PERIOD_CURRENT, "vt.draft.posnb"), 1);
+         g_TradeMgr.TM_PublishTradePosToDB(_Symbol, (ENUM_TIMEFRAMES)_Period);
+         g_vgui.ApplyTradePosFromDBToEdits();
+         g_tp.RebuildRows();
+         // NEU: Linien sofort zeichnen
+         g_TradeMgr.RestoreTradePosLines(_Symbol, (ENUM_TIMEFRAMES)_Period);
+         UI_ApplyZOrder();
 
-         // TODO: hier würdest du "SendDraft" / "SendSignalDraft" aufrufen,
-         // aktuell nur publish:
-         g_TradeMgr.TM_PublishTradePosToDB(_Symbol, PERIOD_CURRENT);
-
+         ChartRedraw(0);
          return true;
         }
-
 
       if(id == CHARTEVENT_OBJECT_CHANGE)
         {
@@ -102,3 +95,4 @@ public:
 static CChartEventRouter g_evt_router;
 //+------------------------------------------------------------------+
 #endif
+//+------------------------------------------------------------------+
