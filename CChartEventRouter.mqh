@@ -34,60 +34,34 @@ class CChartEventRouter
 public:
    SContext          m_ctx;
    void              SetContext(const SContext &ctx) { m_ctx=ctx; }
+
    bool              Dispatch(const int id, const long &lparam, const double &dparam, const string &sparam)
      {
-      const ENUM_TIMEFRAMES tf = m_ctx.tf;
-      // 1) Panel zuerst (Row Buttons etc.)
+      // 1) Panel zuerst
       if(g_tp.OnChartEvent(id, lparam, dparam, sparam))
          return true;
 
-
-      if(id == CHARTEVENT_OBJECT_DRAG)
+      // 2) Nur noch Dispatch, keine Business-Logik mehr im Router
+      if(id == CHARTEVENT_OBJECT_ENDEDIT)
         {
-        }
-
-      if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == TRNB || sparam == POSNB))
-        {
-         // TM übernimmt ggf. Requests aus DB und published tm.pub.*
-         g_TradeMgr.TM_ConsumeGUIRequestsFromDB(_Symbol, (ENUM_TIMEFRAMES)_Period);
-
-         // GUI zeigt published Werte (und schreibt vt.draft.trnb/posnb)
-         g_vgui.ApplyTradePosFromDBToEdits();
-         // danach GUI: aus tm.pub.* lesen und anzeigen (deine GUI macht das)
-        }
-
-      if(id == CHARTEVENT_OBJECT_CLICK && sparam == SENDTRADEBTN)
-        {
-         // Draft aus aktuellen Linien/Buttons in DB schreiben (falls noch nicht vorhanden)
-         g_vgui.FlushDraft(); // neue public Methode, siehe unten
-
-         STMSendFromDraftResult r;
-         if(!g_TradeMgr.TM_SendFromDraft(_Symbol, (ENUM_TIMEFRAMES)_Period, r))
+         if(sparam == TRNB || sparam == POSNB)
            {
-            Print("SEND failed: ", r.error);
+            g_TradeMgr.TM_HandleTradePosEditCommit(_Symbol, (ENUM_TIMEFRAMES)_Period);
             return true;
            }
-         g_TradeMgr.RestoreTradePosLines(_Symbol, (ENUM_TIMEFRAMES)_Period);
-         UI_ApplyZOrder();
-         ChartRedraw(0);
-
-         g_TradeMgr.TM_PublishTradePosToDB(_Symbol, (ENUM_TIMEFRAMES)_Period);
-         g_vgui.ApplyTradePosFromDBToEdits();
-         g_tp.RebuildRows();
-         // NEU: Linien sofort zeichnen
-         g_TradeMgr.RestoreTradePosLines(_Symbol, (ENUM_TIMEFRAMES)_Period);
-         UI_ApplyZOrder();
-
-         ChartRedraw(0);
-         return true;
         }
 
-      if(id == CHARTEVENT_OBJECT_CHANGE)
+      if(id == CHARTEVENT_OBJECT_CLICK)
         {
-
+         if(sparam == SENDTRADEBTN)
+           {
+            STMSendFromDraftResult r;
+            if(!g_TradeMgr.TM_HandleSendTradeClick(_Symbol, (ENUM_TIMEFRAMES)_Period, r))
+               Print("SEND failed: ", r.error);
+            return true;
+           }
         }
 
-      // MouseUp-Fallback wird im MOUSE_MOVE Block gemacht (weil MouseState benötigt wird)
       return false;
      }
   };
