@@ -41,14 +41,14 @@ bool StatusIsActive(const string s)
 //+------------------------------------------------------------------+
 void ClearActiveTrend(const string direction,const SContext &ctx)
   {
-  m_ctx = ctx;
+
    if(direction == "LONG")
      {
       g_ui_state.active_trade_no_long = 0;
       is_long_trade = false;
       HitEntryPriceLong = false; // legacy-Flag, jetzt egal – aber sauber
 
-      g_DB.SetMetaInt(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf,"g_ui_state.active_trade_no_long"), 0);
+      g_DB.SetMetaInt(g_DB.KeyFor(ctx.symbol, ctx.tf,"g_ui_state.active_trade_no_long"), 0);
 
       if(ObjectFind(0, "TP_BTN_ACTIVE_LONG") != -1)
         {
@@ -63,7 +63,7 @@ void ClearActiveTrend(const string direction,const SContext &ctx)
          is_sell_trade = false;
          HitEntryPriceShort = false;
 
-         if(g_DB.SetMetaInt(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf,"g_ui_state.active_trade_no_short"), 0))
+         if(g_DB.SetMetaInt(g_DB.KeyFor(ctx.symbol, ctx.tf,"g_ui_state.active_trade_no_short"), 0))
            {
             if(ObjectFind(0, "TP_BTN_ACTIVE_SHORT") != -1)
               {
