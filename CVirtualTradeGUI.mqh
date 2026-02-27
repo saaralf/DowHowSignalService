@@ -98,8 +98,8 @@ private:
       if(GetBaseEntrySL(e,s))
         {
          DB_SetText("vt.draft.direction", DirectionFromLines());
-         DB_SetText("vt.draft.entry_price", DoubleToString(VT_NormalizeToTick(e), VT_Digits()));
-         DB_SetText("vt.draft.sl_price",    DoubleToString(VT_NormalizeToTick(s), VT_Digits()));
+         DB_SetText("vt.draft.entry_price", DoubleToString(VT_NormalizeToTick(e), VT_Digits(m_ctx.symbol)));
+         DB_SetText("vt.draft.sl_price",    DoubleToString(VT_NormalizeToTick(s), VT_Digits(m_ctx.symbol)));
         }
       else
         {
@@ -216,7 +216,7 @@ void SetRightDist(const string name, const int rightDist)
       double price = ObjectGetDouble(m_ctx.chart_id, line_name, OBJPROP_PRICE);
 
       int x=0, y=0;
-      datetime t = VT_VisibleTime();
+      datetime t = VT_VisibleTime(m_ctx.chart_id,m_ctx.symbol,m_ctx.tf);
       if(!ChartTimePriceToXY(m_ctx.chart_id, 0, t, price, x, y))
          return false;
 
@@ -530,7 +530,7 @@ void SetRightDist(const string name, const int rightDist)
       if(!GetBaseEntrySL(entry, sl))
          return;
 
-      datetime t = VT_VisibleTime();
+      datetime t = VT_VisibleTime(m_ctx.chart_id,m_ctx.symbol,m_ctx.tf);
       int x=0, y=0;
 
       const int gap_under_btn = 2;
@@ -583,9 +583,9 @@ void SetRightDist(const string name, const int rightDist)
       lots = NormalizeDouble(lots, 2);
 
       string entry_txt = (is_long ? "Buy Stop @ " : "Sell Stop @ ");
-      entry_txt += DoubleToString(entry, VT_Digits()) + " | Lot: " + DoubleToString(lots, 2);
+      entry_txt += DoubleToString(entry, VT_Digits(m_ctx.symbol)) + " | Lot: " + DoubleToString(lots, 2);
 
-      string sl_txt = "SL: " + DoubleToString(dist_points, 0) + " pts | " + DoubleToString(sl, VT_Digits());
+      string sl_txt = "SL: " + DoubleToString(dist_points, 0) + " pts | " + DoubleToString(sl, VT_Digits(m_ctx.symbol));
 
       if(ObjectFind(m_ctx.chart_id, EntryButton) >= 0)
          SetText(EntryButton, entry_txt);
@@ -753,10 +753,10 @@ bool Init(CTradeManager *tm, const SContext &ctx)
       EnsureEdit(POSNB, x_pos,  y_mid + btn_h, edit_w, edit_h, IntegerToString(po), clrBlack, clrWhite);
 
       EnsureEdit(SabioEntry, x_sabE, y_mid + btn_h, btn_w, sab_h,
-                 "SABIO Entry: " + DoubleToString(p_entry, VT_Digits()), clrBlack, clrWhite);
+                 "SABIO Entry: " + DoubleToString(p_entry, VT_Digits(m_ctx.symbol)), clrBlack, clrWhite);
 
       EnsureEdit(SabioSL,    x_sabE, y_sl  + btn_h, btn_w, sab_h,
-                 "SABIO SL: " + DoubleToString(p_sl, VT_Digits()), clrBlack, clrWhite);
+                 "SABIO SL: " + DoubleToString(p_sl, VT_Digits(m_ctx.symbol)), clrBlack, clrWhite);
 
       ChartSetInteger(m_ctx.chart_id, CHART_EVENT_MOUSE_MOVE, true);
 
@@ -988,10 +988,10 @@ if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == SabioEntry || sparam == SabioSL
       if(GetBaseEntrySL(entry, sl))
         {
          if(!m_sabio_entry_user)
-            SetText(SabioEntry, "SABIO Entry: " + DoubleToString(entry, VT_Digits()));
+            SetText(SabioEntry, "SABIO Entry: " + DoubleToString(entry, VT_Digits(m_ctx.symbol)));
 
          if(!m_sabio_sl_user)
-            SetText(SabioSL, "SABIO SL: " + DoubleToString(sl, VT_Digits()));
+            SetText(SabioSL, "SABIO SL: " + DoubleToString(sl, VT_Digits(m_ctx.symbol)));
         }
 
 
