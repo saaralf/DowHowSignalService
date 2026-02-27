@@ -140,8 +140,12 @@ void setzeTrade()
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void TPSLReached()
+void TPSLReached(const SContext &ctx)
+
   {
+
+   string symbol = ctx.symbol;
+   ENUM_TIMEFRAMES tf = ctx.tf;
 
    bool any_opened=false;   // <-- NEU
    bool any_closed=false;
@@ -191,7 +195,7 @@ void TPSLReached()
          if(entry_hit)
            {
             string err_open;
-            if(g_TradeMgr.MarkPositionOpen(_Symbol,(ENUM_TIMEFRAMES)_Period,p.direction,p.trade_no,p.pos_no,err_open))
+            if(g_TradeMgr.MarkPositionOpen(symbol, tf,p.direction,p.trade_no,p.pos_no,err_open))
               {
                // lokale Kopie updaten, damit dieselbe Tick-Iteration korrekt weiterläuft
                p.status     = "OPEN";
@@ -215,9 +219,9 @@ void TPSLReached()
         {
          if(p.sl > 0.0 && (CurrentBidPrice <= p.sl))
            {
-             g_TradeMgr.UI_CloseOnePositionAndNotify(m_ctx.symbol,m_ctx.tf,"HIT_SL","LONG",p.trade_no,p.pos_no);
+            g_TradeMgr.UI_CloseOnePositionAndNotify(symbol, tf,"HIT_SL","LONG",p.trade_no,p.pos_no);
             any_closed=true;
-            Alert(_Symbol + " LONG Trade " + IntegerToString(p.trade_no) + " Pos" + IntegerToString(p.pos_no) + " stopped out");
+            Alert(symbol + " LONG Trade " + IntegerToString(p.trade_no) + " Pos" + IntegerToString(p.pos_no) + " stopped out");
             continue;
            }
         }
@@ -227,9 +231,9 @@ void TPSLReached()
         {
          if(p.sl > 0.0 && (CurrentAskPrice >= p.sl))
            {
-             g_TradeMgr.UI_CloseOnePositionAndNotify(m_ctx.symbol,m_ctx.tf,"HIT_SL","SHORT",p.trade_no,p.pos_no);
+            g_TradeMgr.UI_CloseOnePositionAndNotify(symbol, tf,"HIT_SL","SHORT",p.trade_no,p.pos_no);
             any_closed=true;
-            Alert(_Symbol + _Period +" SHORT: Trade " + IntegerToString(p.trade_no) + " Pos" + IntegerToString(p.pos_no) + " stopped out");
+            Alert(symbol + tf +" SHORT: Trade " + IntegerToString(p.trade_no) + " Pos" + IntegerToString(p.pos_no) + " stopped out");
             continue;
            }
         }
@@ -258,10 +262,10 @@ void TPSLReached()
      }
 
    if(g_ui_state.active_trade_no_long > 0 && !any_long_active)
-      ClearActiveTrend("LONG",m_ctx);
+      ClearActiveTrend("LONG",ctx);
 
    if(g_ui_state.active_trade_no_short > 0 && !any_short_active)
-      ClearActiveTrend("SHORT",m_ctx);
+      ClearActiveTrend("SHORT",ctx);
 
    if(any_closed || any_opened)
       g_tp.RequestRebuild();
