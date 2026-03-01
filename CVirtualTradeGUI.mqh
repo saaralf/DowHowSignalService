@@ -8,6 +8,8 @@
 #include "CDBService.mqh"
 extern CDBService g_DB;
 
+//extern bool InpSendOnlyMode;
+
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -138,24 +140,27 @@ private:
       Print("DraftPersist wrote entry=", t_entry, " sl=", t_sl, " sym=", m_ctx.symbol, " tf=", (int)m_ctx.tf);
      }
 
-//Steffen
-int RightDistOf(const string name) const
-{
-   int x,y,w,h;
-   if(!GetBox(name,x,y,w,h)) return 0;
-   int cw = VT_GetChartWidthPx(m_ctx.chart_id);
-   return (cw - (x + w));
-}
+   
+   int               RightDistOf(const string name) const
+     {
+      int x,y,w,h;
+      if(!GetBox(name,x,y,w,h))
+         return 0;
+      int cw = VT_GetChartWidthPx(m_ctx.chart_id);
+      return (cw - (x + w));
+     }
 
-void SetRightDist(const string name, const int rightDist)
-{
-   int x,y,w,h;
-   if(!GetBox(name,x,y,w,h)) return;
-   int cw = VT_GetChartWidthPx(m_ctx.chart_id);
-   int newX = cw - rightDist - w;
-   if(newX < 0) newX = 0;
-   ObjectSetInteger(m_ctx.chart_id, name, OBJPROP_XDISTANCE, newX);
-}
+   void              SetRightDist(const string name, const int rightDist)
+     {
+      int x,y,w,h;
+      if(!GetBox(name,x,y,w,h))
+         return;
+      int cw = VT_GetChartWidthPx(m_ctx.chart_id);
+      int newX = cw - rightDist - w;
+      if(newX < 0)
+         newX = 0;
+      ObjectSetInteger(m_ctx.chart_id, name, OBJPROP_XDISTANCE, newX);
+     }
 
 
    // --- DB helper: keys ---
@@ -550,7 +555,10 @@ void SetRightDist(const string name, const int rightDist)
 
          ObjectSetInteger(m_ctx.chart_id, TRNB,      OBJPROP_YDISTANCE, y_edits_entry);
          ObjectSetInteger(m_ctx.chart_id, POSNB,     OBJPROP_YDISTANCE, y_edits_entry);
-         ObjectSetInteger(m_ctx.chart_id, SabioEntry,OBJPROP_YDISTANCE, y_edits_entry);
+         //         ObjectSetInteger(m_ctx.chart_id, SabioEntry,OBJPROP_YDISTANCE, y_edits_entry);
+         if(ObjectFind(m_ctx.chart_id, SabioEntry) >= 0)
+            ObjectSetInteger(m_ctx.chart_id, SabioEntry, OBJPROP_YDISTANCE, y_edits_entry);
+
         }
 
       if(ObjectFind(m_ctx.chart_id, SLButton) >= 0 && ChartTimePriceToXY(m_ctx.chart_id, 0, t, sl, x, y))
@@ -563,7 +571,10 @@ void SetRightDist(const string name, const int rightDist)
          ObjectSetInteger(m_ctx.chart_id, SLButton, OBJPROP_YDISTANCE, sl_top);
 
          int y_edits_sl = sl_top + btn_h2 + gap_under_btn;
-         ObjectSetInteger(m_ctx.chart_id, SabioSL, OBJPROP_YDISTANCE, y_edits_sl);
+         //         ObjectSetInteger(m_ctx.chart_id, SabioSL, OBJPROP_YDISTANCE, y_edits_sl);
+
+         if(ObjectFind(m_ctx.chart_id, SabioSL) >= 0)
+            ObjectSetInteger(m_ctx.chart_id, SabioSL, OBJPROP_YDISTANCE, y_edits_sl);
         }
      }
 
@@ -591,6 +602,25 @@ void SetRightDist(const string name, const int rightDist)
          SetText(EntryButton, entry_txt);
       if(ObjectFind(m_ctx.chart_id, SLButton)   >= 0)
          SetText(SLButton,   sl_txt);
+     }
+
+   void              SetSabioEditsVisible(const bool visible)
+     {
+      // Wenn nicht existieren: nichts tun (CreateDefaults erzeugt sie)
+      if(ObjectFind(m_ctx.chart_id, SabioEntry) >= 0)
+        {
+         ObjectSetInteger(m_ctx.chart_id, SabioEntry, OBJPROP_HIDDEN,   !visible);
+         // optional: wenn hidden dann auch nicht anklickbar (sicher ist sicher)
+         ObjectSetInteger(m_ctx.chart_id, SabioEntry, OBJPROP_SELECTABLE, false);
+         ObjectSetInteger(m_ctx.chart_id, SabioEntry, OBJPROP_SELECTED,   false);
+        }
+
+      if(ObjectFind(m_ctx.chart_id, SabioSL) >= 0)
+        {
+         ObjectSetInteger(m_ctx.chart_id, SabioSL, OBJPROP_HIDDEN,   !visible);
+         ObjectSetInteger(m_ctx.chart_id, SabioSL, OBJPROP_SELECTABLE, false);
+         ObjectSetInteger(m_ctx.chart_id, SabioSL, OBJPROP_SELECTED,   false);
+        }
      }
 
 public:
@@ -627,47 +657,47 @@ public:
 
       m_prevLeftDown=false;
      }
-     
-//Steffen
-bool Init(CTradeManager *tm, const SContext &ctx)
-{
-   m_ctx = ctx;
-   m_tm = tm;
 
-   m_baseLines.BindChart(m_ctx.chart_id);
-   m_baseBtnDrag.BindChart(m_ctx.chart_id);
-   m_baseBtnDrag.Bind(&m_baseLines);
-
-   m_sabio_entry_user = false;
-   m_sabio_sl_user    = false;
-
-   bool ok = (m_tm != NULL && CheckPointer(m_tm) != POINTER_INVALID);
-
-   if(ok)
-      Anchor_Init();   // ✅ HIER – aber nur wenn Objekte schon existieren!
-
-   return ok;
-}
-     
-     
-/*     
-   bool Init(CTradeManager *tm, const SContext &ctx)
+   
+   bool              Init(CTradeManager *tm, const SContext &ctx)
      {
-
       m_ctx = ctx;
       m_tm = tm;
-      m_ctx.chart_id = m_ctx.chart_id;
 
       m_baseLines.BindChart(m_ctx.chart_id);
       m_baseBtnDrag.BindChart(m_ctx.chart_id);
       m_baseBtnDrag.Bind(&m_baseLines);
+
       m_sabio_entry_user = false;
       m_sabio_sl_user    = false;
 
-      return (m_tm != NULL && CheckPointer(m_tm) != POINTER_INVALID);
+      bool ok = (m_tm != NULL && CheckPointer(m_tm) != POINTER_INVALID);
+
+      if(ok)
+         Anchor_Init();   // ✅ HIER – aber nur wenn Objekte schon existieren!
+
+      return ok;
      }
-*/     
-     
+
+
+   /*
+      bool Init(CTradeManager *tm, const SContext &ctx)
+        {
+
+         m_ctx = ctx;
+         m_tm = tm;
+         m_ctx.chart_id = m_ctx.chart_id;
+
+         m_baseLines.BindChart(m_ctx.chart_id);
+         m_baseBtnDrag.BindChart(m_ctx.chart_id);
+         m_baseBtnDrag.Bind(&m_baseLines);
+         m_sabio_entry_user = false;
+         m_sabio_sl_user    = false;
+
+         return (m_tm != NULL && CheckPointer(m_tm) != POINTER_INVALID);
+        }
+   */
+
    void              Destroy()
      {
       ObjectDelete(m_ctx.chart_id, PR_HL);
@@ -676,6 +706,9 @@ bool Init(CTradeManager *tm, const SContext &ctx)
       ObjectDelete(m_ctx.chart_id, EntryButton);
       ObjectDelete(m_ctx.chart_id, SLButton);
       ObjectDelete(m_ctx.chart_id, SENDTRADEBTN);
+      
+      ObjectDelete(m_ctx.chart_id, "SendOnlyButton");
+      ObjectDelete(m_ctx.chart_id, "T&SButton");   // optional, falls so mal benannt
 
       ObjectDelete(m_ctx.chart_id, TRNB);
       ObjectDelete(m_ctx.chart_id, POSNB);
@@ -690,7 +723,7 @@ bool Init(CTradeManager *tm, const SContext &ctx)
 
       const int btn_w = 260;
       const int btn_h = 30;
-      const int edit_w = 80;
+      const int edit_w = 50;
       const int edit_h = 30;
       const int sab_h  = 30;
 
@@ -743,7 +776,16 @@ bool Init(CTradeManager *tm, const SContext &ctx)
 
       EnsureButton(EntryButton, x_entry, y_mid, btn_w, btn_h, "Entry", PriceButton_font_color, PriceButton_bgcolor);
       EnsureButton(SLButton,    x_entry, y_sl,  btn_w, btn_h, "SL",    SLButton_font_color, SLButton_bgcolor);
-      EnsureButton(SENDTRADEBTN, x_send, y_mid, send_w, btn_h, "SEND", SendOnlyButton_font_color, SendOnlyButton_bgcolor);
+
+      bool sendOnly = m_ctx.send_only_mode;
+
+      string send_txt  = (sendOnly ? "SEND" : "T & S");
+      color  send_bg   = (sendOnly ? SendOnlyButton_bgcolor : TSButton_bgcolor);
+      color  send_font = (sendOnly ? SendOnlyButton_font_color : TSButton_font_color);
+
+      EnsureButton(SENDTRADEBTN, x_send, y_mid, send_w, btn_h, send_txt, send_font, send_bg);
+
+      EnsureButton(SENDTRADEBTN, x_send, y_mid, send_w, btn_h, send_txt, send_font, send_bg);
 
       // ✅ Editfelder: jetzt sofort mit Inhalt (und wirklich editierbar)
       int tr = DB_GetIntV("tm.pub.trnb", 1);
@@ -752,11 +794,23 @@ bool Init(CTradeManager *tm, const SContext &ctx)
       EnsureEdit(TRNB,  x_trnb, y_mid + btn_h, edit_w, edit_h, IntegerToString(tr), clrBlack, clrWhite);
       EnsureEdit(POSNB, x_pos,  y_mid + btn_h, edit_w, edit_h, IntegerToString(po), clrBlack, clrWhite);
 
-      EnsureEdit(SabioEntry, x_sabE, y_mid + btn_h, btn_w, sab_h,
-                 "SABIO Entry: " + DoubleToString(p_entry, VT_Digits()), clrBlack, clrWhite);
+      if(m_ctx.sabio_edit_visible)
+        {
+         EnsureEdit(SabioEntry, x_sabE, y_mid + btn_h, btn_w, sab_h,
+                    "SABIO Entry: " + DoubleToString(p_entry, VT_Digits()), clrBlack, clrWhite);
 
-      EnsureEdit(SabioSL,    x_sabE, y_sl  + btn_h, btn_w, sab_h,
-                 "SABIO SL: " + DoubleToString(p_sl, VT_Digits()), clrBlack, clrWhite);
+         EnsureEdit(SabioSL,    x_sabE, y_sl  + btn_h, btn_w, sab_h,
+                    "SABIO SL: " + DoubleToString(p_sl, VT_Digits()), clrBlack, clrWhite);
+        }
+      else
+        {
+         // falls Objekte noch aus alten Läufen existieren
+         ObjectDelete(m_ctx.chart_id, SabioEntry);
+         ObjectDelete(m_ctx.chart_id, SabioSL);
+        }
+
+      // NEU: Sichtbarkeit gemäß Input/Context setzen
+      SetSabioEditsVisible(m_ctx.sabio_edit_visible);
 
       ChartSetInteger(m_ctx.chart_id, CHART_EVENT_MOUSE_MOVE, true);
 
@@ -776,49 +830,56 @@ bool Init(CTradeManager *tm, const SContext &ctx)
       // initial sync
       OnBaseLinesChanged();
       PersistDraftPricesAndSabio();
-//Steffen
-Anchor_Init();
+      
+      Anchor_Init();
      }
 
-//Steffen
-void Anchor_Init()
-{
-   // nur wenn alle da sind – sonst später erneut versuchen
-   if(!ObjExists(EntryButton) || !ObjExists(SLButton)) return;
+   
+   void              Anchor_Init()
+     {
+      // nur wenn alle da sind – sonst später erneut versuchen
+      if(!ObjExists(EntryButton) || !ObjExists(SLButton))
+         return;
 
-   m_ref_w = VT_GetChartWidthPx(m_ctx.chart_id);
-   m_anchor_inited = (m_ref_w > 0);
+      m_ref_w = VT_GetChartWidthPx(m_ctx.chart_id);
+      m_anchor_inited = (m_ref_w > 0);
 
-   // right distances speichern
-   m_ref_x   = RightDistOf(EntryButton);  // optional (falls du Entry als Referenz willst)
-   m_dx_slbtn= RightDistOf(SLButton);
-   m_dx_send = RightDistOf(SENDTRADEBTN);
-   m_dx_trnb = RightDistOf(TRNB);
-   m_dx_posnb= RightDistOf(POSNB);
-   m_dx_sabE = RightDistOf(SabioEntry);
-   m_dx_sabS = RightDistOf(SabioSL);
-}
+      // right distances speichern
+      m_ref_x   = RightDistOf(EntryButton);  // optional (falls du Entry als Referenz willst)
+      m_dx_slbtn= RightDistOf(SLButton);
+      m_dx_send = RightDistOf(SENDTRADEBTN);
+      m_dx_trnb = RightDistOf(TRNB);
+      m_dx_posnb= RightDistOf(POSNB);
+      m_dx_sabE = RightDistOf(SabioEntry);
+      m_dx_sabS = RightDistOf(SabioSL);
+     }
 
-//Steffen
-void Anchor_Apply()
-{
-   if(!m_anchor_inited) { Anchor_Init(); return; }
+   
+   void              Anchor_Apply()
+     {
+      if(!m_anchor_inited)
+        {
+         Anchor_Init();
+         return;
+        }
 
-   int cw = VT_GetChartWidthPx(m_ctx.chart_id);
-   if(cw <= 0) return;
+      int cw = VT_GetChartWidthPx(m_ctx.chart_id);
+      if(cw <= 0)
+         return;
 
-   // wenn Breite gleich, nicht unnötig schreiben
-   if(cw == m_ref_w) return;
-   m_ref_w = cw;
+      // wenn Breite gleich, nicht unnötig schreiben
+      if(cw == m_ref_w)
+         return;
+      m_ref_w = cw;
 
-   SetRightDist(EntryButton,  m_ref_x);
-   SetRightDist(SLButton,     m_dx_slbtn);
-   SetRightDist(SENDTRADEBTN, m_dx_send);
-   SetRightDist(TRNB,         m_dx_trnb);
-   SetRightDist(POSNB,        m_dx_posnb);
-   SetRightDist(SabioEntry,   m_dx_sabE);
-   SetRightDist(SabioSL,      m_dx_sabS);
-}
+      SetRightDist(EntryButton,  m_ref_x);
+      SetRightDist(SLButton,     m_dx_slbtn);
+      SetRightDist(SENDTRADEBTN, m_dx_send);
+      SetRightDist(TRNB,         m_dx_trnb);
+      SetRightDist(POSNB,        m_dx_posnb);
+      SetRightDist(SabioEntry,   m_dx_sabE);
+      SetRightDist(SabioSL,      m_dx_sabS);
+     }
 
    bool              HandleBaseUIEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
      {
@@ -871,65 +932,22 @@ void Anchor_Apply()
          return false;
         }
 
-if(id == CHARTEVENT_CHART_CHANGE)
-{
-   Anchor_Apply();        // <<< neu: X rechts halten
-   OnBaseLinesChanged();  // Y/Texts sync
-   return true;
-}
-
-/*
       if(id == CHARTEVENT_CHART_CHANGE)
         {
-         OnBaseLinesChanged();
+         Anchor_Apply();        // <<< neu: X rechts halten
+         OnBaseLinesChanged();  // Y/Texts sync
          return true;
         }
-*/
 
-if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == TRNB || sparam == POSNB))
-{
-   if(sparam == TRNB)
-   {
-      int v = ExtractIntDigits(ObjectGetString(m_ctx.chart_id, TRNB, OBJPROP_TEXT));
-      if(v > 0)
-      {
-         DB_SetInt("tm.req.trnb", v);
-         DB_SetInt("tm.req.has_trnb", 1);
-         DB_SetInt("vt.draft.trnb_user", 1);
+      /*
+            if(id == CHARTEVENT_CHART_CHANGE)
+              {
+               OnBaseLinesChanged();
+               return true;
+              }
+      */
 
-         int rev = DB_GetIntV("tm.req.rev", 0);
-         DB_SetInt("tm.req.rev", rev + 1);
-         PersistDraftPricesAndSabio();
-      }
-   }
-   else // POSNB
-   {
-      int v = ExtractIntDigits(ObjectGetString(m_ctx.chart_id, POSNB, OBJPROP_TEXT));
-      if(v > 0)
-      {
-         DB_SetInt("tm.req.posnb", v);
-         DB_SetInt("tm.req.has_posnb", 1);
-         DB_SetInt("vt.draft.posnb_user", 1);
-
-         int rev = DB_GetIntV("tm.req.rev", 0);
-         DB_SetInt("tm.req.rev", rev + 1);
-         PersistDraftPricesAndSabio();
-      }
-   }
-   return true;
-}
-
-// <-- eigener Block für Sabio
-if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == SabioEntry || sparam == SabioSL))
-{
-   if(sparam == SabioEntry) m_sabio_entry_user = true;
-   if(sparam == SabioSL)    m_sabio_sl_user    = true;
-
-   PersistDraftPricesAndSabio();
-   return true;
-}
-
-/*      if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == TRNB || sparam == POSNB))
+      if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == TRNB || sparam == POSNB))
         {
          if(sparam == TRNB)
            {
@@ -959,22 +977,21 @@ if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == SabioEntry || sparam == SabioSL
                PersistDraftPricesAndSabio();
               }
            }
-         if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == SabioEntry || sparam == SabioSL))
-           {
-            if(sparam == SabioEntry)
-               m_sabio_entry_user = true;
-            if(sparam == SabioSL)
-               m_sabio_sl_user    = true;
-
-            // wichtig: Draft sofort in DB sichern, damit SEND den Text sicher hat
-            PersistDraftPricesAndSabio();
-
-            return true;
-           }
-
          return true;
         }
-*/
+
+      // <-- eigener Block für Sabio
+      if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == SabioEntry || sparam == SabioSL))
+        {
+         if(sparam == SabioEntry)
+            m_sabio_entry_user = true;
+         if(sparam == SabioSL)
+            m_sabio_sl_user    = true;
+
+         PersistDraftPricesAndSabio();
+         return true;
+        }
+
       return false;
      }
 
@@ -984,13 +1001,34 @@ if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == SabioEntry || sparam == SabioSL
       UpdateEntrySLButtonTexts();
 
       // Preise auch im Sabio-Edit live anzeigen (ohne irgendeine Prüfung/Logik)
+      /*      double entry=0.0, sl=0.0;
+            if(GetBaseEntrySL(entry, sl))
+              {
+               if(!m_sabio_entry_user)
+                  SetText(SabioEntry, "SABIO Entry: " + DoubleToString(entry, VT_Digits()));
+
+               if(!m_sabio_sl_user)
+                  SetText(SabioSL, "SABIO SL: " + DoubleToString(sl, VT_Digits()));
+              }
+
+            if(GetBaseEntrySL(entry, sl))
+              {
+               if(m_ctx.sabio_edit_visible)
+                 {
+                  if(!m_sabio_entry_user)
+                     SetText(SabioEntry, "SABIO Entry: " + DoubleToString(entry, VT_Digits()));
+                  if(!m_sabio_sl_user)
+                     SetText(SabioSL, "SABIO SL: " + DoubleToString(sl, VT_Digits()));
+                 }
+              }*/
+
       double entry=0.0, sl=0.0;
-      if(GetBaseEntrySL(entry, sl))
+      if(m_ctx.sabio_edit_visible && GetBaseEntrySL(entry, sl))
         {
-         if(!m_sabio_entry_user)
+         if(ObjectFind(m_ctx.chart_id, SabioEntry) >= 0 && !m_sabio_entry_user)
             SetText(SabioEntry, "SABIO Entry: " + DoubleToString(entry, VT_Digits()));
 
-         if(!m_sabio_sl_user)
+         if(ObjectFind(m_ctx.chart_id, SabioSL) >= 0 && !m_sabio_sl_user)
             SetText(SabioSL, "SABIO SL: " + DoubleToString(sl, VT_Digits()));
         }
 
@@ -1016,8 +1054,10 @@ if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == SabioEntry || sparam == SabioSL
          po = 1;
 
       // Draft-DB immer aktuell halten (SEND-Layer liest vt.draft.*)
-      DB_SetInt("vt.draft.trnb", tr);
-      DB_SetInt("vt.draft.posnb", po);
+
+     
+      DB_SetText("vt.draft.trnb",  IntegerToString(tr));
+      DB_SetText("vt.draft.posnb", IntegerToString(po));
 
       if(ObjectFind(m_ctx.chart_id, TRNB) >= 0)
          ObjectSetString(m_ctx.chart_id, TRNB, OBJPROP_TEXT, IntegerToString(tr));
