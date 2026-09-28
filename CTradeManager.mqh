@@ -649,17 +649,23 @@ void  CTradeManager::SaveLinePrices(const string symbol, const ENUM_TIMEFRAMES t
 
    double p;
 
-// 1) Basislinien wie bisher
+// 1) Basislinien in denselben Draft-Keys persistieren, die der Send-Pfad liest.
+   const int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+
    if(ObjectFind(0, PR_HL) >= 0)
      {
       p = ObjectGetDouble(0, PR_HL, OBJPROP_PRICE);
-
+      if(p > 0.0)
+         m_db.SetMetaText(m_db.KeyFor(symbol, tf, "vt.draft.entry_price"),
+                          DoubleToString(p, digits));
      }
 
    if(ObjectFind(0, SL_HL) >= 0)
      {
       p = ObjectGetDouble(0, SL_HL, OBJPROP_PRICE);
-
+      if(p > 0.0)
+         m_db.SetMetaText(m_db.KeyFor(symbol, tf, "vt.draft.sl_price"),
+                          DoubleToString(p, digits));
      }
 
 // 2) Alle Trade-HLines mitspeichern + (für Entry/SL) positions updaten
