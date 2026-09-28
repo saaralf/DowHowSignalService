@@ -269,10 +269,10 @@ bool              TM_SendSignal(const string symbol,
          g_tp.ShowActiveLong(false);
          g_tp.ShowCancelLong(false);
 
-         if(ObjectFind(0, "ActiveLongTrade") >= 0)
+         if(ObjectFind(m_ctx.chart_id, "ActiveLongTrade") >= 0)
            {
-            UI_ObjSetIntSafe(0, "ActiveLongTrade", OBJPROP_COLOR, clrNONE);
-            UI_ObjSetIntSafe(0, "ActiveLongTrade", OBJPROP_BGCOLOR, clrNONE);
+            UI_ObjSetIntSafe(m_ctx.chart_id, "ActiveLongTrade", OBJPROP_COLOR, clrNONE);
+            UI_ObjSetIntSafe(m_ctx.chart_id, "ActiveLongTrade", OBJPROP_BGCOLOR, clrNONE);
            }
         }
       else
@@ -290,15 +290,15 @@ bool              TM_SendSignal(const string symbol,
          g_tp.ShowActiveShort(false);
          g_tp.ShowCancelShort(false);
 
-         if(ObjectFind(0, "ActiveShortTrade") >= 0)
+         if(ObjectFind(m_ctx.chart_id, "ActiveShortTrade") >= 0)
            {
-            UI_ObjSetIntSafe(0, "ActiveShortTrade", OBJPROP_COLOR, clrNONE);
-            UI_ObjSetIntSafe(0, "ActiveShortTrade", OBJPROP_BGCOLOR, clrNONE);
+            UI_ObjSetIntSafe(m_ctx.chart_id, "ActiveShortTrade", OBJPROP_COLOR, clrNONE);
+            UI_ObjSetIntSafe(m_ctx.chart_id, "ActiveShortTrade", OBJPROP_BGCOLOR, clrNONE);
            }
         }
       g_tp.RebuildRows();
 
-      ChartRedraw(0);
+      ChartRedraw(m_ctx.chart_id);
       return true;
      }
 
@@ -360,14 +360,14 @@ bool              TM_SendSignal(const string symbol,
          double sl_price    = rows[i].sl;
 
          TradePosLines_CreateOrUpdate(entryName, entry_price, tf,
-                                      StringFormat("E T%d P%d %s", trade_no, pos_no, DoubleToString(rows[i].entry, _Digits)),
+                                      StringFormat("E T%d P%d %s", trade_no, pos_no, DoubleToString(rows[i].entry, (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS))),
                                       (rows[i].direction=="LONG" ? TradeEntryLineLong : TradeEntryLineShort),
                                       1, style,
                                       (rows[i].direction=="LONG" ? TradeEntryLineLong : TradeEntryLineShort),
                                       10, "Arial", "_TAG", 4, 12);
 
          TradePosLines_CreateOrUpdate(slName, sl_price, tf,
-                                      StringFormat("SL T%d P%d %s", trade_no, pos_no, DoubleToString(rows[i].sl, _Digits)),
+                                      StringFormat("SL T%d P%d %s", trade_no, pos_no, DoubleToString(rows[i].sl, (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS))),
                                       (rows[i].direction=="LONG" ? Tradecolor_SLLineLong : Tradecolor_SLLineShort),
                                       1, style,
                                       (rows[i].direction=="LONG" ? Tradecolor_SLLineLong : Tradecolor_SLLineShort),
@@ -376,7 +376,7 @@ bool              TM_SendSignal(const string symbol,
 
       g_tradePosLines.SyncAllTags();
       UI_ApplyZOrder();
-      ChartRedraw(0);
+      ChartRedraw(m_ctx.chart_id);
      }
    void              CTradeManager::TM_ConsumeGUIRequestsFromDB(const string symbol, const ENUM_TIMEFRAMES tf)
      {
@@ -506,9 +506,9 @@ void CTradeManager::PersistToDB(string symbol,const ENUM_TIMEFRAMES tf)
    SaveLinePrices(symbol,tf);
 
 // Optional: UI-TradeNr aus dem Eingabefeld sichern
-   if(ObjectFind(0, TRNB) >= 0)
+   if(ObjectFind(m_ctx.chart_id, TRNB) >= 0)
      {
-      string s = ObjectGetString(0, TRNB, OBJPROP_TEXT);
+      string s = ObjectGetString(m_ctx.chart_id, TRNB, OBJPROP_TEXT);
       int trn = (int)StringToInteger(s);
       m_db.SetMetaInt(m_db.KeyFor(symbol, tf,"trnb_ui"), trn);
      }
@@ -603,34 +603,34 @@ void  CTradeManager::SaveLinePrices(const string symbol, const ENUM_TIMEFRAMES t
    double p;
 
 // 1) Basislinien wie bisher
-   if(ObjectFind(0, PR_HL) >= 0)
+   if(ObjectFind(m_ctx.chart_id, PR_HL) >= 0)
      {
-      p = ObjectGetDouble(0, PR_HL, OBJPROP_PRICE);
+      p = ObjectGetDouble(m_ctx.chart_id, PR_HL, OBJPROP_PRICE);
 
      }
 
-   if(ObjectFind(0, SL_HL) >= 0)
+   if(ObjectFind(m_ctx.chart_id, SL_HL) >= 0)
      {
-      p = ObjectGetDouble(0, SL_HL, OBJPROP_PRICE);
+      p = ObjectGetDouble(m_ctx.chart_id, SL_HL, OBJPROP_PRICE);
 
      }
 
 // 2) Alle Trade-HLines mitspeichern + (für Entry/SL) positions updaten
-   int total = ObjectsTotal(0, 0, -1);
+   int total = ObjectsTotal(m_ctx.chart_id, 0, -1);
    for(int i = 0; i < total; i++)
      {
-      string name = ObjectName(0, i, 0, -1);
+      string name = ObjectName(m_ctx.chart_id, i, 0, -1);
       if(!UI_IsTradePosLine(name))
          continue;
 
       // Nur echte HLINEs speichern
-      if((ENUM_OBJECT)ObjectGetInteger(0, name, OBJPROP_TYPE) != OBJ_HLINE)
+      if((ENUM_OBJECT)ObjectGetInteger(m_ctx.chart_id, name, OBJPROP_TYPE) != OBJ_HLINE)
          continue;
 
-      double price = ObjectGetDouble(0, name, OBJPROP_PRICE);
+      double price = ObjectGetDouble(m_ctx.chart_id, name, OBJPROP_PRICE);
 
       // 2a) Meta: pro Objektname (stabil, kollisionsfrei)
-      m_db.SetMetaText(m_db.KeyFor(symbol, tf,"hline|" + name), DoubleToString(price, _Digits));
+      m_db.SetMetaText(m_db.KeyFor(symbol, tf,"hline|" + name), DoubleToString(price, (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS)));
 
       // 2b) Positions-Tabelle: Entry/SL sauber persistieren (damit RestoreTradeLines_All stimmt)
       string direction, kind;
@@ -718,17 +718,17 @@ void CTradeManager::SaveTradeLines(const string suf)
   {
 // LONG
 
-   if(ObjectFind(0, SL_Long + suf) >= 0)
-      m_db.SetMetaText(m_db.KeyFor(m_ctx.symbol, m_ctx.tf,"L_sl"), DoubleToString(ObjectGetDouble(0, SL_Long + suf, OBJPROP_PRICE), _Digits));
-   if(ObjectFind(0, Entry_Long + suf) >= 0)
-      m_db.SetMetaText(m_db.KeyFor(m_ctx.symbol, m_ctx.tf,"L_entry"), DoubleToString(ObjectGetDouble(0, Entry_Long + suf, OBJPROP_PRICE), _Digits));
+   if(ObjectFind(m_ctx.chart_id, SL_Long + suf) >= 0)
+      m_db.SetMetaText(m_db.KeyFor(m_ctx.symbol, m_ctx.tf,"L_sl"), DoubleToString(ObjectGetDouble(m_ctx.chart_id, SL_Long + suf, OBJPROP_PRICE), (int)SymbolInfoInteger(m_ctx.symbol, SYMBOL_DIGITS)));
+   if(ObjectFind(m_ctx.chart_id, Entry_Long + suf) >= 0)
+      m_db.SetMetaText(m_db.KeyFor(m_ctx.symbol, m_ctx.tf,"L_entry"), DoubleToString(ObjectGetDouble(m_ctx.chart_id, Entry_Long + suf, OBJPROP_PRICE), (int)SymbolInfoInteger(m_ctx.symbol, SYMBOL_DIGITS)));
 
 // SHORT
 
-   if(ObjectFind(0, SL_Short + suf) >= 0)
-      m_db.SetMetaText(m_db.KeyFor(m_ctx.symbol, m_ctx.tf,"S_sl"), DoubleToString(ObjectGetDouble(0, SL_Short + suf, OBJPROP_PRICE), _Digits));
-   if(ObjectFind(0, Entry_Short + suf) >= 0)
-      m_db.SetMetaText(m_db.KeyFor(m_ctx.symbol, m_ctx.tf,"S_entry"), DoubleToString(ObjectGetDouble(0, Entry_Short + suf, OBJPROP_PRICE), _Digits));
+   if(ObjectFind(m_ctx.chart_id, SL_Short + suf) >= 0)
+      m_db.SetMetaText(m_db.KeyFor(m_ctx.symbol, m_ctx.tf,"S_sl"), DoubleToString(ObjectGetDouble(m_ctx.chart_id, SL_Short + suf, OBJPROP_PRICE), (int)SymbolInfoInteger(m_ctx.symbol, SYMBOL_DIGITS)));
+   if(ObjectFind(m_ctx.chart_id, Entry_Short + suf) >= 0)
+      m_db.SetMetaText(m_db.KeyFor(m_ctx.symbol, m_ctx.tf,"S_entry"), DoubleToString(ObjectGetDouble(m_ctx.chart_id, Entry_Short + suf, OBJPROP_PRICE), (int)SymbolInfoInteger(m_ctx.symbol, SYMBOL_DIGITS)));
   }
 
 
@@ -745,10 +745,10 @@ void CTradeManager::SetPosLinesSolid(const string direction, const int trade_no,
       string e = Entry_Long + suf;
       string s = SL_Long    + suf;
 
-      if(ObjectFind(0, e) >= 0)
-         UI_ObjSetIntSafe(0, e, OBJPROP_STYLE, STYLE_SOLID);
-      if(ObjectFind(0, s) >= 0)
-         UI_ObjSetIntSafe(0, s, OBJPROP_STYLE, STYLE_SOLID);
+      if(ObjectFind(m_ctx.chart_id, e) >= 0)
+         UI_ObjSetIntSafe(m_ctx.chart_id, e, OBJPROP_STYLE, STYLE_SOLID);
+      if(ObjectFind(m_ctx.chart_id, s) >= 0)
+         UI_ObjSetIntSafe(m_ctx.chart_id, s, OBJPROP_STYLE, STYLE_SOLID);
      }
    else
       if(direction == "SHORT")
@@ -756,13 +756,13 @@ void CTradeManager::SetPosLinesSolid(const string direction, const int trade_no,
          string e = Entry_Short + suf;
          string s = SL_Short    + suf;
 
-         if(ObjectFind(0, e) >= 0)
-            UI_ObjSetIntSafe(0, e, OBJPROP_STYLE, STYLE_SOLID);
-         if(ObjectFind(0, s) >= 0)
-            UI_ObjSetIntSafe(0, s, OBJPROP_STYLE, STYLE_SOLID);
+         if(ObjectFind(m_ctx.chart_id, e) >= 0)
+            UI_ObjSetIntSafe(m_ctx.chart_id, e, OBJPROP_STYLE, STYLE_SOLID);
+         if(ObjectFind(m_ctx.chart_id, s) >= 0)
+            UI_ObjSetIntSafe(m_ctx.chart_id, s, OBJPROP_STYLE, STYLE_SOLID);
         }
 
-   ChartRedraw(0); // sofort sichtbar
+   ChartRedraw(m_ctx.chart_id); // sofort sichtbar
   }
 
 
@@ -927,7 +927,7 @@ ESendDraftResult CTradeManager::SendSignalDraft(const string symbol,
    // --- Discord senden
    string msg = m_discord.FormatTradeMessage(row);
 
-   long cid = ChartID();
+   long cid = m_ctx.chart_id;
    int w = (int)ChartGetInteger(cid, CHART_WIDTH_IN_PIXELS, 0);
    int h = (int)ChartGetInteger(cid, CHART_HEIGHT_IN_PIXELS, 0);
    bool ok = m_discord.SendMessageWithChart(symbol, msg, cid, w, h);
@@ -1358,10 +1358,10 @@ bool             CTradeManager::UI_CloseOnePositionAndNotify(const string symbol
          is_long_trade     = false;
          HitEntryPriceLong = false;
 
-         if(ObjectFind(0, "ActiveLongTrade") >= 0)
+         if(ObjectFind(m_ctx.chart_id, "ActiveLongTrade") >= 0)
            {
-            UI_ObjSetIntSafe(0, "ActiveLongTrade", OBJPROP_COLOR, clrNONE);
-            UI_ObjSetIntSafe(0, "ActiveLongTrade", OBJPROP_BGCOLOR, clrNONE);
+            UI_ObjSetIntSafe(m_ctx.chart_id, "ActiveLongTrade", OBJPROP_COLOR, clrNONE);
+            UI_ObjSetIntSafe(m_ctx.chart_id, "ActiveLongTrade", OBJPROP_BGCOLOR, clrNONE);
            }
         }
       else
@@ -1376,10 +1376,10 @@ bool             CTradeManager::UI_CloseOnePositionAndNotify(const string symbol
          is_sell_trade_pending = false;
          HitEntryPriceShort    = false;
 
-         if(ObjectFind(0, "ActiveShortTrade") >= 0)
+         if(ObjectFind(m_ctx.chart_id, "ActiveShortTrade") >= 0)
            {
-            UI_ObjSetIntSafe(0, "ActiveShortTrade", OBJPROP_COLOR, clrNONE);
-            UI_ObjSetIntSafe(0, "ActiveShortTrade", OBJPROP_BGCOLOR, clrNONE);
+            UI_ObjSetIntSafe(m_ctx.chart_id, "ActiveShortTrade", OBJPROP_COLOR, clrNONE);
+            UI_ObjSetIntSafe(m_ctx.chart_id, "ActiveShortTrade", OBJPROP_BGCOLOR, clrNONE);
            }
         }
      }
@@ -1564,7 +1564,7 @@ bool CTradeManager::TM_HandleSendTradeClick(const string symbol,
    g_tp.RebuildRows();
    RestoreTradePosLines(symbol, tf);
    UI_ApplyZOrder();
-   ChartRedraw(0);
+   ChartRedraw(m_ctx.chart_id);
 
    return true;
   }
