@@ -6,6 +6,7 @@
 #include "ta_controllers.mqh"
 #include "ui_state.mqh"
 #include "CDBService.mqh"
+#include "trade_draft.mqh"
 extern CDBService g_DB;
 
 //+------------------------------------------------------------------+
@@ -86,7 +87,6 @@ private:
 
    void              PersistDraftPricesAndSabio()
      {
-
       double e=0.0, s=0.0;
       if(!GetBaseEntrySL(e,s))
         {
@@ -94,48 +94,40 @@ private:
          return;
         }
 
+      SDraftSnapshot draft;
+      draft.direction = DirectionFromLines();
+      draft.entry = VT_NormalizeToTick(e);
+      draft.sl    = VT_NormalizeToTick(s);
 
-      if(GetBaseEntrySL(e,s))
-        {
-         DB_SetText("vt.draft.direction", DirectionFromLines());
-         DB_SetText("vt.draft.entry_price", DoubleToString(VT_NormalizeToTick(e), VT_Digits(m_ctx.symbol)));
-         DB_SetText("vt.draft.sl_price",    DoubleToString(VT_NormalizeToTick(s), VT_Digits(m_ctx.symbol)));
-        }
-      else
-        {
-         Print("PersistDraft: GetBaseEntrySL failed (lines missing?)");
-         return;
-        }
+      draft.sabio_entry = (ObjectFind(m_ctx.chart_id,SabioEntry)>=0
+                           ? ObjectGetString(m_ctx.chart_id,SabioEntry,OBJPROP_TEXT)
+                           : "SABIO Entry: ");
+      draft.sabio_sl = (ObjectFind(m_ctx.chart_id,SabioSL)>=0
+                        ? ObjectGetString(m_ctx.chart_id,SabioSL,OBJPROP_TEXT)
+                        : "SABIO SL: ");
 
+      draft.trnb = "";
+      draft.posnb = "";
 
-      // Sabio Texte stehen bereits im Edit (user oder auto)
-      string se = (ObjectFind(m_ctx.chart_id,SabioEntry)>=0 ? ObjectGetString(m_ctx.chart_id,SabioEntry,OBJPROP_TEXT) : "SABIO Entry: ");
-      string ss = (ObjectFind(m_ctx.chart_id,SabioSL)>=0    ? ObjectGetString(m_ctx.chart_id,SabioSL,OBJPROP_TEXT)    : "SABIO SL: ");
-
-      DB_SetText("vt.draft.sabio_entry_text", se);
-      DB_SetText("vt.draft.sabio_sl_text",    ss);
-
-      // --- NEU: TRNB / POSNB als Draft sichern (UI-Entwurf) ---
       if(ObjectFind(m_ctx.chart_id, TRNB) >= 0)
         {
-         string tr = ObjectGetString(m_ctx.chart_id, TRNB, OBJPROP_TEXT);
-         StringTrimLeft(tr);
-         StringTrimRight(tr);
-         DB_SetText("vt.draft.trnb", tr);
+         draft.trnb = ObjectGetString(m_ctx.chart_id, TRNB, OBJPROP_TEXT);
+         StringTrimLeft(draft.trnb);
+         StringTrimRight(draft.trnb);
         }
 
       if(ObjectFind(m_ctx.chart_id, POSNB) >= 0)
         {
-         string pn = ObjectGetString(m_ctx.chart_id, POSNB, OBJPROP_TEXT);
-         StringTrimLeft(pn);
-         StringTrimRight(pn);
-         DB_SetText("vt.draft.posnb", pn);
+         draft.posnb = ObjectGetString(m_ctx.chart_id, POSNB, OBJPROP_TEXT);
+         StringTrimLeft(draft.posnb);
+         StringTrimRight(draft.posnb);
         }
-      string t_entry = "";
-      string t_sl    = "";
-      g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf, "vt.draft.entry_price"), t_entry, "NA");
-      g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf, "vt.draft.sl_price"),    t_sl,    "NA");
-      Print("DraftPersist wrote entry=", t_entry, " sl=", t_sl, " sym=", m_ctx.symbol, " tf=", (int)m_ctx.tf);
+
+      draft.sabio_entry_user = m_sabio_entry_user;
+      draft.sabio_sl_user    = m_sabio_sl_user;
+
+      if(!TM_PersistDraftIntent(m_ctx, draft))
+         Print("PersistDraft: TradeManager persist failed");
      }
 
    //Steffen
@@ -175,16 +167,6 @@ private:
    int               DB_GetIntV(const string suffix, const int def=0) const
      {
       return g_DB.GetMetaInt(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf,suffix), def);
-     }
-
-   void              DB_SetInt(const string suffix, const int v)
-     {
-      g_DB.SetMetaInt(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf,suffix), v);
-     }
-
-   void              DB_SetText(const string suffix, const string v)
-     {
-      g_DB.SetMetaText(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf, suffix), v);
      }
 
 
@@ -905,12 +887,10 @@ public:
          if(sparam == SabioEntry)
            {
             m_sabio_entry_user = true;
-            DB_SetInt("vt.draft.sabio_entry_user", 1);
            }
          if(sparam == SabioSL)
            {
             m_sabio_sl_user = true;
-            DB_SetInt("vt.draft.sabio_sl_user", 1);
            }
 
          PersistDraftPricesAndSabio();
@@ -957,10 +937,6 @@ public:
          tr = 1;
       if(!DB_GetInt("tm.pub.posnb", po, 1))
          po = 1;
-
-      // Draft-DB immer aktuell halten (SEND-Layer liest vt.draft.*)
-      DB_SetInt("vt.draft.trnb", tr);
-      DB_SetInt("vt.draft.posnb", po);
 
       if(ObjectFind(m_ctx.chart_id, TRNB) >= 0)
          ObjectSetString(m_ctx.chart_id, TRNB, OBJPROP_TEXT, IntegerToString(tr));

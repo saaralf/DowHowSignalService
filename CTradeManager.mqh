@@ -15,6 +15,7 @@
 #include "UI_ParseTradePosFromName.mqh"
 #include "UI_LineTag_GetLineName.mqh"
 #include "CVirtualTradeGUI.mqh"
+#include "trade_draft.mqh"
 #include "CTradesPanel.mqh"
 
 
@@ -146,6 +147,9 @@ public:
 
                      CTradeManager() : m_db(NULL), m_discord(NULL) {}
    bool              TM_HandleTradePosEditCommit(const string symbol, const ENUM_TIMEFRAMES tf, const string field, const int value);
+   bool              TM_PersistDraftSnapshot(const string symbol,
+                                             const ENUM_TIMEFRAMES tf,
+                                             const SDraftSnapshot &draft);
    void              TM_ClearActiveDirection(const string direction,
                                              const string symbol,
                                              const ENUM_TIMEFRAMES tf);
@@ -1615,6 +1619,34 @@ void CTradeManager::TM_ClearActiveDirection(const string direction,
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
+bool CTradeManager::TM_PersistDraftSnapshot(const string symbol,
+                                             const ENUM_TIMEFRAMES tf,
+                                             const SDraftSnapshot &draft)
+  {
+   if(m_db == NULL || CheckPointer(m_db) == POINTER_INVALID)
+      return false;
+
+   const int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+
+   m_db.SetMetaText(m_db.KeyFor(symbol, tf, "vt.draft.direction"), draft.direction);
+   m_db.SetMetaText(m_db.KeyFor(symbol, tf, "vt.draft.entry_price"), DoubleToString(draft.entry, digits));
+   m_db.SetMetaText(m_db.KeyFor(symbol, tf, "vt.draft.sl_price"), DoubleToString(draft.sl, digits));
+   m_db.SetMetaText(m_db.KeyFor(symbol, tf, "vt.draft.sabio_entry_text"), draft.sabio_entry);
+   m_db.SetMetaText(m_db.KeyFor(symbol, tf, "vt.draft.sabio_sl_text"), draft.sabio_sl);
+
+   if(draft.trnb != "")
+      m_db.SetMetaText(m_db.KeyFor(symbol, tf, "vt.draft.trnb"), draft.trnb);
+   if(draft.posnb != "")
+      m_db.SetMetaText(m_db.KeyFor(symbol, tf, "vt.draft.posnb"), draft.posnb);
+
+   m_db.SetMetaInt(m_db.KeyFor(symbol, tf, "vt.draft.sabio_entry_user"), draft.sabio_entry_user ? 1 : 0);
+   m_db.SetMetaInt(m_db.KeyFor(symbol, tf, "vt.draft.sabio_sl_user"), draft.sabio_sl_user ? 1 : 0);
+   return true;
+  }
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 bool CTradeManager::TM_HandleTradePosEditCommit(const string symbol,
                                                   const ENUM_TIMEFRAMES tf,
                                                   const string field,
@@ -1771,5 +1803,13 @@ bool CTradeManager::TM_SendSignal(const string symbol,
    return true;
   }
   
+
+extern CTradeManager g_TradeMgr;
+
+bool TM_PersistDraftIntent(const SContext &ctx, const SDraftSnapshot &draft)
+  {
+   return g_TradeMgr.TM_PersistDraftSnapshot(ctx.symbol, ctx.tf, draft);
+  }
+
 #endif // __TRADE_MANAGER_MQH_
 //+------------------------------------------------------------------+
