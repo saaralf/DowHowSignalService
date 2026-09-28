@@ -180,8 +180,6 @@ bool              TM_SendSignal(const string symbol,
                                 const string sabio_sl,
                                 STMSendFromDraftResult &out);
    void              SaveLinePrices(const string symbol, const ENUM_TIMEFRAMES tf);
-
-   void              SaveTradeLines(const string suf);
    void              SetPosLinesSolid(const string direction, const int trade_no, const int pos_no);
 
 
@@ -559,13 +557,6 @@ void CTradeManager::PersistToDB(string symbol,const ENUM_TIMEFRAMES tf)
 // Linienpreise (Entry/SL/TP) persistieren
    SaveLinePrices(symbol,tf);
 
-// Optional: UI-TradeNr aus dem Eingabefeld sichern
-   if(ObjectFind(m_ctx.chart_id, TRNB) >= 0)
-     {
-      string s = ObjectGetString(m_ctx.chart_id, TRNB, OBJPROP_TEXT);
-      int trn = (int)StringToInteger(s);
-      m_db.SetMetaInt(m_db.KeyFor(symbol, tf,"trnb_ui"), trn);
-     }
   }
 
 //+------------------------------------------------------------------+
@@ -773,25 +764,6 @@ bool CTradeManager::RestoreFromDB(const string symbol, const ENUM_TIMEFRAMES tf)
 
 //+------------------------------------------------------------------+
 //|                                                                  |
-//+------------------------------------------------------------------+
-void CTradeManager::SaveTradeLines(const string suf)
-  {
-// LONG
-
-   if(ObjectFind(m_ctx.chart_id, SL_Long + suf) >= 0)
-      m_db.SetMetaText(m_db.KeyFor(m_ctx.symbol, m_ctx.tf,"L_sl"), DoubleToString(ObjectGetDouble(m_ctx.chart_id, SL_Long + suf, OBJPROP_PRICE), (int)SymbolInfoInteger(m_ctx.symbol, SYMBOL_DIGITS)));
-   if(ObjectFind(m_ctx.chart_id, Entry_Long + suf) >= 0)
-      m_db.SetMetaText(m_db.KeyFor(m_ctx.symbol, m_ctx.tf,"L_entry"), DoubleToString(ObjectGetDouble(m_ctx.chart_id, Entry_Long + suf, OBJPROP_PRICE), (int)SymbolInfoInteger(m_ctx.symbol, SYMBOL_DIGITS)));
-
-// SHORT
-
-   if(ObjectFind(m_ctx.chart_id, SL_Short + suf) >= 0)
-      m_db.SetMetaText(m_db.KeyFor(m_ctx.symbol, m_ctx.tf,"S_sl"), DoubleToString(ObjectGetDouble(m_ctx.chart_id, SL_Short + suf, OBJPROP_PRICE), (int)SymbolInfoInteger(m_ctx.symbol, SYMBOL_DIGITS)));
-   if(ObjectFind(m_ctx.chart_id, Entry_Short + suf) >= 0)
-      m_db.SetMetaText(m_db.KeyFor(m_ctx.symbol, m_ctx.tf,"S_entry"), DoubleToString(ObjectGetDouble(m_ctx.chart_id, Entry_Short + suf, OBJPROP_PRICE), (int)SymbolInfoInteger(m_ctx.symbol, SYMBOL_DIGITS)));
-  }
-
-
 
 //+------------------------------------------------------------------+
 //| Setzt die angegebene HR Linie als Solid (durchgehende Linie)     |
