@@ -464,25 +464,72 @@ bool              TM_SendSignal(const string symbol,
    // Calculates the lot size based on stop loss distance.
    double            calcLots(const string symbol,const ENUM_TIMEFRAMES tf,const double distance)
      {
-      // TODO: implement risk management logic
-      // For now, return a placeholder value
-      // Basic risk management: risk 1% of account equity per trade.
-      double equity = AccountInfoDouble(ACCOUNT_EQUITY);
-      double riskPercent = 0.01;
-      double riskAmount  = equity * riskPercent;
-      // Determine tick value and contract size
-      double tickSize  = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_SIZE);
-      double tickValue = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_VALUE);
-      if(distance <= 0 || tickSize <= 0 || tickValue <= 0)
+      // Aktuell feste Risikovorgabe: 1 % des Account-Equity pro Position.
+      // Die Volumenberechnung wird bewusst nach unten gerundet, damit das
+      // berechnete Risiko durch die Step-Rundung nicht überschritten wird.
+      const double riskPercent = 0.01;
+
+      const double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+      const double stopDistance = MathAbs(distance);
+      if(equity <= 0.0 || stopDistance <= 0.0)
+        {
+         CLogger::Add(LOG_LEVEL_WARNING, "calcLots: invalid equity or stop distance for " + symbol);
          return 0.0;
-      // pip value per lot: tickValue / tickSize
-      double pipValuePerLot = tickValue / tickSize;
-      // required volume (lots) = risk amount / (distance * pip value per lot)
-      double lots = riskAmount / (distance * pipValuePerLot);
-      // Round to the minimum lot step
-      double minLot   = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MIN);
-      double lotStep  = SymbolInfoDouble(symbol, SYMBOL_VOLUME_STEP);
-      lots = MathMax(minLot, MathFloor(lots / lotStep) * lotStep);
+        }
+
+      const double tickSize = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_SIZE);
+      double tickValue = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_VALUE_LOSS);
+      if(tickValue <= 0.0)
+         tickValue = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_VALUE);
+
+      const double minLot  = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MIN);
+      const double maxLot  = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MAX);
+      const double lotStep = SymbolInfoDouble(symbol, SYMBOL_VOLUME_STEP);
+
+      if(tickSize <= 0.0 || tickValue <= 0.0 ||
+         minLot <= 0.0 || maxLot <= 0.0 || lotStep <= 0.0 ||
+         maxLot < minLot)
+        {
+         CLogger::Add(LOG_LEVEL_WARNING, "calcLots: invalid symbol trade properties for " + symbol);
+         return 0.0;
+        }
+
+      const double riskAmount = equity * riskPercent;
+      const double ticksToSL = stopDistance / tickSize;
+      if(ticksToSL <= 0.0)
+         return 0.0;
+
+      const double lossPerLot = ticksToSL * tickValue;
+      if(lossPerLot <= 0.0)
+         return 0.0;
+
+      const double rawLots = riskAmount / lossPerLot;
+
+      // Wenn bereits das kleinste Broker-Lot das Risikobudget überschreiten
+      // würde, keinen Trade erzwingen.
+      if(rawLots < minLot)
+        {
+         CLogger::Add(LOG_LEVEL_WARNING,
+                      StringFormat("calcLots: calculated volume %.8f below broker minimum %.8f for %s",
+                                   rawLots, minLot, symbol));
+         return 0.0;
+        }
+
+      double lots = MathMin(rawLots, maxLot);
+      lots = MathFloor((lots + 1e-12) / lotStep) * lotStep;
+
+      if(lots < minLot)
+         return 0.0;
+      if(lots > maxLot)
+         lots = maxLot;
+
+      // Genug Nachkommastellen für kleine Volume-Steps; der Broker-Step ist
+      // durch das vorherige Flooring bereits eingehalten.
+      lots = NormalizeDouble(lots, 8);
+
+      CLogger::Add(LOG_LEVEL_DEBUG,
+                   StringFormat("calcLots: %s equity=%.2f risk=%.2f distance=%.8f lots=%.8f",
+                                symbol, equity, riskAmount, stopDistance, lots));
       return lots;
      }
 
