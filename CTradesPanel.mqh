@@ -701,9 +701,6 @@ void CTradesPanel::RestoreTradeLinesFromRows(const DB_PositionRow &rows[], const
 
 
          CreateEntryAndSLLines(SL_Long + suf, TimeCurrent(), sl_draw, Tradecolor_SLLineLong);
-
-
-         g_TradeMgr.SaveTradeLines(suf);
         }
       else
          if(rows[i].direction == "SHORT")
@@ -711,9 +708,6 @@ void CTradesPanel::RestoreTradeLinesFromRows(const DB_PositionRow &rows[], const
             CreateEntryAndSLLines(Entry_Short + suf, TimeCurrent(), entry_draw, TradeEntryLineShort);
 
             CreateEntryAndSLLines(SL_Short + suf, TimeCurrent(), sl_draw, Tradecolor_SLLineShort);
-
-
-            g_TradeMgr.SaveTradeLines(suf);
            }
       PrintFormat("RESTORE-LINE: dir=%s trade=%d pos=%d was_sent=%d status=%s entry=%f sl=%f",
                   rows[i].direction, rows[i].trade_no, rows[i].pos_no,
