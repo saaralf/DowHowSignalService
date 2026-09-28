@@ -919,52 +919,7 @@ public:
          return true;
         }
 
-      /*      if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == TRNB || sparam == POSNB))
-              {
-               if(sparam == TRNB)
-                 {
-                  int v = ExtractIntDigits(ObjectGetString(m_ctx.chart_id, TRNB, OBJPROP_TEXT));
-                  if(v > 0)
-                    {
-                     DB_SetInt("tm.req.trnb", v);
-                     DB_SetInt("tm.req.has_trnb", 1);
-                     DB_SetInt("vt.draft.trnb_user", 1);
 
-                     int rev = DB_GetIntV("tm.req.rev", 0);
-                     DB_SetInt("tm.req.rev", rev + 1);
-                     PersistDraftPricesAndSabio();
-                    }
-                 }
-               else // POSNB
-                 {
-                  int v = ExtractIntDigits(ObjectGetString(m_ctx.chart_id, POSNB, OBJPROP_TEXT));
-                  if(v > 0)
-                    {
-                     DB_SetInt("tm.req.posnb", v);
-                     DB_SetInt("tm.req.has_posnb", 1);
-                     DB_SetInt("vt.draft.posnb_user", 1);
-
-                     int rev = DB_GetIntV("tm.req.rev", 0);
-                     DB_SetInt("tm.req.rev", rev + 1);
-                     PersistDraftPricesAndSabio();
-                    }
-                 }
-               if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == SabioEntry || sparam == SabioSL))
-                 {
-                  if(sparam == SabioEntry)
-                     m_sabio_entry_user = true;
-                  if(sparam == SabioSL)
-                     m_sabio_sl_user    = true;
-
-                  // wichtig: Draft sofort in DB sichern, damit SEND den Text sicher hat
-                  PersistDraftPricesAndSabio();
-
-                  return true;
-                 }
-
-               return true;
-              }
-      */
       return false;
      }
 
