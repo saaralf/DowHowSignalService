@@ -46,7 +46,7 @@ public:
         {
          if(sparam == TRNB || sparam == POSNB)
            {
-            g_TradeMgr.TM_HandleTradePosEditCommit(_Symbol, (ENUM_TIMEFRAMES)_Period);
+            g_TradeMgr.TM_HandleTradePosEditCommit(m_ctx.symbol, m_ctx.tf);
             return true;
            }
         }
@@ -56,7 +56,7 @@ public:
          if(sparam == SENDTRADEBTN)
            {
             STMSendFromDraftResult r;
-            if(!g_TradeMgr.TM_HandleSendTradeClick(_Symbol, (ENUM_TIMEFRAMES)_Period, r))
+            if(!g_TradeMgr.TM_HandleSendTradeClick(m_ctx.symbol, m_ctx.tf, r))
                Print("SEND failed: ", r.error);
             return true;
            }
