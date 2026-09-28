@@ -61,16 +61,16 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
      }
 
    // ----------------------------------------------------------------
-   // Alle anderen Events: Base UI zuerst
+   // Alle anderen Events:
+   // Base UI aktualisiert ihren lokalen Zustand, aber fachlich relevante
+   // Events muessen danach weiterhin den Router erreichen.
    // ----------------------------------------------------------------
-   if(g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam))
-      return;
-
+   g_vgui.HandleBaseUIEvent(id, lparam, dparam, sparam);
 
    // ----------------------------------------------------------------
    // Router (Panel + Controller-Kette)
    // ----------------------------------------------------------------
-  g_evt_router.Dispatch(id, lparam, dparam, sparam);
+   g_evt_router.Dispatch(id, lparam, dparam, sparam);
 
    // Chart-Resize / TF-Wechsel etc: Panel neu anfordern
    if(id == CHARTEVENT_CHART_CHANGE){
