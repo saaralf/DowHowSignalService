@@ -39,8 +39,6 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
    // ----------------------------------------------------------------
    if(id == CHARTEVENT_MOUSE_MOVE)
      {
-      const int mx = (int)lparam;
-      const int my = (int)dparam;
       const int mouse_state = (int)StringToInteger(sparam);
 
       // 1) Base UI (Entry/SL + Edits) darf zuerst ziehen/verschieben.
