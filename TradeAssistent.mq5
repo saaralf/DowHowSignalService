@@ -32,45 +32,7 @@ input bool SabioPrices = true;
 input string InpBotName = "DowHow Trading Signalservice";
 input group "===== Webhooks ====="
 input bool   InpRequireKnownSymbol = true; // wenn true: ohne Mapping kein Send
-input string InpWebhook_system     = "";
-
-input string InpWebhook_test     = "";
-input string InpAlias_test = "test";
-input string InpWebhook_EURUSD = "";
-input string InpAlias_EURUSD   = "EURUSD,EURUSD*,*EURUSD*";
-
-input string InpWebhook_GBPUSD = "";
-input string InpAlias_GBPUSD   = "GBPUSD,GBPUSD*,*GBPUSD*";
-
-input string InpWebhook_USDJPY = "";
-input string InpAlias_USDJPY   = "USDJPY,USDJPY*,*USDJPY*";
-
-input string InpWebhook_USDCHF = "";
-input string InpAlias_USDCHF   = "USDCHF,USDCHF*,*USDCHF*";
-
-input string InpWebhook_USDCAD = "";
-input string InpAlias_USDCAD   = "USDCAD,USDCAD*,*USDCAD*";
-
-input string InpWebhook_AUDUSD = "";
-input string InpAlias_AUDUSD   = "AUDUSD,AUDUSD*,*AUDUSD*";
-
-input string InpWebhook_NZDUSD = "";
-input string InpAlias_NZDUSD   = "NZDUSD,NZDUSD*,*NZDUSD*";
-
-input string InpWebhook_XAUUSD = "";
-input string InpAlias_XAUUSD   = "XAUUSD,GOLD*,*GOLD*";
-
-input string InpWebhook_WTI    = "";
-input string InpAlias_WTI      = "WTI,USOIL*,CL*,OIL*";
-
-input string InpWebhook_NASDAQ = "";
-input string InpAlias_NASDAQ   = "NASDAQ,NAS100*,US100*,USTEC*,NQ*";
-
-input string InpWebhook_EURJPY = "";
-input string InpAlias_EURJPY   = "EURJPY,EURJPY*,*EURJPY*";
-
-input string InpWebhook_EURNZD = "";
-input string InpAlias_EURNZD   = "EURNZD,EURNZD*,*EURNZD*";
+input string InpWebhookConfigFile  = "DowHowSignalService_webhooks.cfg";
 
 
 
@@ -96,6 +58,7 @@ input bool InpRequireDiscord = true;
 
 #include "ui_registry.mqh"
 #include "CWebhookRouter.mqh"
+#include "WebhookConfig.mqh"
 #include "CMyTradesPanelHandler.mqh"
 #include "positions_cache.mqh"
 #include "ta_controllers.mqh"
@@ -201,20 +164,22 @@ int OnInit()
    CLogger::SetLogLevel(LOG_LEVEL_DEBUG);
    CLogger::SetMethod(LOGGING_METHOD_FILE);
 
-   g_router.Init(InpRequireKnownSymbol, InpWebhook_system);
-   g_router.Add("EURUSD", InpWebhook_EURUSD, InpAlias_EURUSD);
-   g_router.Add("GBPUSD", InpWebhook_GBPUSD, InpAlias_GBPUSD);
-   g_router.Add("USDJPY", InpWebhook_USDJPY, InpAlias_USDJPY);
-   g_router.Add("USDCHF", InpWebhook_USDCHF, InpAlias_USDCHF);
-   g_router.Add("USDCAD", InpWebhook_USDCAD, InpAlias_USDCAD);
-   g_router.Add("AUDUSD", InpWebhook_AUDUSD, InpAlias_AUDUSD);
-   g_router.Add("NZDUSD", InpWebhook_NZDUSD, InpAlias_NZDUSD);
-   g_router.Add("XAUUSD", InpWebhook_XAUUSD, InpAlias_XAUUSD);
-   g_router.Add("WTI",    InpWebhook_WTI,    InpAlias_WTI);
-   g_router.Add("NASDAQ", InpWebhook_NASDAQ, InpAlias_NASDAQ);
-   g_router.Add("EURNZD", InpWebhook_EURNZD, InpAlias_EURNZD);
-   g_router.Add("EURJPY", InpWebhook_EURJPY, InpAlias_EURJPY);
-   g_router.Add("test", InpWebhook_test, InpAlias_test);
+   CWebhookConfig webhook_cfg;
+   if(!webhook_cfg.Load(InpWebhookConfigFile))
+     {
+      CLogger::Add(LOG_LEVEL_ERROR,
+                   "Webhook config konnte nicht geladen werden: " + InpWebhookConfigFile);
+      return INIT_FAILED;
+     }
+
+   g_router.Init(InpRequireKnownSymbol, webhook_cfg.SystemWebhook());
+
+   for(int i=0; i<webhook_cfg.RouteCount(); i++)
+     {
+      g_router.Add(webhook_cfg.RouteKey(i),
+                   webhook_cfg.RouteWebhook(i),
+                   webhook_cfg.RouteAliases(i));
+     }
 
    if(!g_router.Validate())
       return INIT_FAILED;
@@ -222,7 +187,11 @@ int OnInit()
 
 
 // Discord init: testWebhook + optional requireSymbolHook
-   if(!g_Discord.Init(&g_router,InpBotName,InpWebhook_test,InpWebhook_system,InpRequireDiscord))
+   if(!g_Discord.Init(&g_router,
+                      InpBotName,
+                      webhook_cfg.TestWebhook(),
+                      webhook_cfg.SystemWebhook(),
+                      InpRequireDiscord))
       return INIT_FAILED;
 
    if(!g_DB.Init())
