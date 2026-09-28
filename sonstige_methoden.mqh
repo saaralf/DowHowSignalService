@@ -41,42 +41,8 @@ bool StatusIsActive(const string s)
 //+------------------------------------------------------------------+
 void ClearActiveTrend(const string direction,const SContext &ctx)
   {
-
-   if(direction == "LONG")
-     {
-      g_ui_state.active_trade_no_long = 0;
-      is_long_trade = false;
-      HitEntryPriceLong = false; // legacy-Flag, jetzt egal – aber sauber
-
-      g_DB.SetMetaInt(g_DB.KeyFor(ctx.symbol, ctx.tf,"g_ui_state.active_trade_no_long"), 0);
-
-      if(ObjectFind(0, "TP_BTN_ACTIVE_LONG") != -1)
-        {
-         g_tp.ShowActiveLong(false); //Button Ausblenden
-         g_tp.ShowCancelLong(false);
-        }
-     }
-   else
-      if(direction == "SHORT")
-        {
-         g_ui_state.active_trade_no_short = 0;
-         is_sell_trade = false;
-         HitEntryPriceShort = false;
-
-         if(g_DB.SetMetaInt(g_DB.KeyFor(ctx.symbol, ctx.tf,"g_ui_state.active_trade_no_short"), 0))
-           {
-            if(ObjectFind(0, "TP_BTN_ACTIVE_SHORT") != -1)
-              {
-               g_tp.ShowActiveShort(false);
-               g_tp.ShowCancelShort(false);
-              }
-           }
-        }
+   g_TradeMgr.TM_ClearActiveDirection(direction, ctx.symbol, ctx.tf);
   }
-
-
-
-
 
 
 //+------------------------------------------------------------------+
