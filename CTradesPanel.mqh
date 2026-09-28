@@ -790,10 +790,10 @@ bool CTradesPanel::HandleRowClick(const string objName)
       bool has_pending=true;
       string err="";
       if(isCancel)
-         g_TradeMgr.HandlePositionAction(_Symbol, (ENUM_TIMEFRAMES)_Period, dir, trade_no, pos_no,
+         g_TradeMgr.HandlePositionAction(m_ctx.symbol, m_ctx.tf, dir, trade_no, pos_no,
                                          CTradeManager::POS_CANCEL, has_pending, err);
       else
-         g_TradeMgr.HandlePositionAction(_Symbol, (ENUM_TIMEFRAMES)_Period, dir, trade_no, pos_no,
+         g_TradeMgr.HandlePositionAction(m_ctx.symbol, m_ctx.tf, dir, trade_no, pos_no,
                                          CTradeManager::POS_HIT_SL, has_pending, err);
      }
 
@@ -822,7 +822,7 @@ bool CTradesPanel::BuildSide(const bool isLong, const DB_PositionRow &arr[], con
    int lastTrade=-1;
    bool any=false;
 
-   int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
+   int digits = (int)SymbolInfoInteger(m_ctx.symbol, SYMBOL_DIGITS);
 
 // Farben Trade-Header
    const color TR_BG  = isLong ? (color)C'0,150,90'  : (color)C'200,60,60';
