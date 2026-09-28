@@ -930,9 +930,15 @@ public:
       if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == SabioEntry || sparam == SabioSL))
         {
          if(sparam == SabioEntry)
+           {
             m_sabio_entry_user = true;
+            DB_SetInt("vt.draft.sabio_entry_user", 1);
+           }
          if(sparam == SabioSL)
-            m_sabio_sl_user    = true;
+           {
+            m_sabio_sl_user = true;
+            DB_SetInt("vt.draft.sabio_sl_user", 1);
+           }
 
          PersistDraftPricesAndSabio();
          return true;
@@ -1032,6 +1038,19 @@ public:
          ObjectSetString(m_ctx.chart_id, TRNB, OBJPROP_TEXT, IntegerToString(tr));
       if(ObjectFind(m_ctx.chart_id, POSNB) >= 0)
          ObjectSetString(m_ctx.chart_id, POSNB, OBJPROP_TEXT, IntegerToString(po));
+
+      string sabio_entry = "";
+      string sabio_sl    = "";
+      g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf, "vt.draft.sabio_entry_text"), sabio_entry, "");
+      g_DB.GetMetaText(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf, "vt.draft.sabio_sl_text"),    sabio_sl, "");
+
+      m_sabio_entry_user = (DB_GetIntV("vt.draft.sabio_entry_user", 0) == 1);
+      m_sabio_sl_user    = (DB_GetIntV("vt.draft.sabio_sl_user", 0) == 1);
+
+      if(ObjectFind(m_ctx.chart_id, SabioEntry) >= 0 && sabio_entry != "")
+         ObjectSetString(m_ctx.chart_id, SabioEntry, OBJPROP_TEXT, sabio_entry);
+      if(ObjectFind(m_ctx.chart_id, SabioSL) >= 0 && sabio_sl != "")
+         ObjectSetString(m_ctx.chart_id, SabioSL, OBJPROP_TEXT, sabio_sl);
 
       ChartRedraw(m_ctx.chart_id);
      }
