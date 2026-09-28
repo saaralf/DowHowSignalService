@@ -169,16 +169,6 @@ private:
       return g_DB.GetMetaInt(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf,suffix), def);
      }
 
-   void              DB_SetInt(const string suffix, const int v)
-     {
-      g_DB.SetMetaInt(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf,suffix), v);
-     }
-
-   void              DB_SetText(const string suffix, const string v)
-     {
-      g_DB.SetMetaText(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf, suffix), v);
-     }
-
 
    // ----------------- Objekt/Selection Helpers -----------------
    bool              ObjExists(const string name) const { return (ObjectFind(m_ctx.chart_id, name) >= 0); }
