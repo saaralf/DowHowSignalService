@@ -145,7 +145,7 @@ public:
      };
 
                      CTradeManager() : m_db(NULL), m_discord(NULL) {}
-   bool              TM_HandleTradePosEditCommit(const string symbol, const ENUM_TIMEFRAMES tf);
+   bool              TM_HandleTradePosEditCommit(const string symbol, const ENUM_TIMEFRAMES tf, const string field, const int value);
    bool              TM_HandleSendTradeClick(const string symbol, const ENUM_TIMEFRAMES tf, STMSendFromDraftResult &out);
    bool              UI_CloseOnePositionAndNotify(const string symbol,
          const ENUM_TIMEFRAMES tf,
@@ -1530,14 +1530,37 @@ bool CTradeManager::TM_SendFromDraft(const string symbol,
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-bool CTradeManager::TM_HandleTradePosEditCommit(const string symbol, const ENUM_TIMEFRAMES tf)
+bool CTradeManager::TM_HandleTradePosEditCommit(const string symbol,
+                                                  const ENUM_TIMEFRAMES tf,
+                                                  const string field,
+                                                  const int value)
   {
    if(m_db == NULL || CheckPointer(m_db) == POINTER_INVALID)
       return false;
+   if(value <= 0)
+      return false;
+
+   if(field == TRNB)
+     {
+      m_db.SetMetaInt(m_db.KeyFor(symbol, tf, "tm.req.trnb"), value);
+      m_db.SetMetaInt(m_db.KeyFor(symbol, tf, "tm.req.has_trnb"), 1);
+      m_db.SetMetaInt(m_db.KeyFor(symbol, tf, "vt.draft.trnb_user"), 1);
+     }
+   else
+      if(field == POSNB)
+        {
+         m_db.SetMetaInt(m_db.KeyFor(symbol, tf, "tm.req.posnb"), value);
+         m_db.SetMetaInt(m_db.KeyFor(symbol, tf, "tm.req.has_posnb"), 1);
+         m_db.SetMetaInt(m_db.KeyFor(symbol, tf, "vt.draft.posnb_user"), 1);
+        }
+      else
+         return false;
+
+   int rev = m_db.GetMetaInt(m_db.KeyFor(symbol, tf, "tm.req.rev"), 0);
+   m_db.SetMetaInt(m_db.KeyFor(symbol, tf, "tm.req.rev"), rev + 1);
 
    TM_ConsumeGUIRequestsFromDB(symbol, tf);
 
-// GUI sofort mit publizierten Werten synchronisieren
    g_vgui.ApplyTradePosFromDBToEdits();
    return true;
   }
