@@ -69,7 +69,7 @@ public:
       if(kind != "ENTRY" && kind != "SL")
          return false;
 
-      const double cur_price = ObjectGetDouble(0, obj_name, OBJPROP_PRICE);
+      const double cur_price = ObjectGetDouble(m_ctx.chart_id, obj_name, OBJPROP_PRICE);
 
       // Drag-Start oder Objektwechsel
       if(!m_active || m_name != obj_name)
@@ -182,7 +182,7 @@ private:
          return;
         }
 
-      if(ObjectFind(0, m_name) < 0)
+      if(ObjectFind(m_ctx.chart_id, m_name) < 0)
         {
          Reset();
          return;
@@ -218,10 +218,10 @@ private:
          if(old_price > 0.0)
             msg += StringFormat("**%s:** %s -> %s\n",
                                 what,
-                                DoubleToString(old_price, _Digits),
-                                DoubleToString(new_price, _Digits));
+                                DoubleToString(old_price, (int)SymbolInfoInteger(m_ctx.symbol, SYMBOL_DIGITS)),
+                                DoubleToString(new_price, (int)SymbolInfoInteger(m_ctx.symbol, SYMBOL_DIGITS)));
          else
-            msg += StringFormat("**%s:** %s\n", what, DoubleToString(new_price, _Digits));
+            msg += StringFormat("**%s:** %s\n", what, DoubleToString(new_price, (int)SymbolInfoInteger(m_ctx.symbol, SYMBOL_DIGITS)));
 
          msg += "Linie verschoben\n";
          g_Discord.SendMessage(m_ctx.symbol, msg);
