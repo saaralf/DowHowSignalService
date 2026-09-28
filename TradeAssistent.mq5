@@ -222,7 +222,7 @@ int OnInit()
 
 
 // Discord init: testWebhook + optional requireSymbolHook
-   if(!g_Discord.Init(&g_router,InpBotName,InpWebhook_test,InpWebhook_system,true))
+   if(!g_Discord.Init(&g_router,InpBotName,InpWebhook_test,InpWebhook_system,InpRequireDiscord))
       return INIT_FAILED;
 
    if(!g_DB.Init())
