@@ -909,9 +909,10 @@ ESendDraftResult CTradeManager::SendSignalDraft(const string symbol,
    row.sl          = sl_price;
    row.sabio_entry = sabio_entry;
    row.sabio_sl    = sabio_sl;
-
-   row.status      = "DRAFT";
-   row.was_sent    = 0;
+   // Finalen Positionszustand VOR dem irreversiblen Discord-Send persistieren.
+   // TradeNo und PosNo stehen zu diesem Zeitpunkt bereits endgültig fest.
+   row.status      = "PENDING";
+   row.was_sent    = 1;
    row.is_pending  = 1;
    row.updated_at  = TimeCurrent();
 
@@ -919,11 +920,11 @@ ESendDraftResult CTradeManager::SendSignalDraft(const string symbol,
 
    if(!m_db.UpsertPosition(row))
      {
-      out_error = "DB Fehler: Upsert Draft";
+      out_error = "DB Fehler: finaler PENDING-Commit vor Discord";
       return SEND_ERR_DB;
      }
 
-// --- Discord senden
+   // --- Discord senden
    string msg = m_discord.FormatTradeMessage(row);
 
    long cid = ChartID();
@@ -933,26 +934,20 @@ ESendDraftResult CTradeManager::SendSignalDraft(const string symbol,
 
    if(!ok)
      {
-      // Rollback: Draft löschen, damit pos_no wiederverwendbar bleibt
-      m_db.DeletePosition(symbol, tf, dir, trade_no, pos_no);
+      // Rollback: Datensatz wieder entfernen, damit die Position nicht
+      // als versendet bestehen bleibt und die PosNo wieder frei ist.
+      if(!m_db.DeletePosition(symbol, tf, dir, trade_no, pos_no))
+        {
+         out_error = "Discord Send fehlgeschlagen; DB-Rollback ebenfalls fehlgeschlagen";
+         return SEND_ERR_DB;
+        }
 
       out_error = "Discord Send fehlgeschlagen";
       return SEND_ERR_DISCORD;
      }
 
-// --- Commit: PENDING
-   row.status     = "PENDING";
-   row.was_sent   = 1;
-   row.is_pending = 1;
-   row.updated_at = TimeCurrent();
-
-   if(!m_db.UpsertPosition(row))
-     {
-      out_error = "DB Fehler: Upsert Commit";
-      return SEND_ERR_DB;
-     }
-
-// Cache wie bisher
+   // Kein zweiter Positions-Commit nach Discord: DB und Discord verwenden
+   // exakt denselben bereits finalisierten Trade-/Positionsschlüssel.
    Cache_UpsertLocal(symbol, tf,row);
    out_row = row;
 
@@ -1514,94 +1509,12 @@ bool CTradeManager::TM_SendFromDraft(const string symbol,
       return false;
      }
 
-// --- 4) Option B: gewünschte POSNB erzwingen / korrigieren
-// SendSignalDraft ermittelt pos_no selbst. Wir wollen user-pos.
-// Lösung: Wenn Engine-pos != user-pos:
-//   a) prüfen ob user-pos frei -> DB row auf user-pos "umziehen"
-//   b) sonst: nächst freie pos_no wählen
-// (damit bleiben Engine-Regeln (trade_no) erhalten)
+// --- 4) TradeNo und PosNo sind bereits in SendSignalDraft finalisiert.
+   // Nach Discord darf keine Umnummerierung und kein DB-Move mehr passieren.
    int final_trade = out_trade_no_eff;
    int final_pos   = out_pos_no;
 
-// Wunschpos prüfen nur im selben trade
-   if(pos_no_in != out_pos_no)
-     {
-      // freie pos finden: bevorzugt user pos
-      bool used[DB_MAX_POS_PER_SIDE+1];
-      for(int i=0;i<=DB_MAX_POS_PER_SIDE;i++)
-         used[i]=false;
-
-      DB_PositionRow rows[];
-      int n = m_db.LoadPositions(symbol, tf, rows);
-      for(int i=0;i<n;i++)
-        {
-         if(rows[i].direction != dir)
-            continue;
-         if(rows[i].trade_no  != final_trade)
-            continue;
-         if(rows[i].pos_no < 1 || rows[i].pos_no > DB_MAX_POS_PER_SIDE)
-            continue;
-         if(StringFind(rows[i].status, "CLOSED", 0) == 0)
-            continue;
-         used[rows[i].pos_no] = true;
-        }
-
-      int wanted = pos_no_in;
-      int chosen = 0;
-      if(!used[wanted])
-         chosen = wanted;
-      else
-        {
-         for(int p=1;p<=DB_MAX_POS_PER_SIDE;p++)
-            if(!used[p])
-              {
-               chosen=p;
-               break;
-              }
-        }
-
-      if(chosen == 0)
-        {
-         // keine freie Pos → revert: wir lassen engine-pos, melden aber in draft zurück
-         chosen = out_pos_no;
-        }
-
-      // Wenn chosen != engine-pos, "move" row:
-      //   - delete engine row
-      //   - upsert gleiche row mit neuer pos_no (PENDING)
-      if(chosen != out_pos_no)
-        {
-         // Lösche Engine-Row (commit) und lege unter neuer pos_no an
-         // (Engine hat bereits Discord geschickt; wir ändern nur Speicherung/Anzeige)
-         m_db.DeletePosition(symbol, tf, dir, final_trade, out_pos_no);
-
-         DB_PositionRow moved = out_row;
-         moved.trade_no   = final_trade;
-         moved.pos_no     = chosen;
-         moved.status     = "PENDING";
-         moved.was_sent   = 1;
-         moved.is_pending = 1;
-         moved.updated_at = TimeCurrent();
-
-         if(!m_db.UpsertPosition(moved))
-           {
-            // Fallback: versuche ursprüngliche Row wiederherzustellen
-            m_db.UpsertPosition(out_row);
-            out.error = "DB move to desired pos_no failed";
-            return false;
-           }
-
-         Cache_UpsertLocal(symbol, tf,moved);
-         out_row = moved;
-         final_pos = chosen;
-        }
-      else
-        {
-         final_pos = out_pos_no;
-        }
-     }
-
-// --- 5) Draft zurückschreiben (UI sieht Korrektur sofort)
+   // Draft zurückschreiben: GUI zeigt exakt die tatsächlich gesendeten Nummern.
    m_db.SetMetaText(m_db.KeyFor(symbol, tf, "vt.draft.trnb"), IntegerToString(final_trade));
    m_db.SetMetaText(m_db.KeyFor(symbol, tf, "vt.draft.posnb"), IntegerToString(final_pos));
 
