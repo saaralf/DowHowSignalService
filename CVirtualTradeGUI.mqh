@@ -895,34 +895,9 @@ public:
 
       if(id == CHARTEVENT_OBJECT_ENDEDIT && (sparam == TRNB || sparam == POSNB))
         {
-         if(sparam == TRNB)
-           {
-            int v = ExtractIntDigits(ObjectGetString(m_ctx.chart_id, TRNB, OBJPROP_TEXT));
-            if(v > 0)
-              {
-               DB_SetInt("tm.req.trnb", v);
-               DB_SetInt("tm.req.has_trnb", 1);
-               DB_SetInt("vt.draft.trnb_user", 1);
-
-               int rev = DB_GetIntV("tm.req.rev", 0);
-               DB_SetInt("tm.req.rev", rev + 1);
-               PersistDraftPricesAndSabio();
-              }
-           }
-         else // POSNB
-           {
-            int v = ExtractIntDigits(ObjectGetString(m_ctx.chart_id, POSNB, OBJPROP_TEXT));
-            if(v > 0)
-              {
-               DB_SetInt("tm.req.posnb", v);
-               DB_SetInt("tm.req.has_posnb", 1);
-               DB_SetInt("vt.draft.posnb_user", 1);
-
-               int rev = DB_GetIntV("tm.req.rev", 0);
-               DB_SetInt("tm.req.rev", rev + 1);
-               PersistDraftPricesAndSabio();
-              }
-           }
+         // GUI persistiert nur den sichtbaren Draft. Request-/Publish-State
+         // wird ausschließlich vom TradeManager geschrieben.
+         PersistDraftPricesAndSabio();
          return true;
         }
 
