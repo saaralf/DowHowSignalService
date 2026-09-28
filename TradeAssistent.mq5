@@ -54,7 +54,6 @@ input bool InpRequireDiscord = true;
 #include "CDBService.mqh"
 #include "ui_state.mqh"
 #include "CTradeManager.mqh"
-#include "CUIManager.mqh"
 
 #include "ui_registry.mqh"
 #include "CWebhookRouter.mqh"
@@ -141,7 +140,6 @@ CVirtualTradeGUI g_vgui;
 SUIState g_ui_state;
 CDiscordClient g_Discord;
 CDBService g_DB;
-CUIManager g_ui;
 CTradesPanel g_tp;
 CWebhookRouter g_router;
 CTradeManager g_TradeMgr;
@@ -201,7 +199,6 @@ int OnInit()
       return INIT_FAILED;
 
    g_vgui.Init(&g_TradeMgr,  m_ctx);
-   g_ui.Init(&g_DB, &g_TradeMgr);
    g_vgui.CreateDefaults();
    Print("TRNB readonly=", (int)ObjectGetInteger(0, TRNB, OBJPROP_READONLY),
          " selectable=", (int)ObjectGetInteger(0, TRNB, OBJPROP_SELECTABLE),
