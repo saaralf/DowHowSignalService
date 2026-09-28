@@ -23,6 +23,7 @@ private:
    TA3_Context        m_ctx;
    bool               m_sabio_entry_user;
    bool               m_sabio_sl_user;
+   uint               m_last_refresh_ms;
 
    bool Exists(const string name) const
      {
@@ -224,7 +225,7 @@ private:
      }
 
 public:
-                     CTA3UI():m_app(NULL),m_sabio_entry_user(false),m_sabio_sl_user(false) {}
+                     CTA3UI():m_app(NULL),m_sabio_entry_user(false),m_sabio_sl_user(false),m_last_refresh_ms(0) {}
 
    bool Init(CTA3Application *app,const TA3_Context &ctx)
      {
@@ -294,8 +295,10 @@ public:
          CreateLabel(TA3_PANEL_PREFIX+"ROW_"+IntegerToString(i),20,y,
                      base+" "+rows[i].status+" Lot "+DoubleToString(rows[i].lots,2));
          string suffix=rows[i].direction+"_"+IntegerToString(rows[i].trade_no)+"_"+IntegerToString(rows[i].pos_no);
-         CreateButton(TA3_PANEL_PREFIX+"CANCEL_"+suffix,20,y+18,85,20,"Cancel",clrDarkSlateGray,clrWhite);
-         CreateButton(TA3_PANEL_PREFIX+"SL_"+suffix,110,y+18,70,20,"SL Hit",clrFireBrick,clrWhite);
+         CreateButton(TA3_PANEL_PREFIX+"CANCEL_"+suffix,20,y+18,70,20,"Pos Cancel",clrDarkSlateGray,clrWhite);
+         CreateButton(TA3_PANEL_PREFIX+"SL_"+suffix,95,y+18,60,20,"SL Hit",clrFireBrick,clrWhite);
+         CreateButton(TA3_PANEL_PREFIX+"TCANCEL_"+rows[i].direction+"_"+IntegerToString(rows[i].trade_no)+"_0",
+                      160,y+18,120,20,"Trade Cancel",clrMaroon,clrWhite);
          y+=48;
         }
       ChartRedraw(m_ctx.chart_id);
@@ -304,6 +307,13 @@ public:
    void OnTick()
      {
       m_app.EvaluateMarket();
+
+      uint now=GetTickCount();
+      if((now-m_last_refresh_ms)>=1000)
+        {
+         Refresh();
+         m_last_refresh_ms=now;
+        }
      }
 
    void OnChartEvent(const int id,const long &lparam,const double &dparam,const string &sparam)
@@ -359,13 +369,22 @@ public:
          int tr=0,po=0;
          if(ParseAction(sparam,action,dir,tr,po))
            {
+            string err="";
+
+            if(action=="TCANCEL")
+              {
+               bool ok=m_app.CancelTrade(dir,tr,err);
+               SetStatus(ok?"Trade abgebrochen":err,ok?clrLimeGreen:clrTomato);
+               Refresh();
+               return;
+              }
+
             TA3_Position rows[];
             int n=m_app.ActivePositions(rows);
             for(int i=0;i<n;i++)
               {
                if(rows[i].direction!=dir || rows[i].trade_no!=tr || rows[i].pos_no!=po)
                   continue;
-               string err="";
                bool ok=(action=="SL" ? m_app.ClosePosition(rows[i],"SL",err)
                                      : m_app.ClosePosition(rows[i],"CANCEL",err));
                SetStatus(ok?"Position aktualisiert":err,ok?clrLimeGreen:clrTomato);
