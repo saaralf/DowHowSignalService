@@ -146,6 +146,9 @@ public:
 
                      CTradeManager() : m_db(NULL), m_discord(NULL) {}
    bool              TM_HandleTradePosEditCommit(const string symbol, const ENUM_TIMEFRAMES tf, const string field, const int value);
+   void              TM_ClearActiveDirection(const string direction,
+                                             const string symbol,
+                                             const ENUM_TIMEFRAMES tf);
    bool              TM_HandleSendTradeClick(const string symbol, const ENUM_TIMEFRAMES tf, STMSendFromDraftResult &out);
    bool              UI_CloseOnePositionAndNotify(const string symbol,
          const ENUM_TIMEFRAMES tf,
@@ -261,7 +264,7 @@ bool              TM_SendSignal(const string symbol,
          if(g_ui_state.active_trade_no_long == trade_no)
            {
             g_ui_state.active_trade_no_long = 0;
-            g_DB.SetMetaInt(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf,"g_ui_state.active_trade_no_long"), 0);
+            m_db.SetMetaInt(m_db.KeyFor(m_ctx.symbol, m_ctx.tf,"g_ui_state.active_trade_no_long"), 0);
            }
          is_long_trade     = false;
          HitEntryPriceLong = false;
@@ -280,7 +283,7 @@ bool              TM_SendSignal(const string symbol,
          if(g_ui_state.active_trade_no_short == trade_no)
            {
             g_ui_state.active_trade_no_short = 0;
-            g_DB.SetMetaInt(g_DB.KeyFor(m_ctx.symbol, m_ctx.tf,"g_ui_state.active_trade_no_short"), 0);
+            m_db.SetMetaInt(m_db.KeyFor(m_ctx.symbol, m_ctx.tf,"g_ui_state.active_trade_no_short"), 0);
            }
 
          is_sell_trade         = false;
@@ -1405,7 +1408,7 @@ bool             CTradeManager::UI_CloseOnePositionAndNotify(const string symbol
          if(g_ui_state.active_trade_no_long == trade_no)
            {
             g_ui_state.active_trade_no_long = 0;
-            g_DB.SetMetaInt(g_DB.KeyFor(symbol, tf,"g_ui_state.active_trade_no_long"), 0);
+            m_db.SetMetaInt(m_db.KeyFor(symbol, tf,"g_ui_state.active_trade_no_long"), 0);
            }
 
          is_long_trade     = false;
@@ -1422,7 +1425,7 @@ bool             CTradeManager::UI_CloseOnePositionAndNotify(const string symbol
          if(g_ui_state.active_trade_no_short == trade_no)
            {
             g_ui_state.active_trade_no_short = 0;
-            g_DB.SetMetaInt(g_DB.KeyFor(symbol, tf,"g_ui_state.active_trade_no_short"), 0);
+            m_db.SetMetaInt(m_db.KeyFor(symbol, tf,"g_ui_state.active_trade_no_short"), 0);
            }
 
          is_sell_trade         = false;
@@ -1578,6 +1581,35 @@ bool CTradeManager::TM_SendFromDraft(const string symbol,
    out.row = out_row;
 
    return true;
+  }
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CTradeManager::TM_ClearActiveDirection(const string direction,
+                                                 const string symbol,
+                                                 const ENUM_TIMEFRAMES tf)
+  {
+   if(direction == "LONG")
+     {
+      g_ui_state.active_trade_no_long = 0;
+      m_db.SetMetaInt(m_db.KeyFor(symbol, tf, "g_ui_state.active_trade_no_long"), 0);
+      is_long_trade = false;
+      HitEntryPriceLong = false;
+      g_tp.ShowActiveLong(false);
+      g_tp.ShowCancelLong(false);
+     }
+   else
+      if(direction == "SHORT")
+        {
+         g_ui_state.active_trade_no_short = 0;
+         m_db.SetMetaInt(m_db.KeyFor(symbol, tf, "g_ui_state.active_trade_no_short"), 0);
+         is_sell_trade = false;
+         is_sell_trade_pending = false;
+         HitEntryPriceShort = false;
+         g_tp.ShowActiveShort(false);
+         g_tp.ShowCancelShort(false);
+        }
   }
 
 //+------------------------------------------------------------------+
