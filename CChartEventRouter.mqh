@@ -46,7 +46,13 @@ public:
         {
          if(sparam == TRNB || sparam == POSNB)
            {
-            g_TradeMgr.TM_HandleTradePosEditCommit(_Symbol, (ENUM_TIMEFRAMES)_Period);
+            string raw = ObjectGetString(m_ctx.chart_id, sparam, OBJPROP_TEXT);
+            StringTrimLeft(raw);
+            StringTrimRight(raw);
+            const int value = (int)StringToInteger(raw);
+
+            if(!g_TradeMgr.TM_HandleTradePosEditCommit(m_ctx.symbol, m_ctx.tf, sparam, value))
+               Print("TradePos edit commit failed: field=", sparam, " value=", raw);
             return true;
            }
         }
