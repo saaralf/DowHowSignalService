@@ -768,10 +768,9 @@ void  CTradeManager::SaveLinePrices(const string symbol, const ENUM_TIMEFRAMES t
                row.entry = price;
             else
                row.sl    = price;
-
-            row.updated_at = TimeCurrent();
-            m_db.UpsertPosition(row);
-            Cache_UpsertLocal(symbol, tf,row);
+            string write_err = "";
+            if(!TM_WritePositionRow(symbol, tf, row, true, write_err))
+               CLogger::Add(LOG_LEVEL_WARNING, "SaveLinePrices: " + write_err);
            }
         }
      }
