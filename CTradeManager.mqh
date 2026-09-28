@@ -137,6 +137,26 @@ private:
    int               m_nextPosNo;   // Next position number to assign
 
 
+   bool              TM_WritePositionRow(const string symbol,
+                                         const ENUM_TIMEFRAMES tf,
+                                         DB_PositionRow &row,
+                                         const bool sync_cache,
+                                         string &out_err);
+   bool              TM_TransitionPositionStatus(const string symbol,
+                                                 const ENUM_TIMEFRAMES tf,
+                                                 const string direction,
+                                                 const int trade_no,
+                                                 const int pos_no,
+                                                 const string new_status,
+                                                 const int new_pending,
+                                                 string &out_err);
+   bool              TM_DeletePositionRow(const string symbol,
+                                          const ENUM_TIMEFRAMES tf,
+                                          const string direction,
+                                          const int trade_no,
+                                          const int pos_no,
+                                          string &out_err);
+
 public:
    void              SetContext(const SContext &ctx) { m_ctx=ctx; }
    enum EPosAction
@@ -547,6 +567,113 @@ bool              TM_SendSignal(const string symbol,
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
+bool CTradeManager::TM_WritePositionRow(const string symbol,
+                                              const ENUM_TIMEFRAMES tf,
+                                              DB_PositionRow &row,
+                                              const bool sync_cache,
+                                              string &out_err)
+  {
+   out_err = "";
+   row.updated_at = TimeCurrent();
+
+   if(!m_db.UpsertPosition(row))
+     {
+      out_err = "TM_WritePositionRow: UpsertPosition failed";
+      return false;
+     }
+
+   if(sync_cache && !Cache_UpsertLocal(symbol, tf, row))
+      Cache_Invalidate();
+
+   return true;
+  }
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CTradeManager::TM_TransitionPositionStatus(const string symbol,
+                                                const ENUM_TIMEFRAMES tf,
+                                                const string direction,
+                                                const int trade_no,
+                                                const int pos_no,
+                                                const string new_status,
+                                                const int new_pending,
+                                                string &out_err)
+  {
+   out_err = "";
+
+   DB_PositionRow row;
+   bool have_row = m_db.GetPosition(symbol, tf, direction, trade_no, pos_no, row);
+
+   if(!have_row)
+     {
+      if(!Cache_Get(symbol, tf, direction, trade_no, pos_no, row))
+        {
+         out_err = "TM_TransitionPositionStatus: position not found";
+         return false;
+        }
+
+      row.status = new_status;
+      row.is_pending = new_pending;
+      return TM_WritePositionRow(symbol, tf, row, true, out_err);
+     }
+
+   if(StringFind(row.status, "CLOSED", 0) == 0 && row.status != new_status)
+     {
+      out_err = "TM_TransitionPositionStatus: closed position cannot transition from " +
+                row.status + " to " + new_status;
+      return false;
+     }
+
+   if(row.status == new_status && row.is_pending == new_pending)
+     {
+      if(!Cache_UpsertLocal(symbol, tf, row))
+         Cache_Invalidate();
+      return true;
+     }
+
+   if(!m_db.UpdatePositionStatus(symbol, tf, direction, trade_no, pos_no,
+                                 new_status, new_pending))
+     {
+      out_err = "TM_TransitionPositionStatus: UpdatePositionStatus failed";
+      return false;
+     }
+
+   row.status = new_status;
+   row.is_pending = new_pending;
+   row.updated_at = TimeCurrent();
+
+   if(!Cache_UpsertLocal(symbol, tf, row))
+      Cache_Invalidate();
+
+   return true;
+  }
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CTradeManager::TM_DeletePositionRow(const string symbol,
+                                         const ENUM_TIMEFRAMES tf,
+                                         const string direction,
+                                         const int trade_no,
+                                         const int pos_no,
+                                         string &out_err)
+  {
+   out_err = "";
+
+   if(!m_db.DeletePosition(symbol, tf, direction, trade_no, pos_no))
+     {
+      out_err = "TM_DeletePositionRow: DeletePosition failed";
+      return false;
+     }
+
+   Cache_Invalidate();
+   return true;
+  }
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 void CTradeManager::PersistToDB(string symbol,const ENUM_TIMEFRAMES tf)
   {
 // Kern-State
@@ -569,71 +696,11 @@ bool CTradeManager::MarkPositionOpen(const string symbol,
                                      const int pos_no,
                                      string &out_err)
   {
-   out_err = "";
-
-   if(m_db == NULL)
-     {
-      out_err = "MarkPositionOpen: db not initialized";
+   if(!TM_TransitionPositionStatus(symbol, tf, direction, trade_no, pos_no,
+                                   "OPEN", 0, out_err))
       return false;
-     }
 
-   DB_PositionRow row;
-   bool have_row = m_db.GetPosition(symbol, tf, direction, trade_no, pos_no, row);
-
-   if(have_row)
-     {
-      // Idempotent: already CLOSED -> no-op
-      if(StringFind(row.status, "CLOSED", 0) == 0)
-         return true;
-      // Idempotent: already OPEN
-      if(row.status == "OPEN" && row.is_pending == 0)
-        {
-         SetPosLinesSolid(direction, trade_no, pos_no);
-         Cache_UpdateStatusLocal(symbol, tf,direction, trade_no, pos_no, "OPEN", 0);
-         return true;
-        }
-
-      if(!m_db.UpdatePositionStatus(symbol, tf, direction, trade_no, pos_no, "OPEN", 0))
-        {
-         out_err = "MarkPositionOpen: UpdatePositionStatus failed";
-         return false;
-        }
-     }
-   else
-     {
-      // Fallback: Cache . Upsert (should be rare)
-      if(!Cache_Get(symbol, tf,direction, trade_no, pos_no, row))
-        {
-         out_err = "MarkPositionOpen: row not found (db+cache)";
-         return false;
-        }
-
-      row.status     = "OPEN";
-      row.is_pending = 0;
-      row.updated_at = TimeCurrent();
-
-      if(!m_db.UpsertPosition(row))
-        {
-         out_err = "MarkPositionOpen: UpsertPosition failed";
-         return false;
-        }
-     }
-
-// Cache sync
-   if(!Cache_UpdateStatusLocal(symbol, tf,direction, trade_no, pos_no, "OPEN", 0))
-     {
-      if(have_row)
-        {
-         row.status     = "OPEN";
-         row.is_pending = 0;
-         row.updated_at = TimeCurrent();
-        }
-      Cache_UpsertLocal(symbol, tf,row);
-     }
-
-// Visual: set trade lines solid
    SetPosLinesSolid(direction, trade_no, pos_no);
-
    return true;
   }
 
@@ -701,10 +768,9 @@ void  CTradeManager::SaveLinePrices(const string symbol, const ENUM_TIMEFRAMES t
                row.entry = price;
             else
                row.sl    = price;
-
-            row.updated_at = TimeCurrent();
-            m_db.UpsertPosition(row);
-            Cache_UpsertLocal(symbol, tf,row);
+            string write_err = "";
+            if(!TM_WritePositionRow(symbol, tf, row, true, write_err))
+               CLogger::Add(LOG_LEVEL_WARNING, "SaveLinePrices: " + write_err);
            }
         }
      }
@@ -950,9 +1016,10 @@ ESendDraftResult CTradeManager::SendSignalDraft(const string symbol,
 
    out_row = row;
 
-   if(!m_db.UpsertPosition(row))
+   string write_err = "";
+   if(!TM_WritePositionRow(symbol, tf, row, false, write_err))
      {
-      out_error = "DB Fehler: finaler PENDING-Commit vor Discord";
+      out_error = "DB Fehler: finaler PENDING-Commit vor Discord: " + write_err;
       return SEND_ERR_DB;
      }
 
@@ -968,9 +1035,10 @@ ESendDraftResult CTradeManager::SendSignalDraft(const string symbol,
      {
       // Rollback: Datensatz wieder entfernen, damit die Position nicht
       // als versendet bestehen bleibt und die PosNo wieder frei ist.
-      if(!m_db.DeletePosition(symbol, tf, dir, trade_no, pos_no))
+      string rollback_err = "";
+      if(!TM_DeletePositionRow(symbol, tf, dir, trade_no, pos_no, rollback_err))
         {
-         out_error = "Discord Send fehlgeschlagen; DB-Rollback ebenfalls fehlgeschlagen";
+         out_error = "Discord Send fehlgeschlagen; DB-Rollback ebenfalls fehlgeschlagen: " + rollback_err;
          return SEND_ERR_DB;
         }
 
@@ -1075,21 +1143,10 @@ bool CTradeManager::HandlePositionAction(const string symbol,
       return false;
      }
 
-// 2) DB Status (is_pending . 0)
-   if(!m_db.UpdatePositionStatus(symbol, tf, direction, trade_no, pos_no, new_status, 0))
-     {
-      out_err = "UpdatePositionStatus failed";
+// 2) Status zentral über TradeManager-Use-Case schreiben + Cache synchronisieren
+   if(!TM_TransitionPositionStatus(symbol, tf, direction, trade_no, pos_no,
+                                   new_status, 0, out_err))
       return false;
-     }
-
-// 3) Cache sync (falls nicht gefunden: Row upserten)
-   if(!Cache_UpdateStatusLocal(symbol, tf,direction, trade_no, pos_no, new_status, 0))
-     {
-      row.status     = new_status;
-      row.is_pending = 0;
-      row.updated_at = TimeCurrent();
-      Cache_UpsertLocal(symbol, tf,row);
-     }
 
 // 4) Gibt es noch pending/aktive Positionen im selben Trade?
    int remaining = m_db.CountActivePositions(symbol, tf, direction, trade_no);
@@ -1150,22 +1207,13 @@ bool CTradeManager::CancelTrade(const string symbol,
          continue;
 
       const string new_status = "CLOSED_CANCEL";
-
-      if(!m_db.UpdatePositionStatus(symbol, tf, direction, trade_no, rows[i].pos_no,
-                                    new_status, 0))
+      string transition_err = "";
+      if(!TM_TransitionPositionStatus(symbol, tf, direction, trade_no, rows[i].pos_no,
+                                      new_status, 0, transition_err))
         {
-         out_err = StringFormat("CancelTrade: UpdatePositionStatus failed (T%d P%d).", trade_no, rows[i].pos_no);
+         out_err = StringFormat("CancelTrade: transition failed (T%d P%d): %s",
+                                trade_no, rows[i].pos_no, transition_err);
          return false;
-        }
-
-      // Cache synchron halten
-      if(!Cache_UpdateStatusLocal(symbol, tf,direction, trade_no, rows[i].pos_no, new_status, 0))
-        {
-         DB_PositionRow r = rows[i];
-         r.status     = new_status;
-         r.is_pending = 0;
-         r.updated_at = TimeCurrent();
-         Cache_UpsertLocal(symbol, tf,r);
         }
      }
 
