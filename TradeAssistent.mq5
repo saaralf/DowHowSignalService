@@ -161,6 +161,7 @@ int OnInit()
    CLogger::Add(LOG_LEVEL_INFO, "EA Startet OnInit()");
    CLogger::SetLogLevel(LOG_LEVEL_DEBUG);
    CLogger::SetMethod(LOGGING_METHOD_FILE);
+   Print("TradeAssistent INIT 1/6: Webhook-Config laden...");
 
    CWebhookConfig webhook_cfg;
    if(!webhook_cfg.Load(InpWebhookConfigFile))
@@ -180,7 +181,11 @@ int OnInit()
      }
 
    if(!g_router.Validate())
+     {
+      Print("TradeAssistent INIT FEHLER: WebhookRouter Validate fehlgeschlagen.");
       return INIT_FAILED;
+     }
+   Print("TradeAssistent INIT 2/6: Webhook-Router OK.");
 
 
 
@@ -247,6 +252,7 @@ int OnInit()
 
    ChartSetInteger(0, CHART_FOREGROUND, false);
    ChartRedraw(0);
+   Print("TradeAssistent INIT 6/6: Erfolgreich abgeschlossen.");
    return (INIT_SUCCEEDED);
   }
 
