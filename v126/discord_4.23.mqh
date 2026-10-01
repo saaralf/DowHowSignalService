@@ -33,7 +33,7 @@ bool RecordDiscordAttempt(string kind,int http);
 
 // Structure to hold trade information
 #include "TradeInfo.mqh"
-TradeInfo tradeInfo[2];
+TradeInfo tradeInfo[];
 
 //+------------------------------------------------------------------+
 //|                                                                  |

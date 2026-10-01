@@ -1,55 +1,81 @@
-# V1.04.26 schrittweise erweitern – SQLite, Schritt 1
+# V1.04.28 – editierbare Nummern und mehrere Positionen
 
-Dieser Stand basiert auf dem von Michael hochgeladenen, von Kollegen weiterentwickelten Archiv `Trade Assistent V1.04.26(2).zip`. Er ersetzt den bisher geplanten direkten V4-Neustart als aktuellen Entwicklungspfad. Die V4 bleibt separat als Architekturentwurf bestehen. Einstieg: **TradeAssistantV126_SQLite.mq5**, Entwicklungskennung V1.04.27 / MQL-Version 1.427. Die Oberfläche und ihre Chartbewegung stammen aus V1.04.26.
+Dieser Stand entwickelt Michaels Kollegenversion V1.04.26 schrittweise weiter. Einstieg bleibt **TradeAssistantV126_SQLite.mq5**. Entwicklungskennung V1.04.28 / MQL-Version 1.428. Die Oberfläche stammt weiterhin aus V1.04.26; SQLite verwaltet jetzt alle Positionen unabhängig. Der separate V4-Entwurf bleibt als Architekturreferenz bestehen.
 
-## Installation
+## Nummerierung und manuelle Übernahme
 
-1. `TradeAssistantV126_SQLite.mq5`, den vollständigen Ordner `v126` und `WebhookConfig.mqh` gemeinsam nach `MQL5/Experts/DowHowSignalService_V126/` kopieren. `WebhookConfig.mqh` ist der unveränderte Parser aus V2.x.
-2. Michaels vorhandene `DowHowSignalService_webhooks.cfg` nach **MQL5/Files** dieses Terminals kopieren. Der Parser erwartet wie V2.x SYSTEM und TEST. Ausschließlich **TEST** wird ausgewählt, für alle Symbole sowie M2/M5/H1 und für Text und Screenshot. SYSTEM-/Symbol-Webhooks werden nicht als Versandziel benutzt. Der TEST-Eintrag muss tatsächlich den gewünschten Entwicklungs-Discord bezeichnen.
-3. Im MetaEditor die neue Hauptdatei mit F7 kompilieren. Es wird keine alte EX5 mitgeliefert. MT5-Komponenten wurden hier nicht kompiliert; bei Fehlern die vollständige Fehlerliste zurückgeben.
-4. Auf separatem Demo-Chart starten, `SendOnlyButton=true` lassen. Für WebRequest den Host des TEST-Webhooks in den MT5-Optionen freigeben. Es gibt keinen automatischen Start-Testpost. Fehlende/ungültige Konfiguration sperrt SEND, SL/Cancel können den lokalen Bestand weiterhin schließen und protokollieren.
-5. Nummernfelder sind jetzt **schreibgeschützt** und zeigen die nächste Trade-Nummer und Position 1. `InpInitialLastTrade` legt nur bei einem neuen Kontext den letzten vergebenen Wert fest: beispielsweise 26 → erster Trade 27. Bestehende DB-Kontexte ignorieren den Initialwert. Keine automatische Übernahme alter Terminal-GlobalVariables, da deren Scope weder Server noch Timeframe eindeutig enthält.
+**Trade- und Positionsnummer sind READ/WRITE.** Der EA zeigt einen Vorschlag an und verwendet beim SEND tatsächlich die eingegebenen Zahlen.
 
-SQLite-Datei: `DowHowSignalService_V126_dev.sqlite` unter dem gemeinsamen Terminal-Verzeichnis **Common/Files**. Eigener Dateiname, keine Verwendung der V2-/V4-Datenbank. WAL, Fremdschlüssel und vollständiges synchrones Schreiben sind eingeschaltet. Ein Kontext umfasst Server, Account, Magic, Symbol und Timeframe. LONG und SHORT teilen innerhalb dieses Kontexts einen Zähler. Andere Timeframes/Accounts besitzen getrennte Zähler. Die DB samt WAL-Datei nicht im laufenden Betrieb löschen/ersetzen; Sicherung bei beendetem EA durchführen.
+| Zustand / Aktion | Nächster Vorschlag |
+|---|---|
+| LONG 2.1 gesendet | LONG 2.2 |
+| LONG 2.2 gesendet | LONG 2.3 |
+| Wechsel auf SHORT, bislang kein aktiver SHORT-Trade | SHORT 3.1 |
+| SHORT 3.1 gesendet, zurück auf LONG | LONG 2.3 |
+| Alle LONG-Positionen von Trade 2 geschlossen, SHORT 3 weiter aktiv | Neuer LONG-Trade 4.1 |
+| Manueller Einstieg mit LONG 127.3 | LONG 127.4; für einen neuen SHORT-Trade 128.1 |
 
-## Bereits umgesetzt
+Der Trade bleibt je Richtung aktiv, solange mindestens eine seiner Positionen PENDING oder OPEN ist. Der neue Trade beginnt erst nach Abschluss aller Positionen dieser Richtung. LONG und SHORT teilen einen Zähler für neue Trades; Folgepositionen verbrauchen keine neue Trade-Nummer.
 
-- Vergabe der gemeinsamen Trade-Nummer und Speicherung des Signals samt Ereignis in derselben SQLite-Transaktion. Ein DB-Fehler verbraucht keine Nummer und erzeugt keinen Discord-Aufruf. Historische Positionen bleiben bestehen; abgeschlossene Nummern werden nicht wiederverwendet.
-- Dauerhafte Zustände PENDING, OPEN, CLOSED_SL, CLOSED_CANCEL, einschließlich Entry, SL, Lots und Sabio-Werten. Entry-Hit, SL-Änderung und Abschluss werden vor Versand gespeichert. Aktive Positionen, Linien und Entry-Hit-Status werden beim EA-Start wiederhergestellt.
-- Eine aktive Position je Richtung: ein weiterer SEND derselben Richtung wird gesperrt, damit die zwei Legacy-Slots nicht mehr still überschrieben werden. Position ist in diesem ersten Schritt immer **1**. Mehrere Positionen pro Trade und fortlaufende Positionsnummern sind der nächste separate Ausbau.
-- Aktiven SL verschieben oder über Objekteigenschaften ändern: „Nein“ stellt den alten Preis wieder her; „Ja“ schreibt Zustand/Ereignis und sendet ein Update an TEST. Unveränderte Preise erzeugen kein Update. Für PENDING muss SL auf der richtigen Seite des Entry bleiben.
-- Cancel über die bestehenden Buttons: lokaler Abschluss, Ereignis und TEST-Meldung. Kein Löschen fremder Broker-Orders. Trade & Send ist in diesem Schritt ausdrücklich nicht aktiviert; die Initialisierung verweigert `SendOnlyButton=false`.
-- 30-Sekunden-Lease je Kontext mit Erneuerung alle fünf Sekunden: zweite Instanz desselben Kontexts wird abgewiesen. Verlust/Fristüberschreitung sperrt Änderungen und Versand; EA neu starten, damit zuerst der DB-Zustand geladen wird. Verschiedene Kontexte können parallel laufen.
-- Bestehende Nummern-GlobalVariables und feste Webhook-Tokens werden nicht benutzt. Keine `@everyone`-Erwähnung; Text-Payload setzt zusätzlich `allowed_mentions.parse=[]`. Alle Meldungen kennzeichnen DEV TEST, Trade und Position.
-- HTTP-Versuch und Ergebnis werden als Ereignisse mit Trade-/Positionsbezug protokolliert. Ein persistierter Versuch ohne Ergebnis ist ungeklärt und muss im Testkanal geprüft werden. Kein automatisches erneutes Senden nach Neustart.
-- Kleine Bereinigung: fehlende Logo-Ressource entfernt, Methoden-Include geschützt, veraltete Doppel-SL-Handler entfernt, Orderlöschfunktionen im Entwicklungs-Include entfernt; Volumen nach Broker-Step abrunden und Min/Max prüfen. Risiko-Default bleibt wie in Kollegenversion **100**.
+Für den Produktionseinstieg die **bestehende Trade-/Positionsnummer in die Felder eintragen**, dann SEND. Es besteht keine Verpflichtung, bei 1 zu beginnen. Alternativ setzt `InpInitialLastTrade` nur bei einem neuen Datenbank-Kontext den letzten vergebenen Wert. Die manuell bestätigte Nummer hebt den gemeinsamen Zähler mindestens auf diese Trade-Nummer an. Manuelle Korrekturen werden zusammen mit Signal und Zustand gespeichert; ein `NUMBERS_CORRECTED`-Ereignis enthält Vorschlag und übernommene Kombination.
 
-## Grenzen dieses Schritts
+Regeln gegen Datenverlust:
 
-Keine Outbox und keine Garantie einer exakt einmaligen Zustellung: Ein lokal gespeichertes Signal kann bei HTTP-Fehlern unzugestellt oder beim Timeout bereits zugestellt sein. Erneutes SEND erzeugt deshalb keinen Ersatztrade derselben Richtung. Versandprobleme müssen zunächst anhand Events/Testkanal geprüft werden. Text und Screenshot bleiben getrennte Requests. Die Produktions-Webhooks wurden nicht hier überprüft; die Isolation beruht auf dem TEST-Eintrag in Michaels bereitgestellter V2-Konfiguration.
+- Positive ganze Zahlen bis 2147483647; keine Dezimalwerte, Vorzeichen oder freier Text.
+- Bestehende Kombinationen werden niemals überschrieben. Eine neue Positionsnummer muss größer sein als sämtliche bisher vergebenen Nummern dieses Trades, einschließlich geschlossener Positionen. Ein Sprung, beispielsweise 127.3 → 127.8, ist erlaubt.
+- Ein aktiver Trade derselben Richtung muss unter seiner bisherigen Trade-Nummer fortgeführt werden. Die Eingabefelder benennen gespeicherte Positionen nicht nachträglich um. Soll ein neuer Trade beginnen, muss der alte zuvor abgeschlossen sein.
+- Bereits benutzte Trade-Nummern, auch abgeschlossene oder solche der Gegenrichtung, sind für einen neuen Trade gesperrt. Eine unbenutzte manuelle Nummer unterhalb des höchsten Zählerstands senkt diesen nicht ab.
+- Maximal **vier gleichzeitig aktive Positionen je Richtung**. IDs bleiben fortlaufend über 4 hinaus möglich: P3 schließen → nächste Position P5, nicht nochmals P3.
+- Bei einer Ablehnung bleibt die Eingabe erhalten; kein Discord-Aufruf und keine Änderung an Nummern oder Positionszustand.
 
-Keine Wiederherstellung des noch ungesendeten Entry-/SL-/Sabio-Entwurfs oder der Drag-Geometrie. Kein nachträgliches Ermitteln von Entry-/SL-Ereignissen während der Abschaltung. Nach Neustart gilt der gespeicherte Positionszustand; aktuelle Ticks setzen die Überwachung fort. Kein Mehrpositionspanel und keine Broker-Orders. Dieser Entwicklungsstand ist noch nicht für Produktion abgenommen.
+Eine manuell übernommene Kombination importiert nur das jetzt gesendete Signal mit seinen Entry-/SL-/Sabio-Werten. Früher vorhandene, aber nicht in dieser DB gespeicherte Positionen werden damit nicht rekonstruiert. Noch nicht gesendete manuelle Eingaben werden nicht über einen EA-Neustart hinweg gespeichert. Eine bewusst ausgelöste Richtungsänderung lädt den Vorschlag dieser Richtung; automatische Tick-Abschlüsse überschreiben manuelle bzw. gerade bearbeitete Nummernfelder nicht.
 
-## Prüfung
+## Installation und Upgrade vom ersten SQLite-Stand
 
-Automatisch: `python v126/tests/check_sqlite.py` – acht Prüfungen für Transaktionsrollback, gemeinsame Nummerierung, Historie, Kontexttrennung, Neustartdaten, konkurrierende Besitzer und sichere Distribution/TEST-Routing. Diese SQLite-/Quellstrukturprüfungen sind kein MQL-Laufzeittest.
+1. Alten Entwicklungs-EA entfernen bzw. alle Instanzen stoppen, die dieselbe V126-SQLite-Datei benutzen. Bei abruptem Terminalende kann die Lease noch bis zu 30 Sekunden gelten.
+2. `TradeAssistantV126_SQLite.mq5`, den vollständigen Ordner `v126` und `WebhookConfig.mqh` gemeinsam nach `MQL5/Experts/DowHowSignalService_V126/` kopieren. `WebhookConfig.mqh` ist der unveränderte Parser aus V2.x.
+3. Michaels vorhandene `DowHowSignalService_webhooks.cfg` liegt weiterhin in **MQL5/Files** dieses Terminals. Nur der **TEST**-Eintrag wird für Text und Screenshot ausgewählt. SYSTEM und TEST müssen für den V2-Parser vorhanden sein; Symbol- und SYSTEM-Routen werden nicht als Versandziel verwendet. Der TEST-Eintrag muss tatsächlich den Entwicklungs-Discord bezeichnen.
+4. Im MetaEditor die neue Hauptdatei mit F7 kompilieren. Eine alte EX5 ist nicht enthalten. Die neue MQL-Version wurde hier nicht kompiliert; bei Fehlern die vollständige Fehlerliste zurückgeben.
+5. Auf einem Demo-Chart starten; `SendOnlyButton=true`. Den bisherigen SQLite-Dateinamen und die gleichen Kontext-Einstellungen beibehalten. Für WebRequest den Host des TEST-Webhooks in den MT5-Optionen freigeben.
 
-MT5-Store-Smoke: `v126/tests/SQLiteSmoke.mq5` kompilieren und auf einem separaten Demo-Chart als Skript ausführen. Erwartung: ausschließlich PASS und `SQLite smoke failures: 0`. Das Skript benutzt eine eigene temporäre SQLite-Datei und keinerlei Discord-/Broker-Aufrufe. Es wurde hier nicht ausgeführt.
+**Die vorhandene SQLite-Datei nicht löschen.** Schema 1 wird innerhalb einer Transaktion auf Schema 2 umgestellt. Der bisherige aktive Trade 2.1 bleibt erhalten und kann als 2.2 fortgesetzt werden. Bestehende geschlossene Positionen, Ereignisse und der höchste Trade-Zähler bleiben bestehen. Bei einem Fehler wird die Migration zurückgerollt. Eine Migration bei noch aktiven alten Instanzen wird verweigert. Vor dem Upgrade bei beendetem EA eine Kopie der Datenbank sichern.
 
-Demo-Abnahme:
+Datei: `DowHowSignalService_V126_dev.sqlite` unter **Common/Files**. Keine Verwendung der V2-/V4-Datenbank. Kontext weiterhin Server, Account, Magic, Symbol und Timeframe. Andere Kontexte besitzen getrennte Zähler. WAL, Fremdschlüssel und vollständiges synchrones Schreiben bleiben aktiv. Eine 30-Sekunden-Lease mit Erneuerung alle fünf Sekunden verhindert konkurrierende Besitzer; Verlust sperrt Änderungen und Versand, ein Neustart lädt zuerst die gespeicherten Daten.
 
-1. Mit neuem Kontext/Initialwert 26 beginnen. LONG sendet Trade 27.1, SHORT Trade 28.1. Nur TEST enthält Meldungen. Zweiter LONG-SEND wird gesperrt, Nummer bleibt 29.
-2. EA mit beiden aktiven Positionen neu starten. Nummer bleibt 29; Daten, Linien und OPEN/PENDING müssen stimmen. Keine erneute Initialsignal-Meldung.
-3. SL verschieben: „Nein“ stellt alten Preis wieder her. „Ja“ speichert neuen Preis; genau ein Update im TEST-Kanal. Dasselbe über Objekteigenschaften prüfen.
-4. Entry-Hit und anschließenden SL-Hit je Richtung prüfen; DB-Ereignisse und Historie kontrollieren. Nach Abschluss ist nächster Trade 29.1 verfügbar, Gegenrichtung bleibt bestehen.
-5. Cancel mit OPEN und PENDING testen, „Nein“ ohne Zustandsänderung. Nach Neustart kommen geschlossene Linien nicht zurück.
-6. Config vor Start umbenennen: SEND blockiert; kein Ersatz-/Produktionskanal. Config wiederherstellen und EA neu starten. HTTP-Zugriff sperren: Signal wird lokal gespeichert, Versuch/Fehler protokolliert; Neustart sendet nicht automatisch erneut.
-7. Zweiten Chart desselben Kontexts starten: Init muss scheitern; erster Chart funktioniert weiter. Anderen Timeframe starten: eigener Kontext funktioniert. Nach abruptem Terminalende ggf. Lease-Ablauf (30 Sekunden) abwarten.
-8. UI auf M2/M5/H1, Chartgrößen/DPI, Sabio, Entry-/SL-Drag und Klickunterdrückung prüfen. Ein Drag darf kein neues Signal auslösen.
+## Positionsverwaltung und Anzeige
 
-## Nächste Schritte
+- Alle aktiven Positionen besitzen eigene Entry-/SL-Linien mit Trade-, Positionsnummer, Richtung und OPEN/PENDING-Beschriftung. Nach Neustart werden sämtliche Positionen und ihre Sabio-Werte wieder geladen; keine Wiederholung alter Initialsignale.
+- Aktiven SL verschieben oder über Objekteigenschaften ändern: „Nein“ stellt den alten Preis wieder her; „Ja“ schreibt Zustand/Ereignis vor dem TEST-Update. Jede Linie betrifft nur ihre eigene Position. PENDING-SL muss auf der richtigen Seite des Entry bleiben.
+- Entry-Hit öffnet die betreffende Position. Ein SL einer Folgeposition schließt diese Position. Gemäß bisheriger Pos-1-Regel beendet **SL von Position 1 den gesamten Trade**; übrige aktive Positionen erhalten `CLOSED_POS1_SL`, die Gegenrichtung bleibt bestehen.
+- Die bestehenden Cancel-BUY/SELL-Buttons schließen nach ausdrücklicher Bestätigung **alle aktiven Positionen des betreffenden Richtungstrades**, einschließlich OPEN/PENDING. Pro Position wird ein Ereignis und eine eindeutig bezeichnete TEST-Meldung erzeugt. Ein eigener Einzelpositions-Cancel-Button ist noch nicht implementiert.
+- Die Zustandsänderungen, Abschlüsse aller betroffenen Positionen und Ereignisse werden jeweils atomar gespeichert. Historische Identitäten und geschlossene Positionsdaten sind gegen Überschreiben geschützt.
 
-1. Diesen Stand kompilieren und oben genannten Demo-Test abnehmen.
-2. Versand in eine persistente Outbox überführen, unklare Zustellung sichtbar machen.
-3. Mehrere Positionsdatensätze je Richtung und Trade, monotone Positionsnummern und Pos-1-SL-Regel implementieren.
-4. Entwurf/UI-Wiederherstellung und Panel ergänzen; Module entlang der vereinbarten vier Bereiche schrittweise entkoppeln.
+## Discord und verbleibende Grenzen
+
+Die von Michael getestete TEST-Routing-Logik bleibt bestehen: keine festen Tokens, kein Start-Testpost, keine `@everyone`-Erwähnung, keine Brokeroperationen. M2/M5/H1 verwenden denselben TEST-Eintrag. Fehlende/ungültige Konfiguration blockiert SEND; lokale Abschlüsse und Ereignisse bleiben möglich. Der Risiko-Default bleibt wie in V1.04.26 bei **100**.
+
+Weiterhin keine Outbox und keine Garantie einer exakt einmaligen Zustellung: Signal/Zustand werden vor HTTP gespeichert, Versuch und Ergebnis zusätzlich protokolliert. Bei Timeout kann eine Meldung bereits zugestellt sein. Ein erneuter SEND ist **keine Versandwiederholung**, sondern würde die nächste Position erstellen. Fehler zuerst anhand Events und Testkanal prüfen. Text und Screenshot bleiben getrennte Requests; nach Neustart wird nicht automatisch erneut gesendet.
+
+Kein Wiederherstellen des ungesendeten Preis-/Sabio-Entwurfs oder der Drag-Geometrie, keine historische Rekonstruktion verpasster Kursereignisse. Aktuelle Ticks setzen die gespeicherte Positionsüberwachung fort. Noch kein separates vollständiges Mehrpositionspanel; bei gleichen Preisen können die Linien/Labels überlappen. Keine Produktionsabnahme dieses Ausbaus.
+
+## Prüfung und Demo-Abnahme
+
+Automatisch: `python v126/tests/check_sqlite.py` – **17 Prüfungen** für Trade-Fortsetzung, Richtungswechsel, manuelle Produktionseinstiege, Transaktionsrollback, Historie, vier aktive Positionen mit IDs >4, Pos-1-Abschluss, Kontexttrennung, Neustart, echte Schema-Migration samt Fehler-Rollback und Quellstruktur/TEST-Isolation. Diese SQLite-/Quellstrukturprüfungen kompilieren oder führen MQL5 nicht aus.
+
+MT5-Store-Smoke: Für den Start über den Navigator den Ordner `v126` zusätzlich unter `MQL5/Scripts/DH126_Smoke/` ablegen, `v126/tests/SQLiteSmoke.mq5` kompilieren und auf separatem Demo-Chart als Skript ausführen. Erwartung: nur PASS und `SQLite smoke failures: 0`. Das Skript nutzt eine eigene temporäre Datei ohne Discord-/Broker-Aufrufe. Es prüft den echten MQL-Store mit manueller Nummer 127, Folgepositionen, Richtungswechsel und Wiederherstellung. Hier nicht ausgeführt.
+
+Demo-Fälle:
+
+1. Upgrade deiner bestehenden Datei: Trade 2.1 bleibt sichtbar. LONG zeigt 2.2; SEND legt 2.2 mit eigenen Linien an, danach Vorschlag 2.3.
+2. Auf SHORT wechseln: 3.1 senden; danach zurück auf LONG → Vorschlag 2.3. Alle drei Positionen müssen nach Neustart wieder erscheinen.
+3. In einem separaten Testkontext manuell 127.3 eintragen und senden → nächster LONG-Vorschlag 127.4, neuer SHORT 128.1. Beide Felder müssen tatsächlich editierbar bleiben.
+4. Gleiche Kombination zweimal bzw. fremde Trade-Nummer bei aktivem Richtungstrade eingeben: klare Ablehnung, Felder bleiben erhalten, kein neues Signal im TEST-Kanal.
+5. Vier aktive Positionen senden, fünfte ablehnen. Eine Folgeposition per SL schließen, nächste ID größer als bisheriges Maximum. Historie bleibt vorhanden.
+6. Position-1-SL: alle Positionen ihres Trades schließen; Gegenrichtung bleibt aktiv. Erst jetzt darf diese Richtung einen neuen Trade erhalten. Cancel bestätigt das Schließen aller Positionen nur seiner Richtung.
+7. SL einzelner Positionslinie ändern: „Nein“ ohne Änderung, „Ja“ mit genau einem lokalen Ereignis und TEST-Update. Unverändertes Loslassen erzeugt keinen Auftrag.
+8. Während manueller Nummerneingabe einen Tick-Abschluss provozieren: Eingabe bleibt erhalten. Nach einem abgelehnten SEND darf kein Timer sie überschreiben.
+9. Konfiguration/HTTP-Zugriff sperren, zweites Besitzer-Chart und andere Timeframes testen. Kein Produktionskanal und keine automatische Versandwiederholung.
+
+## Danach
+
+Nach Compile-/Demo-Abnahme die persistente Versand-Outbox, separate Panel-/Einzelpositionsbedienung und vollständige Draft-Wiederherstellung ergänzen; die vier vereinbarten Bereiche schrittweise entkoppeln.

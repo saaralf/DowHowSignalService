@@ -21,7 +21,7 @@ Discord-Kanal: [removed legacy webhook]
 */
 #property copyright "Michael Keller, Steffen Kachold, ChatGPT"
 #property link ""
-#property version "1.427" // Development V1.04.27, based on colleague V1.04.26.
+#property version "1.428" // Development V1.04.28: editable numbering and multiple positions.
 string tradenummer = "0";
 int g_transport_trade=0,g_transport_pos=0;
 #include <Trade\Trade.mqh>
@@ -99,7 +99,6 @@ double CurrentBidPrice;
 string DHFile = ""; // Optional logo absent from colleague archive.
 
 // --- SL Drag / Send-Workflow ---
-bool   slDragActive      = false;
 
 
 color chart_bg_user;
@@ -154,7 +153,9 @@ input string InpSQLiteFile = "DowHowSignalService_V126_dev.sqlite";
 input int InpInitialLastTrade = 0; // Only used when this context is created first.
 CDH126Store g_store;
 bool g_storage_ok=false;
-void SetEditsFromStoredDirection();
+void SetEditsFromStoredDirection(bool force=false);
+bool g_numbers_editing=false;
+string g_suggested_trade="",g_suggested_pos="";
 void RefreshRestoredPositions();
 void CancelStoredPosition(int idx);
 
@@ -224,7 +225,7 @@ int OnInit()
    prevIsBuy = isBuy;
 
 // Nach SendButton(), weil TRNB/POSNB erst dort erstellt werden
-   SetEditsFromStoredDirection();
+   SetEditsFromStoredDirection(true);
 
 
 // --- Lots + Button Texte
@@ -257,10 +258,9 @@ int OnInit()
 
 
 // --- TradeInfo init (TP-frei)
-   InitTradeInfo();
-   if(!g_store.Restore(tradeInfo,is_long_trade,is_sell_trade,HitEntryPriceLong,HitEntryPriceShort)) { g_store.Close(); g_storage_ok=false; return INIT_FAILED; }
    RefreshRestoredPositions();
-   SetEditsFromStoredDirection();
+   if(!g_storage_ok) { g_store.Close(); return INIT_FAILED; }
+   SetEditsFromStoredDirection(true);
    if(!EventSetTimer(5)) { g_store.Close(); g_storage_ok=false; return INIT_FAILED; }
    RepositionUIToRight();
    SyncSendFieldsToEntryButton();
@@ -280,7 +280,7 @@ void OnDeinit(const int reason)
   {
    EventKillTimer();
    if(g_storage_ok) g_store.Event("EA_STOPPED",0,0,"",IntegerToString(reason));
-   g_store.Close(); g_storage_ok=false; deleteObjects();
+   g_store.Close(); g_storage_ok=false; ClearPositionObjects(); deleteObjects();
   }
 void OnTimer()
   {
@@ -295,20 +295,14 @@ void OnTimer()
 //+------------------------------------------------------------------+
 void OnTick()
   {
-   CurrentAskPrice = SymbolInfoDouble(_Symbol,SYMBOL_ASK);
-   CurrentBidPrice = SymbolInfoDouble(_Symbol,SYMBOL_BID);
-
+   CurrentAskPrice=SymbolInfoDouble(_Symbol,SYMBOL_ASK);
+   CurrentBidPrice=SymbolInfoDouble(_Symbol,SYMBOL_BID);
    if(CurrentAskPrice<=0 || CurrentBidPrice<=0) return;
    TPSLReached();
-
-   if(is_long_trade)
+   for(int i=0;i<ArraySize(tradeInfo);i++)
      {
-      CreateLabelsLong();
-     }
-
-   if(is_sell_trade)
-     {
-      CreateLabelsShort();
+      ObjectSetInteger(0,PositionName("ENTRY_LABEL",tradeInfo[i]),OBJPROP_TIME,TimeCurrent());
+      ObjectSetInteger(0,PositionName("SL_LABEL",tradeInfo[i]),OBJPROP_TIME,TimeCurrent());
      }
   }
 
@@ -352,8 +346,10 @@ void OnChartEvent(const int id,
   {
 
 if(!g_storage_ok) return;
+if(id==CHARTEVENT_OBJECT_ENDEDIT && (sparam==TRNB || sparam==POSNB)) { g_numbers_editing=false; return; }
 if(id == CHARTEVENT_OBJECT_CLICK)
 {
+   if(sparam==TRNB || sparam==POSNB) { g_numbers_editing=true; return; }
    if(GetTickCount() < suppressClickUntilMs) return;
    if(sparam=="ButtonCancelOrder") { CancelStoredPosition(0); return; }
    if(sparam=="ButtonCancelOrderSell") { CancelStoredPosition(1); return; }
@@ -409,20 +405,19 @@ if(id == CHARTEVENT_OBJECT_CLICK)
       return;
      }
 
-// Persist active SL only after explicit confirmation; reject restores the line.
-   if((id==CHARTEVENT_OBJECT_DRAG || id==CHARTEVENT_OBJECT_CHANGE) && (sparam==SL_Long || sparam==SL_Short))
+// Each active position has its own durable SL line and label.
+   if((id==CHARTEVENT_OBJECT_DRAG || id==CHARTEVENT_OBJECT_CHANGE) && StringFind(sparam,"DH126_POS_SL_")==0)
      {
-      int idx=sparam==SL_Long?0:1;
-      if(!(idx==0?is_long_trade:is_sell_trade)) return;
-      double old_sl=tradeInfo[idx].sl;
+      int idx=PositionIndex(sparam); if(idx<0) return;
+      TradeInfo p=tradeInfo[idx]; double old_sl=p.sl;
       double price=NormalizeDouble(ObjectGetDouble(0,sparam,OBJPROP_PRICE),_Digits);
-      bool pending=tradeInfo[idx].is_trade_pending;
-      bool valid=price>0 && (!pending || (idx==0?price<tradeInfo[idx].price:price>tradeInfo[idx].price));
+      bool valid=price>0 && (!p.is_trade_pending || (p.type=="BUY"?price<p.price:price>p.price));
       if(MathAbs(price-old_sl)<_Point*0.5) return;
-      if(!valid || MessageBox("SL speichern und an TEST senden?","SL Update",MB_YESNO)!=IDYES) { ObjectSetDouble(0,sparam,OBJPROP_PRICE,old_sl); RefreshRestoredPositions(); return; }
-      TradeInfo changed=tradeInfo[idx]; changed.sl=price;
-      if(!g_store.Change(changed,pending?"PENDING":"OPEN","SL_CHANGED",DoubleToString(old_sl,_Digits),DoubleToString(price,_Digits))) { ObjectSetDouble(0,sparam,OBJPROP_PRICE,old_sl); Print("SQLite SL update failed"); return; }
-      tradeInfo[idx]=changed; RefreshRestoredPositions(); SendSLUpdateToDiscord(idx); return;
+      if(!valid || MessageBox("SL speichern und an TEST senden?","SL Update",MB_YESNO)!=IDYES) { ObjectSetDouble(0,sparam,OBJPROP_PRICE,old_sl); return; }
+      p.sl=price;
+      if(!g_store.Change(p,p.is_trade_pending?"PENDING":"OPEN","SL_CHANGED",DoubleToString(old_sl,_Digits),DoubleToString(price,_Digits))) { ObjectSetDouble(0,sparam,OBJPROP_PRICE,old_sl); Print("SQLite SL update failed: ",g_store.Error()); return; }
+      RefreshRestoredPositions();
+      SendDiscordMessage(FormatUpdateTradeMessage(p)); return;
      }
 
 // --- 1) Mouse move / Drag-Handling (dein schwerster Pfad) ---
@@ -670,7 +665,7 @@ if(id == CHARTEVENT_OBJECT_CLICK)
       if((movingState_R3 || movingState_R5) && (isBuy != prevIsBuy))
         {
 
-         SetEditsFromStoredDirection();
+         SetEditsFromStoredDirection(true);
          prevIsBuy = isBuy;
         }
 
@@ -809,7 +804,7 @@ void SendButton()
    ObjectSetInteger(0, TRNB, OBJPROP_COLOR, clrBlack);
    ObjectSetInteger(0, TRNB, OBJPROP_ALIGN,ALIGN_RIGHT);
 //--- aktivieren (true) oder deaktivieren (false) den schreibgeschützten Modus
-   ObjectSetInteger(0,TRNB,OBJPROP_READONLY,true);
+   ObjectSetInteger(0,TRNB,OBJPROP_READONLY,false);
 
 
 //+------------------------------------------------------------------+
@@ -830,7 +825,7 @@ void SendButton()
    ObjectSetInteger(0, POSNB, OBJPROP_COLOR, clrBlack);
    ObjectSetInteger(0, POSNB, OBJPROP_ALIGN,ALIGN_RIGHT);
 //--- aktivieren (true) oder deaktivieren (false) den schreibgeschützten Modus
-   ObjectSetInteger(0,POSNB,OBJPROP_READONLY,true);
+   ObjectSetInteger(0,POSNB,OBJPROP_READONLY,false);
   }
 
 
@@ -844,7 +839,7 @@ void SendButton()
 void SabioEdit()
   {
 //--- aktivieren (true) oder deaktivieren (false) den schreibgeschützten Modus
-//   ObjectSetInteger(0,TRNB,OBJPROP_READONLY,true);
+//   ObjectSetInteger(0,TRNB,OBJPROP_READONLY,false);
 
 //SabioSLEdit
    ObjectCreate(0, SabioSL, OBJ_EDIT, 0, 0, 0);
@@ -861,7 +856,7 @@ void SabioEdit()
    ObjectSetInteger(0, SabioSL, OBJPROP_COLOR, clrBlack);
 
 //--- aktivieren (true) oder deaktivieren (false) den schreibgeschützten Modus
-//   ObjectSetInteger(0,TRNB,OBJPROP_READONLY,true);
+//   ObjectSetInteger(0,TRNB,OBJPROP_READONLY,false);
 
 //SabioEntryEdit
    ObjectCreate(0, SabioEntry, OBJ_EDIT, 0, 0, 0);
@@ -878,7 +873,7 @@ void SabioEdit()
    ObjectSetInteger(0, SabioEntry, OBJPROP_COLOR, clrBlack);
 
 //--- aktivieren (true) oder deaktivieren (false) den schreibgeschützten Modus
-   ObjectSetInteger(0,TRNB,OBJPROP_READONLY,true);
+   ObjectSetInteger(0,TRNB,OBJPROP_READONLY,false);
   }
 
 //+------------------------------------------------------------------+
@@ -892,25 +887,20 @@ void DiscordSend()
    Entry_Price=Get_Price_d(PR_HL); SL_Price=Get_Price_d(SL_HL);
    if(Entry_Price<=0 || SL_Price<=0 || Entry_Price==SL_Price) { MessageBox("Entry and SL must be positive and different."); return; }
    isBuy=SL_Price<Entry_Price;
-   int idx=isBuy?0:1;
-   if((isBuy && is_long_trade) || (!isBuy && is_sell_trade)) { MessageBox("Stage 1: one active position per direction. Close it before creating another trade."); return; }
    if((isBuy && Entry_Price<=SymbolInfoDouble(_Symbol,SYMBOL_ASK)) || (!isBuy && Entry_Price>=SymbolInfoDouble(_Symbol,SYMBOL_BID))) { MessageBox("Pending entry must be beyond the current Ask/Bid."); return; }
    double lots=calcLots(MathAbs(Entry_Price-SL_Price));
    if(lots<=0) { MessageBox("Invalid risk volume."); return; }
    TradeInfo p;
-   p.tradenummer=0; p.position=1; p.symbol=_Symbol; p.type=isBuy?"BUY":"SELL";
-   p.price=Entry_Price; p.sl=SL_Price; p.lots=lots;
+   if(!ReadPositiveNumber(TRNB,p.tradenummer) || !ReadPositiveNumber(POSNB,p.position)) { MessageBox("Trade and position: positive whole numbers only (1..2147483647)."); return; }
+   p.symbol=_Symbol; p.type=isBuy?"BUY":"SELL"; p.price=Entry_Price; p.sl=SL_Price; p.lots=lots;
    p.sabioentry=(Sabioedit && ObjectFind(0,SabioEntry)>=0)?ObjectGetString(0,SabioEntry,OBJPROP_TEXT):"";
    p.sabiosl=(Sabioedit && ObjectFind(0,SabioSL)>=0)?ObjectGetString(0,SabioSL,OBJPROP_TEXT):"";
    p.was_send=false; p.is_trade_pending=true;
-   if(!g_store.Create(p)) { MessageBox("SQLite commit failed. Nothing sent; numbering unchanged."); return; }
-   tradeInfo[idx]=p;
-   if(isBuy) { is_long_trade=true; HitEntryPriceLong=false; send_SL_buy=false; send_CL_buy=false; }
-   else { is_sell_trade=true; HitEntryPriceShort=false; send_SL_sell=false; send_CL_sell=false; }
-   RefreshRestoredPositions(); SetEditsFromStoredDirection();
-   tradeInfo[idx].was_send=SendDiscordMessage(FormatTradeMessage(tradeInfo[idx]));
-   if(tradeInfo[idx].was_send) SendScreenShot(_Symbol,_Period,getChartWidthInPixels(),getChartHeightInPixels());
-   else Print("Trade stored locally; Discord delivery failed or uncertain. No automatic retry.");
+   if(!g_store.Create(p)) { MessageBox(g_store.Error()+"\nNothing sent. Fields unchanged."); return; }
+   g_numbers_editing=false; RefreshRestoredPositions(); SetEditsFromStoredDirection(true);
+   bool sent=SendDiscordMessage(FormatTradeMessage(p));
+   if(sent) SendScreenShot(_Symbol,_Period,getChartWidthInPixels(),getChartHeightInPixels());
+   else Print("Position stored locally; Discord delivery failed or uncertain. No automatic retry.");
   }
 
 //+------------------------------------------------------------------+
@@ -918,28 +908,24 @@ void DiscordSend()
 //+------------------------------------------------------------------+
 void TPSLReached()
   {
-   if(!g_storage_ok || slDragActive) return;
-   for(int idx=0;idx<2;idx++)
+   if(!g_storage_ok) return;
+   TradeInfo snapshot[]; if(!CopyPositions(snapshot,tradeInfo)) return;
+   for(int i=0;i<ArraySize(snapshot);i++)
      {
-      bool active=idx==0?is_long_trade:is_sell_trade;
-      if(!active) continue;
-      bool hit=idx==0?HitEntryPriceLong:HitEntryPriceShort;
-      bool entry=idx==0?CurrentAskPrice>=tradeInfo[idx].price:CurrentBidPrice<=tradeInfo[idx].price;
-      if(!hit && entry)
+      int idx=FindPosition(snapshot[i].tradenummer,snapshot[i].position);
+      if(idx<0) continue; // A previous Pos-1 SL may have closed this follower.
+      TradeInfo p=tradeInfo[idx]; bool buy=p.type=="BUY";
+      if(p.is_trade_pending && (buy?CurrentAskPrice>=p.price:CurrentBidPrice<=p.price))
         {
-         if(!g_store.Change(tradeInfo[idx],"OPEN","ENTRY_HIT","PENDING","OPEN")) { Print("SQLite ENTRY_HIT failed"); return; }
-         hit=true; tradeInfo[idx].is_trade_pending=false;
-         if(idx==0) HitEntryPriceLong=true; else HitEntryPriceShort=true;
-         RefreshRestoredPositions();
+         if(!g_store.Change(p,"OPEN","ENTRY_HIT","PENDING","OPEN")) { Print("SQLite ENTRY_HIT failed: ",g_store.Error()); return; }
+         p.is_trade_pending=false; RefreshRestoredPositions();
         }
-      bool stopped=idx==0?CurrentBidPrice<=tradeInfo[idx].sl:CurrentAskPrice>=tradeInfo[idx].sl;
-      if(hit && stopped)
+      if(!g_storage_ok) return;
+      if(!p.is_trade_pending && (buy?CurrentBidPrice<=p.sl:CurrentAskPrice>=p.sl))
         {
-         if(!g_store.Change(tradeInfo[idx],"CLOSED_SL","SL_HIT","OPEN","CLOSED_SL")) { Print("SQLite SL_HIT failed"); return; }
-         if(idx==0) { is_long_trade=false; HitEntryPriceLong=false; send_SL_buy=true; DeleteLinesandLabelsLong(); }
-         else { is_sell_trade=false; HitEntryPriceShort=false; send_SL_sell=true; DeleteLinesandLabelsShort(); }
-         ObjectSetString(0,idx==0?"ActiveLongTrade":"ActiveShortTrade",OBJPROP_TEXT,"");
-         SendDiscordMessage(FormatSLMessage(tradeInfo[idx]));
+         TradeInfo before[]; if(!CopyPositions(before,tradeInfo)) return;
+         if(!g_store.Change(p,"CLOSED_SL","SL_HIT","OPEN","CLOSED_SL")) { Print("SQLite SL_HIT failed: ",g_store.Error()); return; }
+         RefreshRestoredPositions(); PublishClosed(before,"SL",p.tradenummer,p.position);
          SetEditsFromStoredDirection();
         }
      }
@@ -1067,36 +1053,14 @@ void CreateLabelsTPSLLines(string name, string text, double price, color clr)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void CreateLabelsLong()
-  {
-   CreateLabelsTPSLLines(LabelSLLong,"SL Long Trade", tradeInfo[0].sl,TradeSLLineLong);
-   update_Text(LabelSLLong, "SL Long Trade");
-   CreateLabelsTPSLLines(LabelEntryLong,"Entry Long Trade", tradeInfo[0].price,TradeEntryLineLong);
-   update_Text(LabelEntryLong, "Entry Long Trade");
-  }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void CreateLabelsShort()
-  {
-   CreateLabelsTPSLLines(LabelSLShort,"SL Short Trade", tradeInfo[1].sl,TradeSLLineShort);
-   update_Text(LabelSLShort, "SL Short Trade");
-   CreateLabelsTPSLLines(LabelEntryShort,"Entry Short Trade", tradeInfo[1].price,TradeEntryLineShort);
-   update_Text(LabelEntryShort, "Entry Short Trade");
-  }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void UpdateTextPosition()
-  {
-   datetime time2 = (datetime)ObjectGetInteger(0, SL_Long, OBJPROP_TIME, 1);
-   double   price2 = ObjectGetDouble(0, SL_Long, OBJPROP_PRICE, 1);
-
-   ObjectSetInteger(0, LabelSLLong, OBJPROP_TIME, time2);
-   ObjectSetDouble(0, LabelSLLong, OBJPROP_PRICE, price2 + 10 * _Point);
-  }
 
 
 //+------------------------------------------------------------------+
@@ -1162,19 +1126,6 @@ void DeleteLinesandLabelsShort()
   }
 
 //+------------------------------------------------------------------+
-void InitTradeInfo()
-  {
-   for(int i=0;i<2;i++)
-     {
-      tradeInfo[i].tradenummer=-1;
-      tradeInfo[i].symbol=_Symbol;
-      tradeInfo[i].price=Entry_Price;
-      tradeInfo[i].sl=SL_Price;
-      tradeInfo[i].was_send=false;
-     }
-   tradeInfo[0].type="BUY";
-   tradeInfo[1].type="SELL";
-  }
 //+------------------------------------------------------------------+
 
 //+------------------------------------------------------------------+
@@ -1258,37 +1209,16 @@ void RepositionUIToRight()
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void UpdateTextPositionLong()
-  {
-   datetime t = (datetime)ObjectGetInteger(0, SL_Long, OBJPROP_TIME, 0);
-   double   p = ObjectGetDouble(0, SL_Long, OBJPROP_PRICE, 0);
-   ObjectSetInteger(0, LabelSLLong, OBJPROP_TIME,  t);
-   ObjectSetDouble(0, LabelSLLong, OBJPROP_PRICE, p + 10 * _Point);
-  }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void UpdateTextPositionShort()
-  {
-   datetime t = (datetime)ObjectGetInteger(0, SL_Short, OBJPROP_TIME, 0);
-   double   p = ObjectGetDouble(0, SL_Short, OBJPROP_PRICE, 0);
-   ObjectSetInteger(0, LabelSLShort, OBJPROP_TIME,  t);
-   ObjectSetDouble(0, LabelSLShort, OBJPROP_PRICE, p + 10 * _Point);
-  }
 
 //+------------------------------------------------------------------+
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void SendSLUpdateToDiscord(int idx) // idx: 0=BUY, 1=SELL
-  {
-   string msg = FormatUpdateTradeMessage(tradeInfo[idx]);
-   bool ret   = SendDiscordMessage(msg);
-   if(!ret)
-      Print("Fehler beim SL-Update senden (Discord).");
-  }
 //+------------------------------------------------------------------+
 
 //+------------------------------------------------------------------+
@@ -1359,20 +1289,23 @@ void FixCorner(const string name)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void SetEditsFromStoredDirection()
+void SetEditsFromStoredDirection(bool force)
   {
-   int tn=0; if(!g_storage_ok || !g_store.Next(tn)) return;
-   ObjectSetString(0,TRNB,OBJPROP_TEXT,IntegerToString(tn));
-   ObjectSetString(0,POSNB,OBJPROP_TEXT,"1");
-   ObjectSetInteger(0,TRNB,OBJPROP_READONLY,true);
-   ObjectSetInteger(0,POSNB,OBJPROP_READONLY,true);
-   update_Text("LabelTradenummer","Next Trade Number: "+IntegerToString(tn)+".1");
+   if(!g_storage_ok) return;
+   // Tick-based closure must not overwrite manual or currently edited numbers.
+   if(!force && (g_numbers_editing || ObjectGetString(0,TRNB,OBJPROP_TEXT)!=g_suggested_trade || ObjectGetString(0,POSNB,OBJPROP_TEXT)!=g_suggested_pos)) return;
+   int tn=0,pn=0; if(!g_store.Next(isBuy?"BUY":"SELL",tn,pn)) return;
+   g_suggested_trade=IntegerToString(tn); g_suggested_pos=IntegerToString(pn);
+   ObjectSetString(0,TRNB,OBJPROP_TEXT,g_suggested_trade);
+   ObjectSetString(0,POSNB,OBJPROP_TEXT,g_suggested_pos);
+   ObjectSetInteger(0,TRNB,OBJPROP_READONLY,false);
+   ObjectSetInteger(0,POSNB,OBJPROP_READONLY,false);
+   update_Text("LabelTradenummer","Next "+(isBuy?"BUY ":"SELL ")+g_suggested_trade+"."+g_suggested_pos);
   }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void SaveCurrentEditsToSlot(const bool dirBuy) {} // Legacy edits are now read-only.
 
 
 //+------------------------------------------------------------------+
@@ -1394,38 +1327,42 @@ bool HitTestButton(const string name, const int mx, const int my)
 
 void RefreshRestoredPositions()
   {
-   for(int idx=0;idx<2;idx++)
+   TradeInfo loaded[];
+   if(!g_store.Restore(loaded)) { g_storage_ok=false; isWebRequestEnabled=false; Print("Position reload failed: restart EA"); return; }
+   if(!CopyPositions(tradeInfo,loaded)) { g_storage_ok=false; isWebRequestEnabled=false; Print("Position allocation failed: restart EA"); return; }
+   ClearPositionObjects(); DeleteLinesandLabelsLong(); DeleteLinesandLabelsShort(); is_long_trade=false; is_sell_trade=false;
+   ObjectSetString(0,"ActiveLongTrade",OBJPROP_TEXT,""); ObjectSetString(0,"ActiveShortTrade",OBJPROP_TEXT,"");
+   int buy_count=0,sell_count=0;
+   for(int idx=0;idx<ArraySize(tradeInfo);idx++)
      {
-      if(!(idx==0?is_long_trade:is_sell_trade)) continue;
-      string entry=idx==0?Entry_Long:Entry_Short;
-      string sl=idx==0?SL_Long:SL_Short;
-      CreateTPSLLines(entry,TimeCurrent(),tradeInfo[idx].price,idx==0?TradeEntryLineLong:TradeEntryLineShort);
-      CreateTPSLLines(sl,TimeCurrent(),tradeInfo[idx].sl,idx==0?TradeSLLineLong:TradeSLLineShort);
-      ObjectSetInteger(0,entry,OBJPROP_SELECTABLE,false);
-      ObjectSetInteger(0,sl,OBJPROP_SELECTABLE,true);
-      ObjectSetInteger(0,sl,OBJPROP_SELECTED,false);
-      bool hit=idx==0?HitEntryPriceLong:HitEntryPriceShort;
-      ObjectSetInteger(0,entry,OBJPROP_STYLE,hit?STYLE_SOLID:STYLE_DASH);
-      ObjectSetInteger(0,sl,OBJPROP_STYLE,hit?STYLE_SOLID:STYLE_DASH);
-      if(idx==0) CreateLabelsLong(); else CreateLabelsShort();
-      string label=idx==0?"ActiveLongTrade":"ActiveShortTrade";
-      ObjectSetString(0,label,OBJPROP_TEXT,"Trade "+IntegerToString(tradeInfo[idx].tradenummer)+".1 "+(hit?"OPEN":"PENDING"));
-      ObjectSetInteger(0,label,OBJPROP_COLOR,clrWhite);
-      ObjectSetInteger(0,label,OBJPROP_BGCOLOR,idx==0?clrGreen:clrRed);
-      ObjectSetInteger(0,label,OBJPROP_BACK,false);
+      TradeInfo p=tradeInfo[idx]; bool buy=p.type=="BUY";
+      if(buy) { is_long_trade=true; buy_count++; } else { is_sell_trade=true; sell_count++; }
+      string entry=PositionName("ENTRY",p),sl=PositionName("SL",p);
+      CreateTPSLLines(entry,TimeCurrent(),p.price,buy?TradeEntryLineLong:TradeEntryLineShort);
+      CreateTPSLLines(sl,TimeCurrent(),p.sl,buy?TradeSLLineLong:TradeSLLineShort);
+      ObjectSetInteger(0,entry,OBJPROP_SELECTABLE,false); ObjectSetInteger(0,sl,OBJPROP_SELECTABLE,true); ObjectSetInteger(0,sl,OBJPROP_SELECTED,false);
+      ObjectSetInteger(0,entry,OBJPROP_STYLE,p.is_trade_pending?STYLE_DASH:STYLE_SOLID);
+      ObjectSetInteger(0,sl,OBJPROP_STYLE,p.is_trade_pending?STYLE_DASH:STYLE_SOLID);
+      string tag=p.type+" "+IntegerToString(p.tradenummer)+"."+IntegerToString(p.position)+(p.is_trade_pending?" PENDING":" OPEN");
+      CreateLabelsTPSLLines(PositionName("ENTRY_LABEL",p),tag+" Entry",p.price,buy?TradeEntryLineLong:TradeEntryLineShort);
+      CreateLabelsTPSLLines(PositionName("SL_LABEL",p),tag+" SL",p.sl,buy?TradeSLLineLong:TradeSLLineShort);
+      string label=buy?"ActiveLongTrade":"ActiveShortTrade";
+      ObjectSetString(0,label,OBJPROP_TEXT,"Trade "+IntegerToString(p.tradenummer)+" | "+IntegerToString(buy?buy_count:sell_count)+" active");
+      ObjectSetInteger(0,label,OBJPROP_COLOR,clrWhite); ObjectSetInteger(0,label,OBJPROP_BGCOLOR,buy?clrGreen:clrRed); ObjectSetInteger(0,label,OBJPROP_BACK,false);
      }
    ChartRedraw();
   }
-void CancelStoredPosition(int idx)
+void CancelStoredPosition(int direction_idx)
   {
-   ObjectSetInteger(0,idx==0?"ButtonCancelOrder":"ButtonCancelOrderSell",OBJPROP_STATE,0);
-   if(!g_storage_ok || !(idx==0?is_long_trade:is_sell_trade)) return;
-   if(MessageBox("Position lokal schliessen und Cancel an TEST senden?","Cancel",MB_YESNO)!=IDYES) return;
-   if(!g_store.Change(tradeInfo[idx],"CLOSED_CANCEL","CANCEL",tradeInfo[idx].is_trade_pending?"PENDING":"OPEN","CLOSED_CANCEL")) { Print("SQLite cancel failed"); return; }
-   if(idx==0) { is_long_trade=false; HitEntryPriceLong=false; send_CL_buy=true; DeleteLinesandLabelsLong(); }
-   else { is_sell_trade=false; HitEntryPriceShort=false; send_CL_sell=true; DeleteLinesandLabelsShort(); }
-   ObjectSetString(0,idx==0?"ActiveLongTrade":"ActiveShortTrade",OBJPROP_TEXT,"");
-   SendDiscordMessage(FormatCancelTradeMessage(tradeInfo[idx])); SetEditsFromStoredDirection();
+   ObjectSetInteger(0,direction_idx==0?"ButtonCancelOrder":"ButtonCancelOrderSell",OBJPROP_STATE,0);
+   if(!g_storage_ok) return;
+   string direction=direction_idx==0?"BUY":"SELL";
+   int tn=0; for(int i=0;i<ArraySize(tradeInfo);i++) if(tradeInfo[i].type==direction) { tn=tradeInfo[i].tradenummer; break; }
+   if(tn==0) return;
+   if(MessageBox("ALLE aktiven "+direction+" Positionen von Trade "+IntegerToString(tn)+" schliessen und Cancel an TEST senden?","Trade Cancel",MB_YESNO)!=IDYES) return;
+   TradeInfo before[]; if(!CopyPositions(before,tradeInfo)) return;
+   if(!g_store.CancelTrade(tn)) { Print("SQLite cancel failed: ",g_store.Error()); return; }
+   RefreshRestoredPositions(); PublishClosed(before,"CANCEL",tn,0); SetEditsFromStoredDirection();
   }
 
 bool RecordDiscordAttempt(string kind,int http)
@@ -1434,4 +1371,43 @@ bool RecordDiscordAttempt(string kind,int http)
    bool ok=g_store.Event(kind,g_transport_trade,g_transport_pos,"",IntegerToString(http));
    if(!ok) { isWebRequestEnabled=false; Print("Discord event persistence failed: sending disabled"); }
    return ok;
+  }
+
+bool ReadPositiveNumber(string name,int &value)
+  {
+   string raw=ObjectGetString(0,name,OBJPROP_TEXT); StringTrimLeft(raw); StringTrimRight(raw);
+   if(StringLen(raw)<1 || StringLen(raw)>10) return false;
+   long n=0;
+   for(int i=0;i<StringLen(raw);i++) { ushort ch=StringGetCharacter(raw,i); if(ch<'0' || ch>'9') return false; n=n*10+(ch-'0'); if(n>2147483647) return false; }
+   if(n<=0) return false; value=(int)n; return true;
+  }
+string PositionName(string kind,TradeInfo &p) { return "DH126_POS_"+kind+"_"+IntegerToString(p.tradenummer)+"_"+IntegerToString(p.position); }
+int PositionIndex(string name)
+  { for(int i=0;i<ArraySize(tradeInfo);i++) if(PositionName("SL",tradeInfo[i])==name) return i; return -1; }
+int FindPosition(int tn,int pn)
+  { for(int i=0;i<ArraySize(tradeInfo);i++) if(tradeInfo[i].tradenummer==tn && tradeInfo[i].position==pn) return i; return -1; }
+void ClearPositionObjects()
+  { for(int i=ObjectsTotal(0)-1;i>=0;i--) { string name=ObjectName(0,i); if(StringFind(name,"DH126_POS_")==0) ObjectDelete(0,name); } }
+void PublishClosed(TradeInfo &before[],string reason,int trigger_trade,int trigger_pos)
+  {
+   for(int i=0;i<ArraySize(before);i++)
+     {
+      TradeInfo p=before[i];
+      if(p.tradenummer!=trigger_trade || FindPosition(p.tradenummer,p.position)>=0) continue;
+      if(reason=="CANCEL") SendDiscordMessage(FormatCancelTradeMessage(p));
+      else if(p.position==trigger_pos) SendDiscordMessage(FormatSLMessage(p));
+      else
+        {
+         g_transport_trade=p.tradenummer; g_transport_pos=p.position;
+         SendDiscordMessage("[DEV TEST] "+p.symbol+" "+getPeriodText()+" "+p.type+" Trade "+IntegerToString(p.tradenummer)+" | Pos "+IntegerToString(p.position)+": trade ended by Position 1 SL");
+        }
+     }
+  }
+
+bool CopyPositions(TradeInfo &dst[],TradeInfo &src[])
+  {
+   int n=ArraySize(src); if(ArrayResize(dst,n)!=n) return false;
+   // Structures contain strings: copy elements using assignment, not ArrayCopy.
+   for(int i=0;i<n;i++) dst[i]=src[i];
+   return true;
   }

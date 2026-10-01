@@ -10,22 +10,30 @@ void OnStart()
    int failures=0;
    string file="DH126_SMOKE_"+IntegerToString((long)GetMicrosecondCount())+".sqlite";
    CDH126Store db,second;
-   if(!db.Open(file,987654,7)) { Print("FAIL opening smoke DB"); return; }
-   Require(!second.Open(file,987654,7),"second owner blocked",failures); second.Close();
+   if(!db.Open(file,987654,0)) { Print("FAIL opening smoke DB: ",db.Error()); return; }
+   Require(!second.Open(file,987654,0),"second owner blocked",failures); second.Close();
    TradeInfo p;
-   p.tradenummer=0; p.position=1; p.symbol=_Symbol; p.type="BUY";
+   p.tradenummer=127; p.position=1; p.symbol=_Symbol; p.type="BUY";
    p.price=100; p.sl=90; p.lots=0.1; p.sabioentry="Sabio's entry"; p.sabiosl="90"; p.was_send=false; p.is_trade_pending=true;
-   Require(db.Create(p) && p.tradenummer==8,"initial seed and signal",failures);
-   TradeInfo duplicate=p;
-   Require(!db.Create(duplicate),"duplicate active direction rolls back",failures);
-   int next=0; Require(db.Next(next) && next==9,"no counter gap",failures);
-   p.sl=95; Require(db.Change(p,"OPEN","ENTRY_HIT","PENDING","OPEN"),"persist OPEN and SL",failures);
+   Require(db.Create(p),"manual production number 127.1",failures);
+   int tn=0,pn=0; Require(db.Next("BUY",tn,pn) && tn==127 && pn==2,"same direction 127.2",failures);
+   Require(!db.Create(p),"duplicate identity rejected",failures);
+   p.position=2; Require(db.Create(p),"second independent position",failures);
+   p.type="SELL"; p.tradenummer=128; p.position=1; Require(db.Create(p),"opposite trade 128.1",failures);
+   Require(db.Next("BUY",tn,pn) && tn==127 && pn==3,"return to BUY 127.3",failures);
+   p.type="BUY"; p.tradenummer=129; Require(!db.Create(p),"cannot replace active trade",failures);
    db.Close();
    Require(db.Open(file,987654,999),"reopen existing DB ignores seed",failures);
-   TradeInfo slots[2]; bool buy=false,sell=false,bh=false,sh=false;
-   Require(db.Restore(slots,buy,sell,bh,sh) && buy && !sell && bh && slots[0].tradenummer==8 && slots[0].sl==95 && slots[0].sabioentry=="Sabio's entry","restore position and Sabio",failures);
-   Require(db.Change(slots[0],"CLOSED_CANCEL","CANCEL","OPEN","CLOSED_CANCEL"),"close durable position",failures);
-   p.type="SELL"; Require(db.Create(p) && p.tradenummer==9,"shared counter across direction",failures);
+   TradeInfo rows[];
+   Require(db.Restore(rows) && ArraySize(rows)==3,"restore all three positions",failures);
+   if(ArraySize(rows)==3)
+     {
+      TradeInfo first=rows[0]; first.sl=95;
+      Require(db.Change(first,"OPEN","ENTRY_HIT","PENDING","OPEN"),"persist OPEN and SL",failures);
+      Require(db.Change(first,"CLOSED_SL","SL_HIT","OPEN","CLOSED_SL"),"Pos1 SL closes BUY family",failures);
+      Require(db.Restore(rows) && ArraySize(rows)==1 && rows[0].type=="SELL","opposite position remains",failures);
+     }
+   Require(db.Next("BUY",tn,pn) && tn==129 && pn==1,"next fresh trade follows high water",failures);
    db.Close(); FileDelete(file,FILE_COMMON); FileDelete(file+"-wal",FILE_COMMON); FileDelete(file+"-shm",FILE_COMMON);
    Print("SQLite smoke failures: ",failures);
   }
