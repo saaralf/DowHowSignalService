@@ -100,3 +100,7 @@ Die SQLite-Transaktions-/Column-API und ArrayCopy-Einschränkungen wurden gegen 
 - Backoff nach Discord Retry-After; aktive Queue-Übersicht und Suche vergangener Positionen.
 - Performance unter hoher Tickrate und mehreren Kontexten; SQLite-Abfragen laufen aktuell pro Marktprüfung.
 - Übernahme aktiver V1-Signale (V1 liefert keine persistente Historie), globale Risikogrenzen, spätere Brokerintegration.
+
+## Zusätzliche Entwicklungsreferenz
+
+Die Kollegenversion aus dem Archiv V1.04.26 ist im [Referenzabgleich](REFERENCE_V1_04_26.md) erfasst. Er dokumentiert Unterschiede zur Produktion V1.04.15, bereits vorhandene V4-Funktionen, zusätzliche Abnahmekriterien und offene Entscheidungen.
