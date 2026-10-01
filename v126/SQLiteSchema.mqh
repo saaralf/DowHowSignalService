@@ -1,0 +1,26 @@
+#ifndef DH126_SCHEMA
+#define DH126_SCHEMA
+string DH126Schema() { return
+"CREATE TABLE IF NOT EXISTS schema_version(version INTEGER NOT NULL CHECK(version=2));\n"
+"INSERT INTO schema_version SELECT 2 WHERE NOT EXISTS(SELECT 1 FROM schema_version);\n"
+"CREATE TABLE IF NOT EXISTS contexts(context TEXT PRIMARY KEY,last_trade_no INTEGER NOT NULL CHECK(last_trade_no>=0));\n"
+"CREATE TABLE IF NOT EXISTS leases(context TEXT PRIMARY KEY,owner TEXT NOT NULL,expires INTEGER NOT NULL);\n"
+"CREATE TABLE IF NOT EXISTS trades(context TEXT NOT NULL,trade_no INTEGER NOT NULL CHECK(trade_no>0),direction TEXT NOT NULL CHECK(direction IN ('BUY','SELL')),status TEXT NOT NULL CHECK(status IN ('ACTIVE','CLOSED')),PRIMARY KEY(context,trade_no),UNIQUE(context,trade_no,direction),FOREIGN KEY(context) REFERENCES contexts(context));\n"
+"CREATE UNIQUE INDEX IF NOT EXISTS one_active_trade_direction ON trades(context,direction) WHERE status='ACTIVE';\n"
+"CREATE TABLE IF NOT EXISTS positions(context TEXT NOT NULL,trade_no INTEGER NOT NULL CHECK(trade_no>0),pos_no INTEGER NOT NULL CHECK(pos_no>0),direction TEXT NOT NULL CHECK(direction IN ('BUY','SELL')),status TEXT NOT NULL CHECK(status IN ('PENDING','OPEN','CLOSED_SL','CLOSED_CANCEL','CLOSED_POS1_SL')),entry REAL NOT NULL CHECK(entry>0),sl REAL NOT NULL CHECK(sl>0),lots REAL NOT NULL CHECK(lots>0),sabio_entry TEXT NOT NULL,sabio_sl TEXT NOT NULL,PRIMARY KEY(context,trade_no,pos_no),FOREIGN KEY(context,trade_no,direction) REFERENCES trades(context,trade_no,direction));\n"
+"CREATE TRIGGER IF NOT EXISTS limit_active_positions BEFORE INSERT ON positions WHEN NEW.status IN ('PENDING','OPEN') AND (SELECT COUNT(*) FROM positions WHERE context=NEW.context AND direction=NEW.direction AND status IN ('PENDING','OPEN'))>=4 BEGIN SELECT RAISE(ABORT,'Maximum four active positions per direction'); END;\n"
+"CREATE TRIGGER IF NOT EXISTS immutable_position_id BEFORE UPDATE ON positions WHEN NEW.context!=OLD.context OR NEW.trade_no!=OLD.trade_no OR NEW.pos_no!=OLD.pos_no OR NEW.direction!=OLD.direction BEGIN SELECT RAISE(ABORT,'Position identity is immutable'); END;\n"
+"CREATE TRIGGER IF NOT EXISTS closed_position_history BEFORE UPDATE ON positions WHEN OLD.status NOT IN ('PENDING','OPEN') BEGIN SELECT RAISE(ABORT,'Closed position history is immutable'); END;\n"
+"CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT,context TEXT NOT NULL,trade_no INTEGER NOT NULL,pos_no INTEGER NOT NULL,kind TEXT NOT NULL,old_value TEXT NOT NULL,new_value TEXT NOT NULL,created_at INTEGER NOT NULL);\n"
+; }
+string DH126MigrateBegin() { return
+"DROP INDEX IF EXISTS one_active_direction;\n"
+"ALTER TABLE positions RENAME TO positions_v1;\n"
+"DROP TABLE schema_version;\n"
+; }
+string DH126MigrateFinish() { return
+"INSERT INTO trades(context,trade_no,direction,status) SELECT context,trade_no,direction,CASE WHEN status IN ('PENDING','OPEN') THEN 'ACTIVE' ELSE 'CLOSED' END FROM positions_v1;\n"
+"INSERT INTO positions SELECT context,trade_no,pos_no,direction,status,entry,sl,lots,sabio_entry,sabio_sl FROM positions_v1;\n"
+"DROP TABLE positions_v1;\n"
+; }
+#endif
