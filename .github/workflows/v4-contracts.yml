@@ -1,0 +1,17 @@
+name: V4 SQLite and module contracts
+on:
+  push:
+    paths: ['TradeAssistantV4.mq5', 'v4/**', '.github/workflows/v4-contracts.yml']
+  pull_request:
+    paths: ['TradeAssistantV4.mq5', 'v4/**', '.github/workflows/v4-contracts.yml']
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python v4/tests/check_v4.py
