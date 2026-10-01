@@ -1,0 +1,15 @@
+name: V126 SQLite contracts
+on:
+  push:
+    paths: ['TradeAssistantV126_SQLite.mq5', 'v126/**', 'WebhookConfig.mqh', '.github/workflows/v126-sqlite.yml']
+  pull_request:
+    paths: ['TradeAssistantV126_SQLite.mq5', 'v126/**', 'WebhookConfig.mqh', '.github/workflows/v126-sqlite.yml']
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python v126/tests/check_sqlite.py
